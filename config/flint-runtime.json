@@ -1,0 +1,8 @@
+{
+  "release": "b11803",
+  "source_revision": "a37cc46104eb50900d5ab4a9ba02a0abdac039db",
+  "filename": "llama-b11803-bin-ubuntu-cuda-12.8-x64.tar.gz",
+  "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11803/llama-b11803-bin-ubuntu-cuda-12.8-x64.tar.gz",
+  "size": 177922746,
+  "sha256": "4594be0afdddcfdf15e82f4fbd6805c60c399eaa62b181432ccaf3de87ef36d0"
+}

@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+set -euo pipefail
+root=$(cd -- "$(dirname -- "$(readlink -f -- "$0")")/.." && pwd)
+exec uv run --no-project --python "$root/.venv/bin/python" python "$root/omp_local.py" "$@"

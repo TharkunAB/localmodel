@@ -1,0 +1,47 @@
+{
+  "version": "18.8.6",
+  "input_sha256": "89ed2ed1c51586f18ce424b46cab113cd01b2b98330202cd192f08968220edc6",
+  "output_sha256": "80f48490f175f8043d7ad5ca6e1ce83390d2280bd977b34ecd0bf1f4a67aafd9",
+  "patches": [
+    {
+      "id": "no-automatic-xai-search",
+      "before": "if(!t.model&&qon(u))p=z7l(p,i);",
+      "after": ""
+    },
+    {
+      "id": "native-reader-exclusive",
+      "before": "f===\"auto\"?LLr:[f,...LLr.filter((h)=>h!==f)]",
+      "after": "f===\"native\"?[\"native\"]:f===\"auto\"?LLr:[f,...LLr.filter((h)=>h!==f)]"
+    },
+    {
+      "id": "native-reader-no-special-handlers",
+      "before": "if(e=wZl(e),!s){let M=await VZl(e,t,o,r,i);if(M)return M}",
+      "after": "if(e=wZl(e),!s&&j8.get(n)!==\"native\"){let M=await VZl(e,t,o,r,i);if(M)return M}"
+    },
+    {
+      "id": "collab-relay-origin-pin",
+      "before": "let n=t.port?`:${t.port}`:\"\";return{origin:`${s}//${t.hostname}${n}`}}function cHt",
+      "after": "let n=t.port?`:${t.port}`:\"\",o=`${s}//${t.hostname}${n}`;try{let r=JSON.parse(process.env.OMP_LOCAL_COLLAB_ORIGINS||\"[]\");if(t.username||t.password||!Array.isArray(r)||!r.includes(o))return{error:\"Collaboration is restricted to the configured LAN relay.\"}}catch{return{error:\"Collaboration origin policy is invalid.\"}}return{origin:o}}function cHt"
+    },
+    {
+      "id": "collab-browser-origin-pin",
+      "before": "if(n.search||n.hash)throw Error(\"collab.webUrl must not include a query string or fragment\");let o=n.pathname.replace",
+      "after": "if(n.search||n.hash)throw Error(\"collab.webUrl must not include a query string or fragment\");let r=UGs(n.origin);if(\"error\"in r)throw Error(r.error);let o=n.pathname.replace"
+    },
+    {
+      "id": "collab-socket-origin-pin-and-private-ca",
+      "before": "#I(){this.#P();let e=`${this.#e.wsUrl}?role=${this.#e.role}`,t={proxy:mB(\"collab\",new URL(e))},s=Reflect.construct(WebSocket,[e,t]);",
+      "after": "#I(){this.#P();let o=UGs(this.#e.wsUrl);if(\"error\"in o)throw Error(o.error);let e=`${this.#e.wsUrl}?role=${this.#e.role}`,t={proxy:void 0,tls:{ca:process.env.OMP_LOCAL_COLLAB_CA_FILE?process.getBuiltinModule(\"node:fs\").readFileSync(process.env.OMP_LOCAL_COLLAB_CA_FILE,\"utf8\"):void 0,rejectUnauthorized:!0}},s=Reflect.construct(WebSocket,[e,t]);"
+    },
+    {
+      "id": "disable-session-upload",
+      "before": "async function Dle(e,t){let s=dQo(e,t),n=new Uint8Array(Dfl);",
+      "after": "async function Dle(e,t){throw Error(\"Session uploads are disabled in this private OMP runtime. Use LAN /collab instead.\");let s=dQo(e,t),n=new Uint8Array(Dfl);"
+    },
+    {
+      "id": "remote-deepseek-profile-resume",
+      "before": "function $pe(e,t){let s=wwi(e,t);if(!s)return;let n=e.find(s.provider,s.id);if(!n||!e.hasConfiguredAuth(n))return;return{model:n,thinkingLevel:s.thinkingLevel}}",
+      "after": "function $pe(e,t){let s=wwi(e,t);if(!s)return;let n=e.find(s.provider,s.id);if(!n&&process.env.OMP_LOCAL_REMOTE_MODEL_FAMILY===\"deepseek-v4.1\"&&s.provider===\"model\"&&/^deepseek-v4\\.1(?:-|$)/i.test(s.id)){let o=e.getAll().filter((r)=>r.provider===\"model\"&&/^deepseek-v4\\.1(?:-|$)/i.test(r.id));if(o.length===1)n=o[0]}if(!n||!e.hasConfiguredAuth(n))return;return{model:n,thinkingLevel:s.thinkingLevel}}"
+    }
+  ]
+}

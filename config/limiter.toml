@@ -1,0 +1,3 @@
+[botdetection]
+# The local server receives requests directly. It has no reverse proxy.
+trusted_proxies = []

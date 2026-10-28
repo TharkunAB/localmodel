@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -euo pipefail
+root=$(cd -- "$(dirname -- "$(readlink -f -- "$0")")/.." && pwd)
+export PATH="/usr/lib/wsl/lib:$PATH"
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=$XDG_RUNTIME_DIR/bus}"
+export HEAVY_PEAKS="$root/state/heavy-peaks"
+exec uv run --no-project --python "$root/.venv/bin/python" python "$root/localmodel.py" "$@"

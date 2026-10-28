@@ -1,0 +1,92 @@
+{
+  "status": "official-strata-0271-source-verified",
+  "model_repository": "ISTA-DASLab/DeepSeek-V4.1-Flash-1017-GSQ-RCO-GGUF",
+  "model_revision": "cb02422c900df489cea5833e8a92171224059b3c",
+  "source_repository": "https://github.com/Niko1221/Strata",
+  "source_revision": "46c152a1310f77cd2f0ce2c7cd213962df14fe83",
+  "context": 262144,
+  "memory_limit": "64G",
+  "expert_ram_budget_gib": 36,
+  "swap_limit": 0,
+  "files": [
+    {
+      "name": "DeepSeek-V4.1-Flash-1017-GSQ-RCO-IQ1_M-00001-of-00004.gguf",
+      "size": 39358830464,
+      "sha256": "6e3f0d5ff53d00428ec32c079db9e8255cb410ccaa435e5342aaa8a47fe1339d",
+      "url": "https://huggingface.co/ISTA-DASLab/DeepSeek-V4.1-Flash-1017-GSQ-RCO-GGUF/resolve/cb02422c900df489cea5833e8a92171224059b3c/DeepSeek-V4.1-Flash-1017-GSQ-RCO-IQ1_M-00001-of-00004.gguf"
+    },
+    {
+      "name": "DeepSeek-V4.1-Flash-1017-GSQ-RCO-IQ1_M-00002-of-00004.gguf",
+      "size": 39176113248,
+      "sha256": "34d68c99fdae9948f9f0af0dafe308e805ce0a78d2c48641b24cc57242fdc0af",
+      "url": "https://huggingface.co/ISTA-DASLab/DeepSeek-V4.1-Flash-1017-GSQ-RCO-GGUF/resolve/cb02422c900df489cea5833e8a92171224059b3c/DeepSeek-V4.1-Flash-1017-GSQ-RCO-IQ1_M-00002-of-00004.gguf"
+    },
+    {
+      "name": "DeepSeek-V4.1-Flash-1017-GSQ-RCO-IQ1_M-00003-of-00004.gguf",
+      "size": 39997334720,
+      "sha256": "a08468c83955e0c4d3a9eb3f7b86c45b7bbac55d99c4640039a296a8a4b327ea",
+      "url": "https://huggingface.co/ISTA-DASLab/DeepSeek-V4.1-Flash-1017-GSQ-RCO-GGUF/resolve/cb02422c900df489cea5833e8a92171224059b3c/DeepSeek-V4.1-Flash-1017-GSQ-RCO-IQ1_M-00003-of-00004.gguf"
+    },
+    {
+      "name": "DeepSeek-V4.1-Flash-1017-GSQ-RCO-IQ1_M-00004-of-00004.gguf",
+      "size": 2188841824,
+      "sha256": "b05f26a92325aa6845cebcb3ec1f93d2e65ebf89bdc3f805695960d2f0681832",
+      "url": "https://huggingface.co/ISTA-DASLab/DeepSeek-V4.1-Flash-1017-GSQ-RCO-GGUF/resolve/cb02422c900df489cea5833e8a92171224059b3c/DeepSeek-V4.1-Flash-1017-GSQ-RCO-IQ1_M-00004-of-00004.gguf"
+    },
+    {
+      "name": "DeepSeek-V4.1-Flash-Engram-IQ4_NL.gguf",
+      "size": 110595290816,
+      "sha256": "eb19f30d368d393784e1fc54fdfaffc427ebb2110bf3762fdf5a8fbb9a2d740a",
+      "url": "https://huggingface.co/ISTA-DASLab/DeepSeek-V4.1-Flash-1017-GSQ-RCO-GGUF/resolve/cb02422c900df489cea5833e8a92171224059b3c/DeepSeek-V4.1-Flash-Engram-IQ4_NL.gguf"
+    }
+  ],
+  "source_directory": "/home/tritlo/Code/local-models/state/sources/strata-official-0.2.7.1",
+  "model_directory": "/home/tritlo/Code/local-models/models/deepseek41-1017-ista-iq1-m",
+  "tested_context_capacities": [
+    262144
+  ],
+  "filled_long_context_verified": false,
+  "results": "results/strata-027-20261027/comparison.json",
+  "omp_results": "results/strata-027-20261027/deepseek-16k-48g-36cache/summary.json",
+  "source_tag": "v0.2.7.1",
+  "source_archive_url": "https://api.github.com/repos/Niko1221/Strata/tarball/46c152a1310f77cd2f0ce2c7cd213962df14fe83",
+  "source_archive_sha256": "fae7217a8c4239c3dc7e1cae5a6e813b2b87d556840d55579e5663371d566d2f",
+  "source_receipt_sha256": "2b517964fba0c633ba61dcfde1d8f12730fd83b072bcb18408b5d2c9da9feb73",
+  "runtime": {
+    "release_tag": "v0.2.7",
+    "version": "0.1.52",
+    "directory": "/home/tritlo/Code/local-models/state/runtimes/strata-official-0.1.52",
+    "archive_url": "https://github.com/Niko1221/Strata/releases/download/v0.2.7/strata-dsv41-0.1.52-linux-x86_64-cuda-cuda13.tar.gz",
+    "archive_sha256": "c1b3d0ca2a575655a395ab4a2d0afc5cd731d0e5d26fbcdb955f2359dbbc1a57",
+    "archive_size": 444709965,
+    "feed_url": "https://github.com/Niko1221/Strata/releases/download/v0.2.7/strata-feed.json",
+    "feed_sha256": "148dc76b786f65371691b6fd73884c6150f269f0c4e379aa6c472dbe29c6f355",
+    "feed_signature_sha256": "2999e0efd205a7b99eb3f2c6457b5022426c9104342f1c9cd86ba5692289f4f1",
+    "manifest_sha256": "dda8e2470c8cb96bd93b2f19fd0d23d24f7e328fea820c692e5ab7829a55db1a",
+    "binary_sha256": "5792fd39d3ea5ad2fd82fe4e88b5a4afd2edb15c051e87d05e1a01f17679692c",
+    "python_packages": [
+      "jinja2==3.1.6",
+      "markupsafe==3.0.3",
+      "regex==2026.9.10"
+    ],
+    "venv": "/home/tritlo/Code/local-models/state/venvs/strata-official"
+  },
+  "historical_results": "results/deepseek-strata/summary.json",
+  "historical_omp_results": "state/deepseek-omp-smoke/summary.json",
+  "historical_tested_context_capacities": [
+    4096,
+    65536,
+    131072,
+    262144
+  ],
+  "prefill_chunk": 4096,
+  "previous_stock_results": "results/strata-official/20261024-migration/summary.json",
+  "pack_source_revision": "4b9e05a2a806a3fe24f7b2560d98626c37dade35",
+  "previous_runtime_results": "results/strata-official/20261025-update-bench/summary.json",
+  "previous_runtime_omp_results": "results/strata-official/20261025-update-bench/64g-48cache-4096-retry/summary.json",
+  "pack_source_directory": "/home/tritlo/Code/local-models/state/sources/strata-official-0.2.6",
+  "pack_source_archive_url": "https://api.github.com/repos/Niko1221/Strata/tarball/4b9e05a2a806a3fe24f7b2560d98626c37dade35",
+  "pack_source_archive_sha256": "9f1e872b4b7b04fc0f762297e712227b042ad0f9684a0f06807bb0cdb1646d26",
+  "pack_source_receipt_sha256": "cd2cec3cf7b0597a99c2863ec5a4ece40c0366abf725fecc72855bfeb394a7d8",
+  "control_version": "0.1.53"
+}

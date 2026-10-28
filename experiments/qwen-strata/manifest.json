@@ -1,0 +1,61 @@
+{
+  "source_directory": "/home/tritlo/Code/local-models/state/sources/strata-official-0.2.7.1",
+  "source_revision": "46c152a1310f77cd2f0ce2c7cd213962df14fe83",
+  "source_archive_url": "https://api.github.com/repos/Niko1221/Strata/tarball/46c152a1310f77cd2f0ce2c7cd213962df14fe83",
+  "source_archive_sha256": "fae7217a8c4239c3dc7e1cae5a6e813b2b87d556840d55579e5663371d566d2f",
+  "source_receipt_sha256": "2b517964fba0c633ba61dcfde1d8f12730fd83b072bcb18408b5d2c9da9feb73",
+  "model_repository": "ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF",
+  "model_revision": "ed59f92082b1e93c0e96d60a8b11aab089b52f09",
+  "model_directory": "/home/tritlo/Code/local-models/models/qwen38-ista-iq2-xs",
+  "first_shard": "/home/tritlo/Code/local-models/models/qwen38-ista-iq2-xs/Qwen3.8-Flash-Next-GSQ-RCO-IQ2_XS-00001-of-00002.gguf",
+  "pack_directory": "/home/tritlo/Code/local-models/models/qwen38-ista-iq2-xs/pack",
+  "mtp_directory": "/home/tritlo/Code/local-models/models/qwen38-ista-iq2-xs/mtp/rt",
+  "files": [
+    {
+      "name": "Qwen3.8-Flash-Next-GSQ-RCO-IQ2_XS-00001-of-00002.gguf",
+      "size": 39225954592,
+      "sha256": "92cee27ae5bbadcd732416a0f7a7f0acc092399dbbe8f5a5efa707c2ec0a49d7",
+      "url": "https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/resolve/ed59f92082b1e93c0e96d60a8b11aab089b52f09/IQ2_XS/Qwen3.8-Flash-Next-GSQ-RCO-IQ2_XS-00001-of-00002.gguf"
+    },
+    {
+      "name": "Qwen3.8-Flash-Next-GSQ-RCO-IQ2_XS-00002-of-00002.gguf",
+      "size": 28800138432,
+      "sha256": "316b46f3a2dbd68c900f43136ab9449f9dcc3725dfd8c794847c204bc161e113",
+      "url": "https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/resolve/ed59f92082b1e93c0e96d60a8b11aab089b52f09/IQ2_XS/Qwen3.8-Flash-Next-GSQ-RCO-IQ2_XS-00002-of-00002.gguf"
+    }
+  ],
+  "context": 262144,
+  "memory_limit": "64G",
+  "mtp_revision": "de4b8e4d43b917e7706784d8bb445c9af86a3540",
+  "managed_directories": [
+    "pack",
+    "mtp"
+  ],
+  "runtime": {
+    "directory": "/home/tritlo/Code/local-models/state/runtimes/strata-qwen-0.1.52",
+    "binary": "/home/tritlo/Code/local-models/state/runtimes/strata-qwen-0.1.52/engine/strata",
+    "version": "0.1.52",
+    "archive_url": "https://github.com/Niko1221/Strata/releases/download/v0.2.7/strata-engine-0.1.52-linux-x86_64-cuda-cuda13.tar.gz",
+    "archive_sha256": "4177c1a8ffc59bf66074093b22ac55ed477bcbe84f8bd12e378b0f1236da55c7",
+    "archive_size": 645979691,
+    "manifest_sha256": "52f57c1943e982cccc75426a050ab3961d0fd5791b0b9e66dacc3a764be1b4a7",
+    "feed_url": "https://github.com/Niko1221/Strata/releases/download/v0.2.7/strata-feed.json",
+    "feed_sha256": "148dc76b786f65371691b6fd73884c6150f269f0c4e379aa6c472dbe29c6f355",
+    "feed_signature_sha256": "2999e0efd205a7b99eb3f2c6457b5022426c9104342f1c9cd86ba5692289f4f1",
+    "venv": "/home/tritlo/Code/local-models/state/venvs/strata-official"
+  },
+  "gguf_source": {
+    "url": "https://codeload.github.com/ggml-org/llama.cpp/zip/3cf03257f219afbe7334045ff7c6a06ac68c627d",
+    "size": 39564399,
+    "sha256": "cbe23c594282ead2937abb3f008e51fcec4609d9256652fff42c7cc1c21ea47b"
+  },
+  "prepare_packages": [
+    "numpy==2.3.4",
+    "tqdm==4.67.1",
+    "pyyaml==6.0.3",
+    "regex==2026.9.10"
+  ],
+  "ple_shard": "/home/tritlo/Code/local-models/models/qwen38-ista-iq2-xs/Qwen3.8-Flash-Next-GSQ-RCO-IQ2_XS-00002-of-00002.gguf",
+  "source_tag": "v0.2.7.1",
+  "control_version": "0.1.53"
+}

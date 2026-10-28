@@ -1,0 +1,143 @@
+{
+  "id": "bonsai-native",
+  "status": "prepared-not-built-not-benchmarked",
+  "prepared_at": "2026-10-19",
+  "source_repository": "https://github.com/PrismML-Eng/llama.cpp",
+  "source_revision": "e3de715222b2667c54a267441159a5729f11155e",
+  "base_commit": "e3de715222b2667c54a267441159a5729f11155e",
+  "bundle_repository": "https://github.com/professorpalmer/bonsai-ada-surgery",
+  "bundle_commit": "f0a11b8b7ac5e82dcfdcd48015beb9eabf9501d2",
+  "source_directory": "/home/tritlo/Code/local-models/state/sources/bonsai-native",
+  "build_directory": "/home/tritlo/Code/local-models/state/builds/bonsai-native",
+  "binary": "/home/tritlo/Code/local-models/state/builds/bonsai-native/bin/llama-server",
+  "source_archive": {
+    "url": "https://codeload.github.com/PrismML-Eng/llama.cpp/tar.gz/e3de715222b2667c54a267441159a5729f11155e",
+    "sha256": "e0dbe5fde916a15a93cf11fe6467b320bf23b6b60fca772d3c136fdf880fda70",
+    "path": "/home/tritlo/Code/local-models/state/sources/bonsai-native/.git/preparation/base-source.tar.gz",
+    "size": 37384891
+  },
+  "patch": "/home/tritlo/Code/local-models/experiments/bonsai-native/native.patch",
+  "patch_sha256": "588b41428a8f00ad07df811bd63e8cfc714565db9e3af6c9354435870be9467c",
+  "source_diff_sha256": "588b41428a8f00ad07df811bd63e8cfc714565db9e3af6c9354435870be9467c",
+  "source_files_sha256": "/home/tritlo/Code/local-models/experiments/bonsai-native/source-files.sha256",
+  "source_files_count": 3587,
+  "changed_source_files": "/home/tritlo/Code/local-models/experiments/bonsai-native/changed-source-files.json",
+  "changed_source_files_count": 17,
+  "upstream_patches": [
+    {
+      "number": "0028",
+      "path": "/home/tritlo/Code/local-models/experiments/bonsai-native/upstream/0028-llama-cuda-tiered-KV-cache-kv-vram-cells-VRAM-head-p.patch",
+      "sha256": "910df92496acef51f8dc828a742107cd6d466970e76da0cb27c473799e011af7"
+    },
+    {
+      "number": "0029",
+      "path": "/home/tritlo/Code/local-models/experiments/bonsai-native/upstream/0029-cuda-quantized-KV-GQA-decode-on-the-in-place-MMA-fla.patch",
+      "sha256": "b609d2b2f45636f1295f26bf469c19c3bfec16e4225eb3dff2197025b06eebea"
+    },
+    {
+      "number": "0031",
+      "path": "/home/tritlo/Code/local-models/experiments/bonsai-native/upstream/0031-speculative-spec-draft-window-and-spec-draft-n-max-t.patch",
+      "sha256": "cf8c8eec47f125ce61e95c37be984a2c07723901659a93bc4505ba0609c523e3"
+    },
+    {
+      "number": "0041",
+      "path": "/home/tritlo/Code/local-models/experiments/bonsai-native/upstream/0041-cuda-tiered-KV-prefill-writes-new-rows-through-the-V.patch",
+      "sha256": "23c30f817a9bb6cb87bdb038ad827f5c2f65f824fc9d57a334d7ca8d2a70d5ee"
+    },
+    {
+      "number": "0042",
+      "path": "/home/tritlo/Code/local-models/experiments/bonsai-native/upstream/0042-grammar-clone-redirects-stack-pointers-by-binary-sea.patch",
+      "sha256": "1a3fdbb65b2800b55a864ee9717bc24403873bdd46211d71abb041be178cb8e1"
+    },
+    {
+      "number": "0047",
+      "path": "/home/tritlo/Code/local-models/experiments/bonsai-native/upstream/0047-cuda-tiered-KV-partial-staging-GGML_CUDA_KV_TIER_STA.patch",
+      "sha256": "c4912627fb69f86213f8ca7db8986e8f1f24c1228f7867f8be8fe9c53849a213"
+    },
+    {
+      "number": "0053",
+      "path": "/home/tritlo/Code/local-models/experiments/bonsai-native/upstream/0053-cuda-CUDA-graphs-off-for-graphs-whose-attention-read.patch",
+      "sha256": "da5487a4cb4b40eda5cef082066a2666ca8a3586ed7f466f7353f5923c4d8643"
+    }
+  ],
+  "adaptations": [
+    "0031: retain bounded MTP-window sizing and eviction only; omit tail caps and depth-cutoff resizing.",
+    "0031: require MTP and nonempty batch; use 64-bit sizing arithmetic.",
+    "0041: place the graph begin/step/end hooks in e3de715 without importing optional op-timing code."
+  ],
+  "cmake_args": [
+    "-DCMAKE_BUILD_TYPE=Release",
+    "-DCMAKE_CUDA_ARCHITECTURES=89-real",
+    "-DCMAKE_CUDA_COMPILER=/home/tritlo/Code/local-models/dory/.venv/lib/python3.12/site-packages/nvidia/cu13/bin/nvcc",
+    "-DCUDAToolkit_ROOT=/home/tritlo/Code/local-models/dory/.venv/lib/python3.12/site-packages/nvidia/cu13",
+    "-DCMAKE_CUDA_FLAGS=-I/home/tritlo/Code/local-models/dory/.venv/lib/python3.12/site-packages/nvidia/cu13/include/cccl",
+    "-DCUDA_cudart_LIBRARY=/home/tritlo/Code/local-models/dory/.venv/lib/python3.12/site-packages/nvidia/cu13/lib/libcudart.so.13",
+    "-DCUDA_cublas_LIBRARY=/home/tritlo/Code/local-models/dory/.venv/lib/python3.12/site-packages/nvidia/cu13/lib/libcublas.so.13",
+    "-DCUDA_cublasLt_LIBRARY=/home/tritlo/Code/local-models/dory/.venv/lib/python3.12/site-packages/nvidia/cu13/lib/libcublasLt.so.13",
+    "-DGGML_CUDA=ON",
+    "-DGGML_RPC=OFF",
+    "-DGGML_NATIVE=OFF",
+    "-DGGML_CUDA_CCCL_VERSION=",
+    "-DLLAMA_BUILD_COMMON=ON",
+    "-DLLAMA_BUILD_TOOLS=ON",
+    "-DLLAMA_BUILD_SERVER=ON",
+    "-DLLAMA_BUILD_TESTS=OFF",
+    "-DLLAMA_BUILD_EXAMPLES=OFF",
+    "-DLLAMA_BUILD_APP=OFF",
+    "-DLLAMA_BUILD_UI=OFF",
+    "-DLLAMA_USE_PREBUILT_UI=OFF",
+    "-DLLAMA_OPENSSL=OFF",
+    "-DLLAMA_SUBPROCESS=OFF",
+    "-DLLAMA_LLGUIDANCE=OFF",
+    "-DFETCHCONTENT_FULLY_DISCONNECTED=ON",
+    "-DGGML_CUDA_NO_VMM=OFF",
+    "-DLLAMA_DSPARK_MARKOV_CUDA=OFF",
+    "-DLLAMA_BUILD_COMMIT=e3de715-bonsai-native"
+  ],
+  "build_target": "llama-server",
+  "build_jobs": 2,
+  "build_memory_cap": "16G",
+  "build_time_cap": "90m",
+  "environment": {
+    "PATH_prepend": "/home/tritlo/Code/local-models/dory/.venv/lib/python3.12/site-packages/nvidia/cu13/bin",
+    "LD_LIBRARY_PATH_prepend": "/home/tritlo/Code/local-models/dory/.venv/lib/python3.12/site-packages/nvidia/cu13/lib"
+  },
+  "native_features": [
+    "draft_window",
+    "kv_vram_cells",
+    "mma_decode_min_kv",
+    "grammar_clone",
+    "lookup_ngram_mod",
+    "mtp_chain",
+    "reasoning_xhigh",
+    "tier_prefetch"
+  ],
+  "unsupported_features": [
+    "spec-draft-n-max-tail",
+    "sparse-host-tail",
+    "agent-proxy",
+    "reasoning-effort-normalization"
+  ],
+  "runtime_requirements": {
+    "host": "127.0.0.1",
+    "parallel": 1,
+    "gpu_layers": 99,
+    "cache_type_k": "q4_0",
+    "cache_type_v": "q4_0",
+    "flash_attention": "on",
+    "cuda_architecture": "89-real",
+    "cuda_vmm": true,
+    "existing_weights_only": true
+  },
+  "review": {
+    "scope": "Seven selected upstream patches and focused source adaptations; see source-audit.md.",
+    "finding": "No added networking, telemetry, subprocess execution, URL fetching, or tool execution found in the selected changes.",
+    "limitations": [
+      "No CMake configure, compilation, native execution, GPU probe, inference, or benchmark performed.",
+      "CUDA VMM host allocation and staging are unvalidated on this WSL2 driver.",
+      "Bounded source inspection is not a proof of memory safety or numerical parity.",
+      "Single-GPU single-slot use only; dynamic hot reload and concurrent allocation require further review.",
+      "Draft-window acceptance, cache restore, compaction and cancellation require runtime checks later."
+    ]
+  }
+}

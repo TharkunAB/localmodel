@@ -1,0 +1,3137 @@
+diff --git a/common/arg.cpp b/common/arg.cpp
+index 94dead3..8e23e13 100644
+--- a/common/arg.cpp
++++ b/common/arg.cpp
+@@ -1701,6 +1701,19 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
+             params.checkpoint_min_step = value;
+         }
+     ).set_env("LLAMA_ARG_CHECKPOINT_MIN_SPACING_NT").set_examples({LLAMA_EXAMPLE_SERVER}));
++    add_opt(common_arg(
++        {"-cent", "--checkpoint-every-nt"}, "N",
++        string_format("also create a context checkpoint inside a long message every N prompt tokens, so a later prompt\n"
++                      "that diverges inside that message restores the nearest checkpoint instead of processing the whole\n"
++                      "prompt again (hybrid / recurrent models; default: %d, 0 = only at user messages and the prompt end)",
++                      params.checkpoint_every_nt),
++        [](common_params & params, int value) {
++            if (value < 0) {
++                throw std::invalid_argument("checkpoint-every-nt must be non-negative");
++            }
++            params.checkpoint_every_nt = value;
++        }
++    ).set_examples({LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_CHECKPOINT_EVERY_NT"));
+     add_opt(common_arg(
+         {"-cram", "--cache-ram"}, "N",
+         string_format("set the maximum cache size in MiB (default: %d, -1 - no limit, 0 - disable)"
+@@ -2457,6 +2470,18 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
+             params.kv_mean_center_path = value;
+         }
+     ).set_env("LLAMA_ARG_KV_MEAN_CENTER"));
++    add_opt(common_arg(
++        {"--kv-vram-cells"}, "N",
++        "tiered KV cache: keep the first N cells of each layer's K/V in VRAM and the rest in pinned system RAM\n"
++        "mapped into the same device range (CUDA VMM), so the context can exceed VRAM. Positions past N are\n"
++        "read over PCIe once a sequence is that deep; output is identical to an all-VRAM cache. 0 = off (default)",
++        [](common_params & params, int value) {
++            if (value < 0) {
++                throw std::invalid_argument("invalid value");
++            }
++            params.n_kv_vram_cells = value;
++        }
++    ).set_env("LLAMA_ARG_KV_VRAM_CELLS"));
+     add_opt(common_arg(
+         {"--hellaswag"},
+         "compute HellaSwag score over random tasks from datafile supplied with -f",
+@@ -4128,6 +4153,17 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
+             params.speculative.draft.n_depth_max = value;
+         }
+     ).set_spec().set_examples({LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_SPEC_DRAFT_DEPTH_MAX"));
++    add_opt(common_arg(
++        {"--spec-draft-window"}, "N",
++        string_format("retain the last N rows in the MTP draft cache; the target keeps its full context\n"
++                      "0 = full draft history (default: %d)", params.speculative.draft.n_window),
++        [](common_params & params, int value) {
++            if (value < 0) {
++                throw std::invalid_argument("invalid value");
++            }
++            params.speculative.draft.n_window = value;
++        }
++    ).set_spec().set_examples({LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_SPEC_DRAFT_WINDOW"));
+ 
+     add_opt(common_arg(
+         {"--spec-draft-p-split", "--draft-p-split"}, "P",
+diff --git a/common/common.cpp b/common/common.cpp
+index 4045903..eb91804 100644
+--- a/common/common.cpp
++++ b/common/common.cpp
+@@ -1764,6 +1764,7 @@ struct llama_context_params common_context_params_to_llama(const common_params &
+     // note: params (and therefore params.kv_mean_center_path) is kept alive by the caller for
+     // at least as long as it takes to call llama_init_from_model() with the returned cparams
+     cparams.path_kv_mean_center = params.kv_mean_center_path.empty() ? nullptr : params.kv_mean_center_path.c_str();
++    cparams.n_kv_vram_cells     = (uint32_t) std::max(0, params.n_kv_vram_cells);
+ 
+     return cparams;
+ }
+diff --git a/common/common.h b/common/common.h
+index 0ab2a3f..ad43126 100644
+--- a/common/common.h
++++ b/common/common.h
+@@ -335,6 +335,9 @@ struct common_params_speculative_draft {
+     // even near 24k tokens and costs 30% at 64k. Past the cutoff the slot decodes one token per step.
+     int32_t n_depth_max = 0;
+ 
++    // Retain the last n_window rows in the MTP draft cache. Zero retains the full history.
++    int32_t n_window = 0;
++
+     bool backend_sampling = true; // offload draft sampling to the backend (default: on)
+ 
+     common_params_model mparams;
+@@ -588,6 +591,9 @@ struct common_params {
+     // only takes effect when cache_type_k == GGML_TYPE_Q4_0; see docs/kv-mean-center.md
+     std::string kv_mean_center_path = "";
+ 
++    // tiered KV cache: cells past this many live in pinned host memory (0 = all in device memory)
++    int32_t n_kv_vram_cells = 0;
++
+     common_conversation_mode conversation_mode = COMMON_CONVERSATION_MODE_AUTO;
+ 
+     // multimodal models (see tools/mtmd)
+@@ -624,6 +630,7 @@ struct common_params {
+     bool    cache_idle_slots    = true;  // save and clear idle slots upon starting a new task
+     int32_t n_ctx_checkpoints   = 32;    // max number of context checkpoints per slot
+     int32_t checkpoint_min_step = 8192;  // minimum spacing between context checkpoints
++    int32_t checkpoint_every_nt = 0;     // also checkpoint inside a long message every N prompt tokens (0 = off)
+     int32_t cache_ram_mib       = 8192;  // -1 = no limit, 0 - disable, 1 = 1 MiB, etc.
+ 
+     std::string hostname      = "127.0.0.1";
+diff --git a/common/speculative.cpp b/common/speculative.cpp
+index ed48214..9cb3019 100644
+--- a/common/speculative.cpp
++++ b/common/speculative.cpp
+@@ -3811,8 +3811,19 @@ common_speculative_init_result::common_speculative_init_result(
+         cparams.ctx_type = LLAMA_CONTEXT_TYPE_MTP;
+     }
+ 
+-    // the draft context holds as many tokens per sequence as the target context
++    // Use the full target context unless an MTP draft window is set.
+     cparams.n_ctx = llama_n_ctx(ctx_tgt);
++    if (spec_mtp && params.speculative.draft.n_window > 0) {
++        const uint64_t n_seq = std::max<uint32_t>(1, cparams.n_seq_max);
++        const uint64_t need = (uint64_t) params.speculative.draft.n_window +
++                              2*std::max<uint32_t>(cparams.n_batch, cparams.n_ubatch) + 256;
++        const uint64_t capped = GGML_PAD(need, 256) * n_seq;
++        if (capped < cparams.n_ctx) {
++            LOG_INF("%s: draft context sized to %u tokens (spec-draft-window %d, target %u)\n",
++                    __func__, (uint32_t) capped, params.speculative.draft.n_window, cparams.n_ctx);
++            cparams.n_ctx = (uint32_t) capped;
++        }
++    }
+ 
+     // n_rs_seq stays as common_context_params_to_llama set it: the draft context needs the same rollback window as the target, with n_rs_seq == 0 its seq_rm fails silently on partial acceptance and keeps stale positions
+     cparams.ctx_other = ctx_tgt;
+diff --git a/ggml/include/ggml-cuda.h b/ggml/include/ggml-cuda.h
+index 1cd81ee..b243049 100644
+--- a/ggml/include/ggml-cuda.h
++++ b/ggml/include/ggml-cuda.h
+@@ -27,6 +27,10 @@ GGML_BACKEND_API bool ggml_backend_is_cuda(ggml_backend_t backend);
+ // device buffer
+ GGML_BACKEND_API ggml_backend_buffer_type_t ggml_backend_cuda_buffer_type(int device);
+ 
++// device buffer whose buffers keep vram_frac of each of n_parts equal parts in VRAM and the remainder in
++// pinned host memory mapped into the same device address range (CUDA VMM). nullptr without VMM.
++GGML_BACKEND_API ggml_backend_buffer_type_t ggml_backend_cuda_tier_buffer_type(int device, double vram_frac, int n_parts, const char * tag);
++
+ // conduct allreduce operation between devices
+ GGML_BACKEND_API bool ggml_backend_cuda_allreduce_tensor(ggml_backend_t * backends, struct ggml_tensor ** tensors, size_t n_backends);
+ 
+diff --git a/ggml/include/ggml.h b/ggml/include/ggml.h
+index c933946..35c0152 100644
+--- a/ggml/include/ggml.h
++++ b/ggml/include/ggml.h
+@@ -2622,6 +2622,24 @@ extern "C" {
+             struct ggml_tensor  * rows,
+             int                   n_snap_slots);
+ 
++    // replay rollback (llama LLAMA_RS_REPLAY): a raw-gate gated_delta_net op that first runs the pending tokens of each
++    // sequence (the GDN inputs of its last P tokens, kept in `pend`: rows of P tokens [k | v | g | beta] + one float
++    // holding how many are valid), skipping the ones `info` marks rejected, then the batch. `info` is I32 [3*n_seqs]:
++    // pend row, rejected count, fresh (1: the state is new, no pending token is valid). Output: the attention scores
++    // [S_v, H_v, n_tokens, n_seqs], then the state P tokens before the end (the commit point) [S_v, S_v, H_v, n_seqs],
++    // then the new pending rows [pend->ne[0], n_seqs] (padded to whole output rows). CUDA only.
++    GGML_API struct ggml_tensor * ggml_gated_delta_net_replay_raw(
++            struct ggml_context * ctx,
++            struct ggml_tensor  * q,
++            struct ggml_tensor  * k,
++            struct ggml_tensor  * v,
++            struct ggml_tensor  * g,
++            struct ggml_tensor  * beta,
++            struct ggml_tensor  * state,
++            struct ggml_tensor  * pend,
++            struct ggml_tensor  * info,
++            int                   n_pend);
++
+     // fold the per-head gate activations into a gated_delta_net op (scalar gate only):
+     //   beta -> sigmoid(beta),  g -> a[h] * softplus(g + dt_bias[h])
+     // dt_bias and a are F32 with H_v elements; removes four elementwise ops per layer
+diff --git a/ggml/src/ggml-cpu/ops.cpp b/ggml/src/ggml-cpu/ops.cpp
+index ccb5ec8..c9842ed 100644
+--- a/ggml/src/ggml-cpu/ops.cpp
++++ b/ggml/src/ggml-cpu/ops.cpp
+@@ -11117,6 +11117,8 @@ static void ggml_compute_forward_gated_delta_net_f32(
+         const ggml_compute_params * params,
+         ggml_tensor * dst) {
+ 
++    GGML_ASSERT(ggml_get_op_params_i32(dst, 2) == 0 && "gated_delta_net replay (pending tokens) is CUDA only");
++
+     ggml_tensor * V = dst->src[2];
+     int64_t nr = V->ne[1] * V->ne[3];
+ 
+diff --git a/ggml/src/ggml-cuda/common.cuh b/ggml/src/ggml-cuda/common.cuh
+index d294186..29e0dc7 100644
+--- a/ggml/src/ggml-cuda/common.cuh
++++ b/ggml/src/ggml-cuda/common.cuh
+@@ -52,6 +52,8 @@
+ #define GGML_CUDA_CC_VOLTA           700
+ #define GGML_CUDA_CC_TURING          750
+ #define GGML_CUDA_CC_AMPERE          800
++#define GGML_CUDA_CC_AMPERE_GA10X    860
++#define GGML_CUDA_CC_ORIN            870
+ #define GGML_CUDA_CC_ADA_LOVELACE    890
+ #define GGML_CUDA_CC_HOPPER          900
+ // While BW spans CC 1000, 1100 & 1200, we are integrating Tensor Core instructions available to 1200 family, see
+diff --git a/ggml/src/ggml-cuda/fattn.cu b/ggml/src/ggml-cuda/fattn.cu
+index 32f6440..a8d9409 100644
+--- a/ggml/src/ggml-cuda/fattn.cu
++++ b/ggml/src/ggml-cuda/fattn.cu
+@@ -485,6 +485,23 @@ static best_fattn_kernel ggml_cuda_get_best_fattn_kernel(const int device, const
+ 
+     // If Turing tensor cores are available, use them:
+     if (turing_mma_available(cc) && Q->ne[0] != 40 && Q->ne[0] != 72) {
++        // Quantized-KV decode with wide GQA (up to 8 queries: single-token decode and speculative verify):
++        // the vector kernel runs one block per Q head, so every K/V row is fetched gqa_ratio times (6x for
++        // Qwen3.5/Bonsai 2: 24 Q heads over 4 KV heads). The MMA kernel packs the GQA heads of one KV head
++        // into one tile and reads q4_0/q8_0 K/V in place once. Same rule the F16 path already uses.
++        // RTX 4070, Bonsai 2 27B, q8_0 K/V, MTP draft: 4k 78.1 -> 86.9 tok/s, 16k 77.7 -> 111.6, 32k 54.5 -> 103.6.
++        // GGML_CUDA_FA_MMA_DECODE_MIN_KV = shortest KV length that takes this route (default 256, 0 = never).
++        {
++            static const int min_kv = [] {
++                const char * e = getenv("GGML_CUDA_FA_MMA_DECODE_MIN_KV");
++                return e ? atoi(e) : 256;
++            }();
++            if (min_kv > 0 && ggml_is_quantized(K->type) && K->type == V->type &&
++                    ggml_cuda_fattn_mma_kv_native_supported(dst) &&
++                    gqa_opt_applies && gqa_ratio > 4 && Q->ne[1] <= 8 && Q->ne[3] == 1 && K->ne[1] >= min_kv) {
++                return BEST_FATTN_KERNEL_MMA_F16;
++            }
++        }
+         if (can_use_vector_kernel) {
+             // batch-invariant mode: the same (vector) kernel for 1 to 8 queries, so a token verified in a
+             // speculative batch attends with the same arithmetic as a token decoded alone
+@@ -607,8 +624,57 @@ size_t ggml_cuda_flash_attn_ext_get_alloc_size(int device, const ggml_tensor * d
+     return f16_extra.end - (uintptr_t) dst->data;
+ }
+ 
++// ggml-cuda.cu: host-tail staging of tiered buffers (ggml_backend_cuda_tier_buffer_type), and its prefetch
++void * ggml_cuda_tier_stage(const void * ptr, size_t nbytes, cudaStream_t stream);
++bool   ggml_cuda_tier_fa_begin(ggml_backend_cuda_context & ctx, const ggml_tensor * dst, void ** K_alias, void ** V_alias);
++void   ggml_cuda_tier_fa_end(ggml_backend_cuda_context & ctx);
++
++// GGML_CUDA_KV_TIER_STAGE_MIN_Q=q: attention ops with fewer than q queries (decode, small verify batches) that are not
++// in the prefill prefetch read the host tail in place and copy nothing. Unset: 0 (every op that reaches the tail stages).
++static int64_t ggml_cuda_tier_stage_min_q() {
++    static const int64_t q = [] {
++        const char * e = getenv("GGML_CUDA_KV_TIER_STAGE_MIN_Q");
++        return e ? (int64_t) atoll(e) : (int64_t) 0;
++    }();
++    return q;
++}
++
+ void ggml_cuda_flash_attn_ext(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
+     ggml_cuda_set_device(ctx.device);
++
++    // K/V in a tiered buffer whose host tail this op reaches: copy the used host rows into the VRAM staging
++    // buffer with the copy engine and point K/V at the all-VRAM alias of the same range for this op. Prefill
++    // kernels read each K/V row once per query tile, which for host rows would be PCIe traffic every time;
++    // decode reads each row once, but DMA moves it faster than SMs reading host memory from inside the
++    // kernel (RTX 4070, 180k context, 86k cells in host memory: +28% decode). Nothing is copied for ops
++    // that stay below the tier line. The staged bytes are the same bytes, so results are unchanged.
++    ggml_tensor * K = dst->src[1];
++    ggml_tensor * V = dst->src[2];
++    // With the prefetch (ggml_cuda_tier_graph_begin), the host rows are already in staging when this op starts.
++    void * K_data = K ? K->data : nullptr;
++    void * V_data = V ? V->data : nullptr;
++    bool tier_piped = false;
++    if (K && V && V != K) {
++        void * K_alias = nullptr;
++        void * V_alias = nullptr;
++        tier_piped = ggml_cuda_tier_fa_begin(ctx, dst, &K_alias, &V_alias);
++        if (tier_piped) {
++            if (K_alias) {
++                K->data = K_alias;
++            }
++            if (V_alias) {
++                V->data = V_alias;
++            }
++        } else if (dst->src[0]->ne[1] >= ggml_cuda_tier_stage_min_q()) {
++            if (void * a = ggml_cuda_tier_stage(K->data, ggml_nbytes(K), ctx.stream())) {
++                K->data = a;
++            }
++            if (void * a = ggml_cuda_tier_stage(V->data, ggml_nbytes(V), ctx.stream())) {
++                V->data = a;
++            }
++        }
++    }
++
+     switch (ggml_cuda_get_best_fattn_kernel(ggml_cuda_get_device(), dst)) {
+         case BEST_FATTN_KERNEL_NONE:
+             GGML_ABORT("fatal error");
+@@ -622,6 +688,17 @@ void ggml_cuda_flash_attn_ext(ggml_backend_cuda_context & ctx, ggml_tensor * dst
+             ggml_cuda_flash_attn_ext_mma_f16(ctx, dst);
+             break;
+     }
++
++    if (tier_piped) {
++        ggml_cuda_tier_fa_end(ctx);
++    }
++
++    if (K) {
++        K->data = K_data;
++    }
++    if (V) {
++        V->data = V_data;
++    }
+ }
+ 
+ bool ggml_cuda_flash_attn_ext_supported(int device, const ggml_tensor * dst) {
+diff --git a/ggml/src/ggml-cuda/gated-delta-net-mma.cu b/ggml/src/ggml-cuda/gated-delta-net-mma.cu
+new file mode 100644
+index 0000000..a0c47b3
+--- /dev/null
++++ b/ggml/src/ggml-cuda/gated-delta-net-mma.cu
+@@ -0,0 +1,450 @@
++#include "gated-delta-net-mma.cuh"
++#include "mma.cuh"
++
++#include <climits>
++#include <mutex>
++
++namespace {
++constexpr int D = 128;
++using bf16      = nv_bfloat16;
++
++template <int R, int C> struct matrix {
++    bf16 hi[R * C], lo[R * C];
++
++    static __device__ __forceinline__ int index(int r, int c) {
++#ifdef GGML_USE_HIP
++        return r * C + c;
++#else
++        return ggml_cuda_mma::swizzle_bytes<true, nv_bfloat162>(r, c / 2, C / 2) / 2 + c % 2;
++#endif // GGML_USE_HIP
++    }
++
++    __device__ __forceinline__ void store2(int r, int c, float2 x) {
++#ifdef GGML_USE_MUSA
++        store(r, c, x.x);
++        store(r, c + 1, x.y);
++#else
++        const int    i                            = index(r, c);
++        const auto   h                            = __float22bfloat162_rn(x);
++        const float2 rounded                      = __bfloat1622float2(h);
++        *reinterpret_cast<nv_bfloat162 *>(hi + i) = h;
++        *reinterpret_cast<nv_bfloat162 *>(lo + i) =
++            __float22bfloat162_rn(make_float2(x.x - rounded.x, x.y - rounded.y));
++#endif // GGML_USE_MUSA
++    }
++
++    __device__ __forceinline__ void store(int r, int c, float x) {
++        const int  i = index(r, c);
++        const bf16 h = __float2bfloat16(x);
++        hi[i]        = h;
++        lo[i]        = __float2bfloat16(x - __bfloat162float(h));
++    }
++};
++
++template <int C, int V> struct alignas(128) shared {
++    matrix<C, D> q, k;
++    matrix<C, C> p, inverse;
++    matrix<C, V> delta;
++
++    union {
++        matrix<D, V> state;
++        matrix<C, V> solved;
++    } scratch;
++
++    float lower[C * C], prefix[C], beta[C];
++
++    static __device__ __forceinline__ int lower_index(int r, int c) { return r * C + c; }
++};
++
++#if defined(AMPERE_MMA_AVAILABLE) || (defined(AMD_WMMA_AVAILABLE) && defined(RDNA3))
++using namespace ggml_cuda_mma;
++#ifdef GGML_USE_HIP
++using acc    = tile<16, 16, float, DATA_LAYOUT_J_MAJOR>;
++using a_tile = tile<16, 8, nv_bfloat162, DATA_LAYOUT_I_MAJOR_MIRRORED>;
++using b_tile = a_tile;
++#else
++using acc    = tile<16, 8, float>;
++using a_tile = tile<16, 8, nv_bfloat162>;
++using b_tile = tile<8, 8, nv_bfloat162>;
++#endif // GGML_USE_HIP
++
++template <class tile_t, bool TRANS, int R, int C>
++__device__ __forceinline__ tile_t load(const matrix<R, C> & m, int row, int col, bool low) {
++    tile_t       t;
++    const bf16 * data = low ? m.lo : m.hi;
++#ifdef GGML_USE_HIP
++#pragma unroll
++    for (int i = 0; i < tile_t::ne; ++i) {
++        const int  r = row + tile_t::get_i(i), c = col + 2 * tile_t::get_j(i);
++        const bf16 x = data[TRANS ? m.index(c, r) : m.index(r, c)];
++        const bf16 y = data[TRANS ? m.index(c + 1, r) : m.index(r, c + 1)];
++        t.x[i]       = __float22bfloat162_rn(make_float2(__bfloat162float(x), __bfloat162float(y)));
++    }
++#else
++    const auto * packed = reinterpret_cast<const nv_bfloat162 *>(data);
++    if constexpr (TRANS) {
++        load_ldmatrix_trans<true>(t, packed, col, row / 2, C / 2);
++    } else {
++        load_ldmatrix<true>(t, packed, row, col / 2, C / 2);
++    }
++#endif // GGML_USE_HIP
++    return t;
++}
++
++// B is addressed as B-transpose. Preserve both BF16 first-order residual terms.
++template <int K, bool TA = false, bool TB = false, int AR, int AC, int BR, int BC>
++__device__ __forceinline__ void product(acc & c, const matrix<AR, AC> & a, const matrix<BR, BC> & b, int row, int col) {
++#pragma unroll
++    for (int k = 0; k < K; k += 16) {
++        const auto ah = load<a_tile, TA>(a, row, k, false);
++        const auto al = load<a_tile, TA>(a, row, k, true);
++        const auto bh = load<b_tile, TB>(b, col, k, false);
++        const auto bl = load<b_tile, TB>(b, col, k, true);
++        mma(c, al, bh);
++        mma(c, ah, bl);
++        mma(c, ah, bh);
++    }
++}
++
++template <int R, int C> __device__ __forceinline__ void store(matrix<R, C> & m, const acc & x, int r, int c) {
++#pragma unroll
++#ifdef GGML_USE_HIP
++    for (int i = 0; i < acc::ne; ++i) {
++        m.store(r + acc::get_i(i), c + acc::get_j(i), x.x[i]);
++    }
++#else
++    for (int i = 0; i < acc::ne; i += 2) {
++        m.store2(r + acc::get_i(i), c + acc::get_j(i), make_float2(x.x[i], x.x[i + 1]));
++    }
++#endif // GGML_USE_HIP
++}
++#endif // defined(AMPERE_MMA_AVAILABLE) || (defined(AMD_WMMA_AVAILABLE) && defined(RDNA3))
++
++// Each block owns V independent value columns and advances by C tokens.
++// Keep recurrent state in FP32; pack high/residual BF16 operands inside the block.
++template <int C, int V, int BLOCKS = 1>
++static __global__ __launch_bounds__(256, BLOCKS) void gdn_single(ggml_cuda_gdn_mma_args a) {
++#if defined(AMPERE_MMA_AVAILABLE) || (defined(AMD_WMMA_AVAILABLE) && defined(RDNA3))
++    static_assert(ggml_cuda_get_physical_warp_size() == 32, "GDN MMA requires 32-lane warps");
++    constexpr int WARPS = 8;
++#ifdef GGML_USE_HIP
++    constexpr int N = 16;
++#else
++    constexpr int N = 8;
++#endif // GGML_USE_HIP
++    static_assert(C >= 16 && (C & (C - 1)) == 0 && V % N == 0 && D % V == 0, "invalid GDN tile");
++    extern __shared__ __align__(128) unsigned char bytes[];
++    auto &                                         s    = *reinterpret_cast<shared<C, V> *>(bytes);
++    const int                                      lane = threadIdx.x, warp = threadIdx.y, tid = warp * 32 + lane;
++    const int                                      slice = blockIdx.x % (D / V);
++    const int                                      h     = (blockIdx.x / (D / V)) % a.H;
++    const int                                      seq   = blockIdx.x / ((D / V) * a.H);
++    const int                                      v0    = slice * V;
++    const int64_t                                  soff  = ((int64_t) seq * a.H + h) * D * D;
++    const int64_t                                  qoff  = (seq / a.rq3) * a.sq3 + (h % a.H_k) * a.sq1;
++    const int64_t                                  voff  = seq * a.sv3 + h * a.sv1 + v0;
++    const int64_t                                  goff  = seq * a.sb3 + h * a.sb1;
++    float *                                        out   = a.dst + ((int64_t) seq * a.n_tokens * a.H + h) * D + v0;
++    constexpr int                                  STATE_TILES = (D / 16) * (V / N);
++    constexpr int                                  PER_WARP    = STATE_TILES / WARPS;
++    static_assert(STATE_TILES % WARPS == 0, "state must divide across warps");
++    acc state[PER_WARP];
++#pragma unroll
++    for (int j = 0; j < PER_WARP; ++j) {
++        const int tile_index = warp + j * WARPS, r = (tile_index / (V / N)) * 16, c = (tile_index % (V / N)) * N;
++#pragma unroll
++        for (int i = 0; i < acc::ne; ++i) {
++            state[j].x[i] = a.state[soff + (v0 + c + acc::get_j(i)) * D + r + acc::get_i(i)];
++        }
++    }
++    auto read_qk = [&](int64_t t, float4 & q, float4 & k) {
++        t += warp;
++        q = k = make_float4(0, 0, 0, 0);
++        if (t < a.n_tokens) {
++            const int64_t off = qoff + t * a.sq2 + 4 * lane;
++            if ((((uintptr_t) (a.q + off) | (uintptr_t) (a.k + off)) & 15) == 0) {
++                q = *reinterpret_cast<const float4 *>(a.q + off);
++                k = *reinterpret_cast<const float4 *>(a.k + off);
++            } else {
++                q = make_float4(a.q[off], a.q[off + 1], a.q[off + 2], a.q[off + 3]);
++                k = make_float4(a.k[off], a.k[off + 1], a.k[off + 2], a.k[off + 3]);
++            }
++        }
++    };
++    // Carry the first eight input rows across chunks to hide global-load latency.
++    constexpr bool PREFETCH = C == 16 && V == 32;
++    float4         next_q, next_k;
++    if constexpr (PREFETCH) {
++        read_qk(0, next_q, next_k);
++    }
++    for (int64_t t0 = 0; t0 < a.n_tokens; t0 += C) {
++        const int valid = min((int64_t) C, a.n_tokens - t0);
++#pragma unroll
++        for (int j = 0; j < C / 8; ++j) {
++            const int t = warp + 8 * j, d = 4 * lane;
++            float4    q, k;
++            if (PREFETCH && j == 0) {
++                q = next_q;
++                k = next_k;
++            } else {
++                read_qk(t0 + 8 * j, q, k);
++            }
++            s.q.store2(t, d, make_float2(q.x * a.scale, q.y * a.scale));
++            s.q.store2(t, d + 2, make_float2(q.z * a.scale, q.w * a.scale));
++            s.k.store2(t, d, make_float2(k.x, k.y));
++            s.k.store2(t, d + 2, make_float2(k.z, k.w));
++        }
++        // Load gates in parallel before the FP32 prefix scan.
++        if (warp == 0) {
++            float carry = 0.f;
++            for (int base = 0; base < C; base += 32) {
++                const int   t    = base + lane;
++                float       g    = t < valid ? a.g[goff + (t0 + t) * a.sb2] : 0.f;
++                const float beta = t < valid ? a.beta[goff + (t0 + t) * a.sb2] : 0.f;
++#pragma unroll
++                for (int offset = 1; offset < 32; offset *= 2) {
++                    const float previous = __shfl_up_sync(0xffffffff, g, offset, 32);
++                    if (lane >= offset) {
++                        g += previous;
++                    }
++                }
++                g += carry;
++                if (t < C) {
++                    s.prefix[t] = g;
++                    s.beta[t]   = beta;
++                }
++                carry = __shfl_sync(0xffffffff, g, 31, 32);
++            }
++        }
++#pragma unroll
++        for (int j = 0; j < PER_WARP; ++j) {
++            const int ti = warp + j * WARPS;
++            store(s.scratch.state, state[j], (ti / (V / N)) * 16, (ti % (V / N)) * N);
++        }
++        __syncthreads();
++        if constexpr (PREFETCH) {
++            if (t0 + C < a.n_tokens) {
++                read_qk(t0 + C, next_q, next_k);
++            }
++        }
++        // V32 overlaps Gram work with one output tile per projection warp.
++        constexpr bool SPLIT_PROJECTION = C == 16 && V == 32;
++        acc            base_output[((C / 16) * (V / N) + WARPS - 1) / WARPS];
++        auto           project = [&]() {
++            if constexpr (V == 32) {
++                if (warp < 4) {
++                    return;
++                }
++            }
++            for (int ti = (V == 32 ? warp - 4 : warp); ti < (C / 16) * (V / N); ti += (V == 32 ? 4 : WARPS)) {
++                const int r = (ti / (V / N)) * 16, c = (ti % (V / N)) * N;
++                acc       qs, ks;
++                product<D, false, true>(qs, s.q, s.scratch.state, r, c);
++                product<D, false, true>(ks, s.k, s.scratch.state, r, c);
++#pragma unroll
++                for (int i = 0; i < acc::ne; ++i) {
++                    const int   t = r + acc::get_i(i), v = c + acc::get_j(i);
++                    const float decay = expf(s.prefix[t]);
++                    const float vv    = t < valid ? a.v[voff + (t0 + t) * a.sv2 + v] : 0.f;
++                    s.delta.store(t, v, s.beta[t] * (vv - decay * ks.x[i]));
++                    base_output[ti / WARPS].x[i] = decay * qs.x[i];
++                }
++            }
++        };
++        for (int ti = warp; ti < 2 * (C / 16) * (C / N) && (V != 32 || warp < 4); ti += (V == 32 ? 4 : WARPS)) {
++            const bool gram = ti < (C / 16) * (C / N);
++            const int  t = ti % ((C / 16) * (C / N)), r = (t / (C / N)) * 16, c = (t % (C / N)) * N;
++            acc        x;
++            if (gram) {
++                product<D>(x, s.k, s.k, r, c);
++            } else {
++                product<D>(x, s.q, s.k, r, c);
++            }
++#pragma unroll
++            for (int i = 0; i < acc::ne; ++i) {
++                const int   rr = r + acc::get_i(i), cc = c + acc::get_j(i);
++                const float v = rr < valid && cc <= rr ? x.x[i] * expf(s.prefix[rr] - s.prefix[cc]) : 0.f;
++                if (gram) {
++                    if (cc < rr) {
++                        s.lower[s.lower_index(rr, cc)] = v * s.beta[rr];
++                    }
++                } else {
++                    s.p.store(rr, cc, v);
++                }
++            }
++        }
++        if constexpr (V == 32) {
++            project();
++        }
++        __syncthreads();
++        for (int row = warp; row < C; row += WARPS) {
++            float x[(C + 31) / 32];
++#pragma unroll
++            for (int j = 0; j < (C + 31) / 32; ++j) {
++                const int col = lane + 32 * j;
++                x[j]          = col == row ? 1.f : (col < row ? -s.lower[s.lower_index(row, col)] : 0.f);
++            }
++            for (int pivot = row - 1; pivot > 0; --pivot) {
++                const float xp = __shfl_sync(0xffffffff, x[pivot / 32], pivot % 32, 32);
++#pragma unroll
++                for (int j = 0; j < (C + 31) / 32; ++j) {
++                    const int col = lane + 32 * j;
++                    if (col < pivot) {
++                        x[j] -= xp * s.lower[s.lower_index(pivot, col)];
++                    }
++                }
++            }
++#pragma unroll
++            for (int j = 0; j < (C + 31) / 32; ++j) {
++                if (lane + 32 * j < C) {
++                    s.inverse.store(row, lane + 32 * j, x[j]);
++                }
++            }
++        }
++        if constexpr (V != 32) {
++            project();
++        }
++        __syncthreads();
++        for (int ti = warp; ti < (C / 16) * (V / N); ti += WARPS) {
++            const int r = (ti / (V / N)) * 16, c = (ti % (V / N)) * N;
++            acc       x;
++            product<C, false, true>(x, s.inverse, s.delta, r, c);
++            store(s.scratch.solved, x, r, c);
++        }
++        __syncthreads();
++        for (int ti = (SPLIT_PROJECTION ? warp - 4 : warp); ti < (C / 16) * (V / N) && (!SPLIT_PROJECTION || warp >= 4);
++             ti += WARPS) {
++            const int r = (ti / (V / N)) * 16, c = (ti % (V / N)) * N;
++            acc       x;
++            product<C, false, true>(x, s.p, s.scratch.solved, r, c);
++#pragma unroll
++            for (int i = 0; i < acc::ne; ++i) {
++                const int t = r + acc::get_i(i), v = c + acc::get_j(i);
++                if (t < valid) {
++                    out[(t0 + t) * a.H * D + v] = base_output[ti / WARPS].x[i] + x.x[i];
++                }
++            }
++        }
++        for (int i = tid; i < C * V; i += 256) {
++            const int   t = i / V, v = i % V, j = s.scratch.solved.index(t, v);
++            const float x = __bfloat162float(s.scratch.solved.hi[j]) + __bfloat162float(s.scratch.solved.lo[j]);
++            s.delta.store(t, v, x * expf(s.prefix[valid - 1] - s.prefix[t]));
++        }
++        __syncthreads();
++        const float decay = expf(s.prefix[valid - 1]);
++#pragma unroll
++        for (int j = 0; j < PER_WARP; ++j) {
++            const int ti = warp + j * WARPS, r = (ti / (V / N)) * 16, c = (ti % (V / N)) * N;
++#pragma unroll
++            for (int i = 0; i < acc::ne; ++i) {
++                state[j].x[i] *= decay;
++            }
++            product<C, true, true>(state[j], s.k, s.delta, r, c);
++        }
++        __syncthreads();
++    }
++#pragma unroll
++    for (int j = 0; j < PER_WARP; ++j) {
++        const int ti = warp + j * WARPS, r = (ti / (V / N)) * 16, c = (ti % (V / N)) * N;
++#pragma unroll
++        for (int i = 0; i < acc::ne; ++i) {
++            a.state_out[soff + (v0 + c + acc::get_j(i)) * D + r + acc::get_i(i)] = state[j].x[i];
++        }
++    }
++#else
++    GGML_UNUSED_VARS(a);
++    NO_DEVICE_CODE;
++#endif // defined(AMPERE_MMA_AVAILABLE) || (defined(AMD_WMMA_AVAILABLE) && defined(RDNA3))
++}
++
++template <int C, int V, int BLOCKS = 1> bool init(int device) {
++    static std::once_flag once[GGML_CUDA_MAX_DEVICES];
++    static bool           available[GGML_CUDA_MAX_DEVICES] = {};
++    std::call_once(once[device], [device] {
++        ggml_cuda_set_device(device);
++        if (sizeof(shared<C, V>) > ggml_cuda_info().devices[device].smpbo) {
++            return;
++        }
++        const auto status = cudaFuncSetAttribute((const void *) gdn_single<C, V, BLOCKS>,
++                                                 cudaFuncAttributeMaxDynamicSharedMemorySize, sizeof(shared<C, V>));
++        available[device] = status == cudaSuccess;
++        if (status != cudaSuccess) {
++            (void) cudaGetLastError();
++        }
++    });
++    return available[device];
++}
++
++enum class gdn_path { ar, slice32_one_block, slice32_two_blocks, slice64, whole_head };
++
++static gdn_path select_gdn_mma_path(int device, const ggml_cuda_gdn_mma_args & a) {
++    GGML_ASSERT(device >= 0 && device < GGML_CUDA_MAX_DEVICES);
++    if (!a.eligible || a.H_k != 16 || (a.H != 16 && a.H != 32 && a.H != 48 && a.H != 64) || a.n_tokens < 64 ||
++        a.n_tokens > INT64_MAX - 32 || a.rq3 <= 0 || a.n_seqs <= 0 || a.n_seqs > INT_MAX / (a.H * 4)) {
++        return gdn_path::ar;
++    }
++    const auto & info = ggml_cuda_info().devices[device];
++#ifdef GGML_USE_HIP
++    if (!GGML_CUDA_CC_IS_RDNA3_5(info.cc) || a.n_tokens < 2048) {
++        return gdn_path::ar;
++    }
++    return init<16, 64>(device) ? gdn_path::slice64 : gdn_path::ar;
++#elif defined(GGML_USE_MUSA)
++    GGML_UNUSED_VARS(info);
++    return gdn_path::ar;
++#else
++    // Enable only architectures benchmarked for this schedule. MMA support alone does not imply a speedup.
++    if (!ampere_mma_available(info.cc) ||
++        (info.cc != GGML_CUDA_CC_AMPERE_GA10X && info.cc != GGML_CUDA_CC_ADA_LOVELACE &&
++         info.cc != GGML_CUDA_CC_BLACKWELL && info.cc != GGML_CUDA_CC_DGX_SPARK)) {
++        return gdn_path::ar;
++    }
++    // Value splitting pays off when whole heads leave at least half the SMs idle.
++    if (a.H * a.n_seqs * 2 <= info.nsm) {
++        // A grid that already fits in one wave benefits from a larger register budget.
++        if (a.H * a.n_seqs * 4 <= info.nsm) {
++            return init<16, 32, 1>(device) ? gdn_path::slice32_one_block : gdn_path::ar;
++        }
++        return init<16, 32, 2>(device) ? gdn_path::slice32_two_blocks : gdn_path::ar;
++    }
++    return init<16, 128>(device) ? gdn_path::whole_head : gdn_path::ar;
++#endif // GGML_USE_HIP
++}
++}  // namespace
++
++bool ggml_cuda_gdn_mma_device_supported(int device) {
++    const int cc = ggml_cuda_info().devices[device].cc;
++#ifdef GGML_USE_HIP
++    return GGML_CUDA_CC_IS_RDNA3_5(cc);
++#elif defined(GGML_USE_MUSA)
++    GGML_UNUSED(cc);
++    return false;
++#else
++    // the architectures select_gdn_mma_path accepts
++    return ampere_mma_available(cc) && (cc == GGML_CUDA_CC_AMPERE_GA10X || cc == GGML_CUDA_CC_ADA_LOVELACE ||
++                                        cc == GGML_CUDA_CC_BLACKWELL || cc == GGML_CUDA_CC_DGX_SPARK);
++#endif // GGML_USE_HIP
++}
++
++bool ggml_cuda_gdn_mma_launch(int device, const ggml_cuda_gdn_mma_args & a, cudaStream_t stream) {
++    if (!a.state_out) {
++        return false;
++    }
++    const auto path = select_gdn_mma_path(device, a);
++    if (path == gdn_path::ar) {
++        return false;
++    }
++#ifdef GGML_USE_HIP
++    gdn_single<16, 64><<<a.H * a.n_seqs * 2, dim3(32, 8), sizeof(shared<16, 64>), stream>>>(a);
++#else
++    if (path == gdn_path::slice32_two_blocks) {
++        gdn_single<16, 32, 2><<<a.H * a.n_seqs * 4, dim3(32, 8), sizeof(shared<16, 32>), stream>>>(a);
++    } else if (path == gdn_path::slice32_one_block) {
++        gdn_single<16, 32, 1><<<a.H * a.n_seqs * 4, dim3(32, 8), sizeof(shared<16, 32>), stream>>>(a);
++    } else {
++        gdn_single<16, 128><<<a.H * a.n_seqs, dim3(32, 8), sizeof(shared<16, 128>), stream>>>(a);
++    }
++#endif // GGML_USE_HIP
++    CUDA_CHECK(cudaGetLastError());
++    return true;
++}
+diff --git a/ggml/src/ggml-cuda/gated-delta-net-mma.cuh b/ggml/src/ggml-cuda/gated-delta-net-mma.cuh
+new file mode 100644
+index 0000000..b1fd6e9
+--- /dev/null
++++ b/ggml/src/ggml-cuda/gated-delta-net-mma.cuh
+@@ -0,0 +1,37 @@
++#pragma once
++
++#include "common.cuh"
++
++#include <cstdint>
++
++struct ggml_cuda_gdn_mma_args {
++    const float * q;
++    const float * k;
++    const float * v;
++    const float * g;
++    const float * beta;
++    const float * state;
++    float *       dst;
++    float *       state_out;
++
++    int64_t H;
++    int64_t H_k;
++    int64_t n_tokens;
++    int64_t n_seqs;
++    int64_t rq3;
++    int64_t sq1;
++    int64_t sq2;
++    int64_t sq3;
++    int64_t sv1;
++    int64_t sv2;
++    int64_t sv3;
++    int64_t sb1;
++    int64_t sb2;
++    int64_t sb3;
++    float   scale;
++    bool    eligible;
++};
++
++// false: the device never takes the chunked kernel (checked before any temporaries are allocated)
++bool ggml_cuda_gdn_mma_device_supported(int device);
++bool ggml_cuda_gdn_mma_launch(int device, const ggml_cuda_gdn_mma_args & args, cudaStream_t stream);
+diff --git a/ggml/src/ggml-cuda/gated_delta_net.cu b/ggml/src/ggml-cuda/gated_delta_net.cu
+index 40a639d..5f43c28 100644
+--- a/ggml/src/ggml-cuda/gated_delta_net.cu
++++ b/ggml/src/ggml-cuda/gated_delta_net.cu
+@@ -1,6 +1,9 @@
+ #include "gated_delta_net.cuh"
++#include "gated-delta-net-mma.cuh"
+ #include "ggml-cuda/common.cuh"
+ 
++#include <cstdint>
++
+ // Host and device must agree on columns/warp. Kernel uses __CUDA_ARCH__; host uses ggml_cuda_highest_compiled_arch(cc). NVIDIA Ampere+ and S_v==128 and !KDA -> 4; HIP/MUSA stay 1.
+ static constexpr __host__ __device__ int gdn_cols_per_warp(int arch, int S_v, bool KDA) {
+ #if defined(GGML_USE_HIP) || defined(GGML_USE_MUSA)
+@@ -18,6 +21,44 @@ static __global__ void gdn_precompute_exp(const float * g, float * g_exp, int64_
+     }
+ }
+ 
++// fused state gather -> contiguous s0 [S_v, S_v, H, n_seqs] for the chunked MMA kernel (per sequence one cache row)
++static __global__ void gdn_gather_state(const float * base, const int32_t * ids, const int64_t row_stride,
++        float * out, const int64_t n_per_seq, const int64_t n_seqs) {
++    const int64_t n = n_per_seq * n_seqs;
++    for (int64_t i = (int64_t) blockIdx.x*blockDim.x + threadIdx.x; i < n; i += (int64_t) blockDim.x*gridDim.x) {
++        const int64_t seq = i / n_per_seq;
++        out[i] = base[(int64_t) ids[seq]*row_stride + (i - seq*n_per_seq)];
++    }
++}
++
++// raw gates -> activated gates for the chunked MMA kernel: beta = sigmoid(beta), g = raw_a[h] * softplus(g + dt_bias[h]),
++// the same formulas as the RAW path of gated_delta_net_cuda. g and beta are contiguous [1, H, n_tokens, n_seqs].
++static __global__ void gdn_activate_raw_gates(const float * g, const float * beta, const float * raw_dt_bias,
++        const float * raw_a, float * g_out, float * beta_out, const int64_t n, const int64_t H) {
++    for (int64_t i = (int64_t) blockIdx.x*blockDim.x + threadIdx.x; i < n; i += (int64_t) blockDim.x*gridDim.x) {
++        const int64_t h = i % H;
++        const float x = g[i] + raw_dt_bias[h];
++        g_out[i]    = raw_a[h] * ((x > 20.0f) ? x : logf(1.0f + expf(x)));
++        beta_out[i] = 1.0f / (1.0f + expf(-beta[i]));
++    }
++}
++
++// Replay rollback (ggml_gated_delta_net_replay_raw): the pending tokens of each sequence (the inputs of its last P tokens)
++// run first, then the batch; a pending token marked rejected is skipped. The state after the commit point (P tokens
++// before the end of the combined run) goes to `state`, and the inputs of the last P combined tokens go to p_out.
++// mode 0: none (the legacy op); 1: commit point + new pending; 2: pending tokens only, final state to `state`.
++struct gdn_replay_args {
++    const float *   p_in         = nullptr; // pending rows (P tokens [k | v | g | beta] + a valid count), nullptr: none
++    const int32_t * p_info       = nullptr; // [3 * n_seqs]: pending row, rejected count, fresh
++    float *         p_out        = nullptr; // new pending rows, one per sequence (nullptr: none)
++    int64_t         p_row_stride = 0;       // floats per pending row
++    int             P            = 0;
++    int             p_tok        = 0;       // floats per pending token
++    int             n_kf         = 0;       // k floats per token (S_k * H_k)
++    int             n_vf         = 0;       // v floats per token (S_v * H)
++    int             mode         = 0;
++};
++
+ // RAW: beta and g arrive pre-activation (ggml_gated_delta_net_set_raw_gates); the kernel applies
+ // sigmoid(beta) and raw_a[h] * softplus(g + raw_dt_bias[h]) with the unary kernels' formulas.
+ // G_PRECOMPUTED: g already holds exp(g) (GB10 long-prompt path); only used with RAW == false.
+@@ -51,7 +92,8 @@ gated_delta_net_cuda(const float * q,
+                                      int64_t       state_slot_stride,
+                                      int           K,
+                                      const int32_t * s_ids,
+-                                     int64_t       s_row_stride) {
++                                     int64_t       s_row_stride,
++                                     const gdn_replay_args rp) {
+     const uint32_t h_idx    = blockIdx.x;
+     const uint32_t sequence = blockIdx.y;
+     // Each warp owns one or more columns, using warp-level primitives to reduce across rows.
+@@ -97,14 +139,60 @@ gated_delta_net_cuda(const float * q,
+         }
+     }
+ 
+-    for (int t = 0; t < n_tokens; t++) {
+-        const float * q_t = q + iq3 * sq3 + t * sq2 + iq1 * sq1;
+-        const float * k_t = k + iq3 * sq3 + t * sq2 + iq1 * sq1;
+-        const float * v_t = v + sequence * sv3 + t * sv2 + h_idx * sv1;
++    // replay: cv valid pending tokens run before the batch (raw scalar gates only)
++    int           cv   = 0;
++    const float * prow = nullptr;
++    if constexpr (RAW && !KDA) {
++        if (rp.p_in != nullptr) {
++            const int row   = rp.p_info[sequence];
++            const int rej   = rp.p_info[n_seqs + sequence];
++            const int fresh = rp.p_info[2 * n_seqs + sequence];
++            prow = rp.p_in + (int64_t) row * rp.p_row_stride;
++            const float count = prow[(int64_t) rp.P * rp.p_tok];
++            const bool valid = isfinite(count) && count >= 0.0f && (double) count <= rp.P && floorf(count) == count;
++            cv = fresh || !valid ? 0 : max(0, (int) count - min(max(rej, 0), rp.P));
++        }
++    }
++    const int L      = cv + (int) n_tokens;
++    const int c_new  = rp.p_out != nullptr ? min(L, rp.P) : 0;
++    const int commit = rp.mode == 1 ? L - c_new : -1;   // the state after this many combined tokens goes to `state`
++    float *   p_dst  = rp.p_out != nullptr ? rp.p_out + (int64_t) sequence * rp.p_row_stride : nullptr;
+ 
+-        const int64_t gb_offset = sequence * sb3 + t * sb2 + h_idx * sb1;
+-        const float * beta_t = beta + gb_offset;
+-        const float * g_t    = g    + gb_offset * (KDA ? S_v : 1);
++    if (commit == 0) {
++#pragma unroll
++        for (int c = 0; c < cols_per_warp; ++c) {
++#pragma unroll
++            for (int r = 0; r < rows_per_lane; r++) {
++                state[(col + c) * S_v + r * warp_size + lane] = s_shard[c][r];
++            }
++        }
++    }
++
++    for (int ci = 0; ci < L; ci++) {
++        const bool pend = ci < cv;   // a pending token: no output
++        const int  t    = ci - cv;   // batch token index
++
++        const float * q_t;
++        const float * k_t;
++        const float * v_t;
++        const float * beta_t;
++        const float * g_t;
++        if (pend) {
++            const float * pt = prow + (int64_t) ci * rp.p_tok;
++            k_t    = pt + iq1 * S_v;
++            q_t    = k_t;   // the output of a pending token is not used
++            v_t    = pt + rp.n_kf + h_idx * S_v;
++            g_t    = pt + rp.n_kf + rp.n_vf + h_idx;
++            beta_t = pt + rp.n_kf + rp.n_vf + H + h_idx;
++        } else {
++            q_t = q + iq3 * sq3 + t * sq2 + iq1 * sq1;
++            k_t = k + iq3 * sq3 + t * sq2 + iq1 * sq1;
++            v_t = v + sequence * sv3 + t * sv2 + h_idx * sv1;
++
++            const int64_t gb_offset = sequence * sb3 + t * sb2 + h_idx * sb1;
++            beta_t = beta + gb_offset;
++            g_t    = g    + gb_offset * (KDA ? S_v : 1);
++        }
+ 
+         float beta_val = *beta_t;
+         if constexpr (RAW) {
+@@ -151,7 +239,7 @@ gated_delta_net_cuda(const float * q,
+ 
+                 float attn_col = warp_reduce_sum<warp_size>(attn_partial);
+ 
+-                if (lane == 0) {
++                if (lane == 0 && !pend) {
+                     attn_data[col + c] = attn_col * scale;
+                 }
+             }
+@@ -181,18 +269,20 @@ gated_delta_net_cuda(const float * q,
+ 
+             float attn_col = warp_reduce_sum<warp_size>(attn_partial);
+ 
+-            if (lane == 0) {
++            if (lane == 0 && !pend) {
+                 attn_data[col] = attn_col * scale;
+             }
+         }
+ 
+-        attn_data += S_v * H;
++        if (!pend) {
++            attn_data += S_v * H;
++        }
+ 
+         if constexpr (keep_rs_t) {
+             // snapshot slot mapping: slot 0 = most recent state, slot s = s tokens back.
+             // When n_tokens < K only slots 0..n_tokens-1 are written; older slots are caller-owned.
+             const int target_slot = (int) n_tokens - 1 - t;
+-            if (target_slot >= 0 && target_slot < K) {
++            if (!pend && target_slot >= 0 && target_slot < K) {
+                 float * curr_state = state + target_slot * state_slot_stride;
+ #pragma unroll
+                 for (int c = 0; c < cols_per_warp; ++c) {
+@@ -205,15 +295,73 @@ gated_delta_net_cuda(const float * q,
+             }
+         }
+ 
++        if (ci + 1 == commit) {
++#pragma unroll
++            for (int c = 0; c < cols_per_warp; ++c) {
++#pragma unroll
++                for (int r = 0; r < rows_per_lane; r++) {
++                    state[(col + c) * S_v + r * warp_size + lane] = s_shard[c][r];
++                }
++            }
++        }
++
++        if (p_dst != nullptr && ci >= commit) {
++            // this token's inputs become pending slot ci - commit: k once per k head, v per owned column, gates once
++            float * pt = p_dst + (int64_t) (ci - commit) * rp.p_tok;
++            if (h_idx == iq1 && blockIdx.z == 0 && threadIdx.y == 0) {
++#pragma unroll
++                for (int r = 0; r < rows_per_lane; r++) {
++                    pt[iq1 * S_v + r * warp_size + lane] = k_reg[r];
++                }
++            }
++            if (lane == 0) {
++#pragma unroll
++                for (int c = 0; c < cols_per_warp; ++c) {
++                    pt[rp.n_kf + h_idx * S_v + col + c] = v_t[col + c];
++                }
++            }
++            if (blockIdx.z == 0 && threadIdx.y == 0 && lane == 0) {
++                pt[rp.n_kf + rp.n_vf + h_idx]     = *g_t;
++                pt[rp.n_kf + rp.n_vf + H + h_idx] = *beta_t;
++            }
++        }
++    }
++
++    if (p_dst != nullptr) {
++        // unused slots (fewer than P combined tokens): zeros, so saved rows do not depend on old memory
++        for (int sl = c_new; sl < rp.P; ++sl) {
++            float * pt = p_dst + (int64_t) sl * rp.p_tok;
++            if (h_idx == iq1 && blockIdx.z == 0 && threadIdx.y == 0) {
++#pragma unroll
++                for (int r = 0; r < rows_per_lane; r++) {
++                    pt[iq1 * S_v + r * warp_size + lane] = 0.0f;
++                }
++            }
++            if (lane == 0) {
++#pragma unroll
++                for (int c = 0; c < cols_per_warp; ++c) {
++                    pt[rp.n_kf + h_idx * S_v + col + c] = 0.0f;
++                }
++            }
++            if (blockIdx.z == 0 && threadIdx.y == 0 && lane == 0) {
++                pt[rp.n_kf + rp.n_vf + h_idx]     = 0.0f;
++                pt[rp.n_kf + rp.n_vf + H + h_idx] = 0.0f;
++            }
++        }
++        if (h_idx == 0 && blockIdx.z == 0 && threadIdx.y == 0 && lane == 0) {
++            p_dst[(int64_t) rp.P * rp.p_tok] = (float) c_new;
++        }
+     }
+ 
+     if constexpr (!keep_rs_t) {
++        if (commit < 0) {
+ #pragma unroll
+-        for (int c = 0; c < cols_per_warp; ++c) {
++            for (int c = 0; c < cols_per_warp; ++c) {
+ #pragma unroll
+-            for (int r = 0; r < rows_per_lane; r++) {
+-                const int i = r * warp_size + lane;
+-                state[(col + c) * S_v + i] = s_shard[c][r];
++                for (int r = 0; r < rows_per_lane; r++) {
++                    const int i = r * warp_size + lane;
++                    state[(col + c) * S_v + i] = s_shard[c][r];
++                }
+             }
+         }
+     }
+@@ -230,7 +378,7 @@ static void launch_gated_delta_net(
+         int64_t sb1,   int64_t sb2, int64_t sb3,
+         int64_t neqk1, int64_t rq3,
+         float scale, int64_t state_slot_stride, int K,
+-        const int32_t * s_ids, int64_t s_row_stride, cudaStream_t stream) {
++        const int32_t * s_ids, int64_t s_row_stride, cudaStream_t stream, const gdn_replay_args & rp = gdn_replay_args()) {
+     //TODO: Add chunked kernel for even faster pre-fill
+     const int warp_size = ggml_cuda_info().devices[ggml_cuda_get_device()].warp_size;
+     const int cc = ggml_cuda_info().devices[ggml_cuda_get_device()].cc;
+@@ -249,26 +397,26 @@ static void launch_gated_delta_net(
+             ggml_cuda_kernel_launch(gated_delta_net_cuda<16, KDA, keep_rs_t, RAW, G_PRECOMPUTED>, launch_params,
+                 q_d, k_d, v_d, g_d, b_d, rb_d, ra_d, s_d, dst_d, state_d, H,
+                 n_tokens, n_seqs, sq1, sq2, sq3, sv1, sv2, sv3,
+-                sb1, sb2, sb3, neqk1_magic, rq3_magic, scale, state_slot_stride, K, s_ids, s_row_stride);
++                sb1, sb2, sb3, neqk1_magic, rq3_magic, scale, state_slot_stride, K, s_ids, s_row_stride, rp);
+             break;
+         case 32:
+             ggml_cuda_kernel_launch(gated_delta_net_cuda<32, KDA, keep_rs_t, RAW, G_PRECOMPUTED>, launch_params,
+                 q_d, k_d, v_d, g_d, b_d, rb_d, ra_d, s_d, dst_d, state_d, H,
+                 n_tokens, n_seqs, sq1, sq2, sq3, sv1, sv2, sv3,
+-                sb1, sb2, sb3, neqk1_magic, rq3_magic, scale, state_slot_stride, K, s_ids, s_row_stride);
++                sb1, sb2, sb3, neqk1_magic, rq3_magic, scale, state_slot_stride, K, s_ids, s_row_stride, rp);
+             break;
+         case 64: {
+             ggml_cuda_kernel_launch(gated_delta_net_cuda<64, KDA, keep_rs_t, RAW, G_PRECOMPUTED>, launch_params,
+                 q_d, k_d, v_d, g_d, b_d, rb_d, ra_d, s_d, dst_d, state_d, H,
+                 n_tokens, n_seqs, sq1, sq2, sq3, sv1, sv2, sv3,
+-                sb1, sb2, sb3, neqk1_magic, rq3_magic, scale, state_slot_stride, K, s_ids, s_row_stride);
++                sb1, sb2, sb3, neqk1_magic, rq3_magic, scale, state_slot_stride, K, s_ids, s_row_stride, rp);
+             break;
+         }
+         case 128: {
+             ggml_cuda_kernel_launch(gated_delta_net_cuda<128, KDA, keep_rs_t, RAW, G_PRECOMPUTED>, launch_params,
+                 q_d, k_d, v_d, g_d, b_d, rb_d, ra_d, s_d, dst_d, state_d, H,
+                 n_tokens, n_seqs, sq1, sq2, sq3, sv1, sv2, sv3,
+-                sb1, sb2, sb3, neqk1_magic, rq3_magic, scale, state_slot_stride, K, s_ids, s_row_stride);
++                sb1, sb2, sb3, neqk1_magic, rq3_magic, scale, state_slot_stride, K, s_ids, s_row_stride, rp);
+             break;
+         }
+         default:
+@@ -277,6 +425,44 @@ static void launch_gated_delta_net(
+     }
+ }
+ 
++static ggml_cuda_gdn_mma_args ggml_cuda_gdn_mma_args_from_tensor(const ggml_tensor * dst) {
++    const ggml_tensor * q     = dst->src[0];
++    const ggml_tensor * k     = dst->src[1];
++    const ggml_tensor * v     = dst->src[2];
++    const ggml_tensor * g     = dst->src[3];
++    const ggml_tensor * beta  = dst->src[4];
++    const ggml_tensor * state = dst->src[5];
++
++    const int64_t S_v = v->ne[0];
++    const int64_t H   = v->ne[1];
++    return {
++        (const float *) q->data,
++        (const float *) k->data,
++        (const float *) v->data,
++        (const float *) g->data,
++        (const float *) beta->data,
++        (const float *) state->data,
++        (float *) dst->data,
++        nullptr,
++        H,
++        q->ne[1],
++        v->ne[2],
++        v->ne[3],
++        v->ne[3] / q->ne[3],
++        (int64_t) (q->nb[1] / sizeof(float)),
++        (int64_t) (q->nb[2] / sizeof(float)),
++        (int64_t) (q->nb[3] / sizeof(float)),
++        (int64_t) (v->nb[1] / sizeof(float)),
++        (int64_t) (v->nb[2] / sizeof(float)),
++        (int64_t) (v->nb[3] / sizeof(float)),
++        (int64_t) (beta->nb[1] / sizeof(float)),
++        (int64_t) (beta->nb[2] / sizeof(float)),
++        (int64_t) (beta->nb[3] / sizeof(float)),
++        1.0f / sqrtf((float) S_v),
++        g->ne[0] == 1 && ggml_get_op_params_i32(dst, 0) == 1 && S_v == 128 && q->ne[0] == 128,
++    };
++}
++
+ static void ggml_cuda_op_gated_delta_net_impl(
+         ggml_backend_cuda_context & ctx, ggml_tensor * dst, const ggml_cuda_gated_delta_net_fused_cache * cache) {
+     ggml_tensor * src_q     = dst->src[0];
+@@ -304,6 +490,8 @@ static void ggml_cuda_op_gated_delta_net_impl(
+     GGML_ASSERT(neq1 == nek1);
+     const int64_t neqk1 = neq1;
+ 
++    GGML_ASSERT(neq3 > 0 && nev3 >= neq3 && nev3 % neq3 == 0);
++    GGML_ASSERT(nek3 == neq3);
+     const int64_t rq3 = nev3 / neq3;
+ 
+     const float * q_d = (const float *) src_q->data;
+@@ -365,6 +553,158 @@ static void ggml_cuda_op_gated_delta_net_impl(
+     const float * ra_d = raw ? (const float *) dst->src[8]->data : nullptr;
+     GGML_ASSERT(!(raw && kda)); // raw gates are defined for the scalar gate only
+ 
++    static const bool mma_off = getenv("GGML_CUDA_GDN_MMA_DISABLE") != nullptr;
++
++    // replay rollback (ggml_gated_delta_net_replay_raw): pending tokens first, the commit-point state to state_d, the new
++    // pending rows after it in dst. With the chunked prefill: the pending tokens run alone first (per-token kernel), the
++    // MMA kernel takes the batch up to its last P + 1 tokens (the boundaries of the snapshot form with K = P + 1, so the
++    // results are the same), and the per-token kernel finishes the last P + 1 with the commit point and pending out.
++    const int n_pend = ggml_get_op_params_i32(dst, 2);
++    if (n_pend > 0) {
++        GGML_ASSERT(raw && !kda && !keep_rs && S_v == neq0);
++        const ggml_tensor * src_p = dst->src[9];
++        const ggml_tensor * src_i = dst->src[6];
++        gdn_replay_args rp;
++        rp.p_in         = (const float *) src_p->data;
++        rp.p_info       = (const int32_t *) src_i->data;
++        rp.p_row_stride = (int64_t) (src_p->nb[1] / sizeof(float));
++        rp.P            = n_pend;
++        rp.n_kf         = (int) (S_v * neqk1);
++        rp.n_vf         = (int) (S_v * H);
++        rp.p_tok        = rp.n_kf + rp.n_vf + 2 * (int) H;
++        GGML_ASSERT(src_p->ne[0] == (int64_t) rp.P * rp.p_tok + 1 && rp.p_row_stride == src_p->ne[0]);
++        rp.p_out        = dst_d + S_v * H * n_tokens * n_seqs + S_v * S_v * H * n_seqs;
++        rp.mode         = 1;
++
++        const int64_t n_mma_r = n_seqs == 1 ? n_tokens - (rp.P + 1) : 0;
++        if (!mma_off && n_mma_r >= 64 && ggml_cuda_gdn_mma_device_supported(ctx.device)) {
++            ggml_cuda_pool_alloc<float> s_rep(ctx.pool(), S_v * S_v * H * n_seqs);
++            ggml_cuda_pool_alloc<float> s_mid(ctx.pool(), S_v * S_v * H * n_seqs);
++            ggml_cuda_pool_alloc<float> g_act(ctx.pool());
++            ggml_cuda_pool_alloc<float> b_act(ctx.pool());
++            gdn_replay_args rp_pend = rp;   // pending tokens only, final state to s_rep
++            rp_pend.p_out = nullptr;
++            rp_pend.mode  = 2;
++            launch_gated_delta_net<false, false, true, false>(q_d, k_d, v_d, g_d, b_d, rb_d, ra_d, s_d, dst_d, s_rep.ptr,
++                S_v, H, 0, n_seqs, sq1, sq2, sq3, sv1, sv2, sv3, sb1, sb2, sb3, neqk1, rq3, scale, 0, 1,
++                s_ids, s_row_stride, stream, rp_pend);
++
++            ggml_cuda_gdn_mma_args args = ggml_cuda_gdn_mma_args_from_tensor(dst);
++            args.eligible  = src_g->ne[0] == 1 && S_v == 128 && neq0 == 128;
++            args.n_tokens  = n_mma_r;
++            args.state     = s_rep.ptr;
++            args.state_out = s_mid.ptr;
++            const int64_t n_gb = ggml_nelements(src_g);
++            g_act.alloc(n_gb);
++            b_act.alloc(n_gb);
++            gdn_activate_raw_gates<<<(unsigned) std::min<int64_t>((n_gb + 255)/256, 4096), 256, 0, stream>>>(
++                g_d, b_d, rb_d, ra_d, g_act.ptr, b_act.ptr, n_gb, H);
++            args.g    = g_act.ptr;
++            args.beta = b_act.ptr;
++            if (ggml_cuda_gdn_mma_launch(ctx.device, args, stream)) {
++                const int64_t t0 = n_mma_r;
++                gdn_replay_args rp_tail = rp;   // no pending phase (it ran first), commit point + new pending
++                rp_tail.p_in = nullptr;
++                launch_gated_delta_net<false, false, true, false>(q_d + t0 * sq2, k_d + t0 * sq2, v_d + t0 * sv2,
++                    g_d + t0 * sb2, b_d + t0 * sb2, rb_d, ra_d, s_mid.ptr, dst_d + t0 * S_v * H, state_d,
++                    S_v, H, rp.P + 1, n_seqs, sq1, sq2, sq3, sv1, sv2, sv3, sb1, sb2, sb3, neqk1, rq3, scale, 0, 1,
++                    nullptr, 0, stream, rp_tail);
++                return;
++            }
++        }
++        launch_gated_delta_net<false, false, true, false>(q_d, k_d, v_d, g_d, b_d, rb_d, ra_d, s_d, dst_d, state_d,
++            S_v, H, n_tokens, n_seqs, sq1, sq2, sq3, sv1, sv2, sv3, sb1, sb2, sb3, neqk1, rq3, scale, 0, 1,
++            s_ids, s_row_stride, stream, rp);
++        return;
++    }
++
++    // chunked MMA prefill kernel (upstream ggml-org/llama.cpp#29353): scalar gates, state read in place (no fused
++    // gather). Raw gates are activated into temporaries first, with the formulas of the RAW path below, so the
++    // product graph (raw gates on CUDA) can take it. With K > 1 rollback snapshots (speculative decoding), one
++    // sequence: the MMA kernel runs tokens [0, n - K) into a temporary state and the recurrent kernel continues
++    // over the last K tokens from it, writing the K snapshot slots exactly as before.
++    const int64_t n_mma = K == 1 ? n_tokens : (n_seqs == 1 ? n_tokens - K : 0);
++    if (!mma_off && n_tokens >= 64 && (kda || n_mma < 64)) {
++        static bool logged_skip = false;
++        if (!logged_skip) {
++            GGML_LOG_WARN("%s: chunked GDN prefill (MMA) skipped: %lld tokens, K %d, kda %d, seqs %lld\n",
++                __func__, (long long) n_tokens, K, (int) kda, (long long) n_seqs);
++            logged_skip = true;
++        }
++    }
++    const bool mma_dev = !mma_off && !kda && n_mma >= 64 && ggml_cuda_gdn_mma_device_supported(ctx.device);
++    if (!mma_off && !kda && n_mma >= 64 && !mma_dev) {
++        static bool logged_dev = false;
++        if (!logged_dev) {
++            GGML_LOG_WARN("%s: chunked GDN prefill (MMA) skipped: device cc %d has no supported BF16 MMA schedule; recurrent kernel\n",
++                __func__, ggml_cuda_info().devices[ctx.device].cc);
++            logged_dev = true;
++        }
++    }
++    if (mma_dev) {
++        ggml_cuda_gdn_mma_args args = ggml_cuda_gdn_mma_args_from_tensor(dst);
++        args.eligible = src_g->ne[0] == 1 && S_v == 128 && neq0 == 128;   // K is handled here
++        args.n_tokens = n_mma;
++        ggml_cuda_pool_alloc<float> s_in(ctx.pool());
++        ggml_cuda_pool_alloc<float> g_act(ctx.pool());
++        ggml_cuda_pool_alloc<float> b_act(ctx.pool());
++        ggml_cuda_pool_alloc<float> s_mid(ctx.pool());
++        if (s_ids != nullptr) {
++            // fused gather: copy each sequence's live state out of its cache row first (S_v*S_v*H floats per sequence)
++            const int64_t n_per_seq = S_v * S_v * H;
++            s_in.alloc(n_per_seq * n_seqs);
++            gdn_gather_state<<<(unsigned) std::min<int64_t>((n_per_seq*n_seqs + 255)/256, 4096), 256, 0, stream>>>(
++                s_d, s_ids, s_row_stride, s_in.ptr, n_per_seq, n_seqs);
++            args.state = s_in.ptr;
++        }
++        if (raw) {
++            const int64_t n_gb = ggml_nelements(src_g);
++            GGML_ASSERT(ggml_nelements(src_beta) == n_gb);
++            g_act.alloc(n_gb);
++            b_act.alloc(n_gb);
++            gdn_activate_raw_gates<<<(unsigned) std::min<int64_t>((n_gb + 255)/256, 4096), 256, 0, stream>>>(
++                g_d, b_d, rb_d, ra_d, g_act.ptr, b_act.ptr, n_gb, H);
++            args.g    = g_act.ptr;
++            args.beta = b_act.ptr;
++        }
++        if (K > 1) {
++            s_mid.alloc(S_v * S_v * H * n_seqs);
++            args.state_out = s_mid.ptr;
++        } else {
++            args.state_out = state_d;
++        }
++        const bool launched = ggml_cuda_gdn_mma_launch(ctx.device, args, stream);
++        static bool logged = false;
++        if (!logged) {
++            GGML_LOG_WARN("%s: chunked GDN prefill (MMA) %s: %lld tokens (%lld by MMA), K %d, H %lld, H_k %lld, raw %d, gather %d, seqs %lld\n",
++                __func__, launched ? "engaged" : "not taken (shape or device)", (long long) n_tokens, (long long) n_mma, K,
++                (long long) H, (long long) neqk1, (int) raw, (int) (s_ids != nullptr), (long long) n_seqs);
++            logged = true;
++        }
++        if (launched) {
++            if (K > 1) {
++                // the last K tokens from the MMA state, with the snapshot slots (raw gates still raw here)
++                const int64_t t0 = n_mma;
++                const float * q_t = q_d + t0 * sq2;
++                const float * k_t = k_d + t0 * sq2;
++                const float * v_t = v_d + t0 * sv2;
++                const float * g_t = g_d + t0 * sb2;
++                const float * b_t = b_d + t0 * sb2;
++                float       * o_t = dst_d + t0 * S_v * H;
++                if (raw) {
++                    launch_gated_delta_net<false, true, true, false>(q_t, k_t, v_t, g_t, b_t, rb_d, ra_d, s_mid.ptr, o_t, state_d,
++                        S_v, H, K, n_seqs, sq1, sq2, sq3, sv1, sv2, sv3, sb1, sb2, sb3, neqk1, rq3, scale, state_slot_stride, K,
++                        nullptr, 0, stream);
++                } else {
++                    launch_gated_delta_net<false, true, false, false>(q_t, k_t, v_t, g_t, b_t, rb_d, ra_d, s_mid.ptr, o_t, state_d,
++                        S_v, H, K, n_seqs, sq1, sq2, sq3, sv1, sv2, sv3, sb1, sb2, sb3, neqk1, rq3, scale, state_slot_stride, K,
++                        nullptr, 0, stream);
++                }
++            }
++            return;
++        }
++    }
++
+     // GB10 long-prompt path: exp(g) once per (token, head) instead of once per column-warp.
+     // Only for activated gates; with raw gates (#165) the activation happens inside the kernel.
+     ggml_cuda_pool_alloc<float> g_exp_alloc(ctx.pool());
+diff --git a/ggml/src/ggml-cuda/ggml-cuda.cu b/ggml/src/ggml-cuda/ggml-cuda.cu
+index 616f1d7..399c151 100644
+--- a/ggml/src/ggml-cuda/ggml-cuda.cu
++++ b/ggml/src/ggml-cuda/ggml-cuda.cu
+@@ -83,6 +83,7 @@
+ #include <initializer_list>
+ #include <limits>
+ #include <map>
++#include <functional>
+ #include <memory>
+ #include <mutex>
+ #include <cstdarg>
+@@ -701,10 +702,51 @@ static std::mutex ggml_cuda_lock;
+ static std::condition_variable ggml_cuda_lock_cv;
+ static std::atomic<int> ggml_cuda_lock_counter;
+ 
++// tiered KV prefill state of a backend context (see ggml_cuda_tier_graph_begin)
++struct ggml_cuda_tier_redirect {
++    int          at;       // graph index of the set_rows node
++    ggml_tensor * node;
++    void *       data;     // the node's own address, restored after the write-back
++    const void * entry;    // ggml_cuda_tier_entry of the tiered buffer
++    size_t       base;     // offset of the node's data in the tiered buffer
++    size_t       h_lo;     // host run of the node's range, as offsets from base
++    size_t       h_hi;
++};
++struct ggml_cuda_tier_state {
++    std::vector<ggml_cuda_tier_redirect> rd; // set_rows nodes that write through the alias, in graph order
++    size_t      rd_next  = 0;             // rd[rd_next] is the next one to write back
++    std::vector<const ggml_tensor *> fa;  // attention ops of the graph whose K/V reach a host tail, in graph order
++    size_t      next     = 0;             // fa[next] is the next attention op of the prefetch pipeline
++    bool        inflight = false;         // a prefetch was queued and the main stream has not waited for it yet
++    cudaEvent_t read     = nullptr;       // main stream: the last attention op that read the staging buffers is done
++    cudaEvent_t copied   = nullptr;       // prefetch stream: the copy for fa[next] is done
++};
++static std::mutex g_tier_state_mutex;
++static std::unordered_map<const ggml_backend_cuda_context *, ggml_cuda_tier_state> g_tier_states;
++
++static ggml_cuda_tier_state & ggml_cuda_tier_state_of(const ggml_backend_cuda_context & ctx) {
++    std::lock_guard<std::mutex> lock(g_tier_state_mutex);
++    return g_tier_states[&ctx];
++}
++
+ ggml_backend_cuda_context::~ggml_backend_cuda_context() {
+     std::unique_lock<std::mutex> lock(ggml_cuda_lock);
+     ggml_cuda_lock_cv.wait(lock, []{ return ggml_cuda_lock_counter.load(std::memory_order_relaxed) == 0; });
+ 
++    {
++        std::lock_guard<std::mutex> tier_lock(g_tier_state_mutex);
++        auto it = g_tier_states.find(this);
++        if (it != g_tier_states.end()) {
++            if (it->second.read != nullptr) {
++                CUDA_CHECK(cudaEventDestroy(it->second.read));
++            }
++            if (it->second.copied != nullptr) {
++                CUDA_CHECK(cudaEventDestroy(it->second.copied));
++            }
++            g_tier_states.erase(it);
++        }
++    }
++
+     // pool blocks held across a graph go back to the pool before the pools are destroyed below
+     fwht_q8_context.reset();
+ 
+@@ -733,6 +775,7 @@ struct ggml_backend_cuda_buffer_context {
+     int device;
+     void * dev_ptr = nullptr;
+     std::string name;
++    std::function<void()> release; // set by the tiered (VRAM head + host tail) buffer; default cudaFree
+ 
+     ggml_backend_cuda_buffer_context(int device, void * dev_ptr) :
+         device(device), dev_ptr(dev_ptr),
+@@ -740,7 +783,11 @@ struct ggml_backend_cuda_buffer_context {
+     }
+ 
+     ~ggml_backend_cuda_buffer_context() {
+-        CUDA_CHECK(cudaFree(dev_ptr));
++        if (release) {
++            release();
++        } else {
++            CUDA_CHECK(cudaFree(dev_ptr));
++        }
+     }
+ };
+ 
+@@ -874,8 +921,15 @@ static const ggml_backend_buffer_i ggml_backend_cuda_buffer_interface = {
+ struct ggml_backend_cuda_buffer_type_context {
+     int device;
+     std::string name;
++    // tiered buffer (see ggml_backend_cuda_tier_buffer_type): the buffer is n_parts equal parts; the
++    // first vram_frac of every part is backed by VRAM, the rest by pinned host memory mapped into the
++    // same virtual range. vram_frac >= 1 is an ordinary device buffer.
++    double vram_frac = 1.0;
++    int    n_parts   = 1;
+ };
+ 
++static ggml_backend_buffer_t ggml_backend_cuda_tier_alloc(ggml_backend_buffer_type_t buft, size_t size);
++
+ static const char * ggml_backend_cuda_buffer_type_get_name(ggml_backend_buffer_type_t buft) {
+     ggml_backend_cuda_buffer_type_context * ctx = (ggml_backend_cuda_buffer_type_context *)buft->context;
+ 
+@@ -891,6 +945,10 @@ static ggml_backend_buffer_t ggml_backend_cuda_buffer_type_alloc_buffer(ggml_bac
+ 
+     ggml_cuda_set_device(buft_ctx->device);
+ 
++    if (buft_ctx->vram_frac < 1.0 && size > 0) {
++        return ggml_backend_cuda_tier_alloc(buft, size);
++    }
++
+     void * dev_ptr;
+     cudaError_t err = ggml_cuda_device_malloc(&dev_ptr, size, buft_ctx->device);
+     if (err != cudaSuccess) {
+@@ -964,6 +1022,606 @@ ggml_backend_buffer_type_t ggml_backend_cuda_buffer_type(int device) {
+     return &ggml_backend_cuda_buffer_types[device];
+ }
+ 
++// Tiered device buffer: one contiguous device virtual range whose pages are backed partly by VRAM and
++// partly by pinned host memory (cuMemCreate with a host location), so kernels address it like any
++// device buffer. Used for the KV cache (llama_context_params.n_kv_vram_cells): the first vram_frac of
++// every K/V tensor (the early positions) stays in VRAM, positions past that live in system RAM and are
++// read over PCIe only once a sequence is that deep. Nothing in the attention kernels changes.
++//
++// Staging: each tiered buffer also gets a second virtual range that maps the same VRAM head pages and, in
++// place of each host run, a VRAM staging buffer shared by all tiered buffers (one per part: K, V). An
++// attention op whose K/V range reaches the host tail copies the used host rows into staging with the copy
++// engine and reads the all-VRAM alias (ggml_cuda_tier_stage). GGML_CUDA_KV_TIER_STAGING=0 disables it.
++#if defined(GGML_USE_VMM) && !defined(GGML_USE_HIP) && !defined(GGML_USE_MUSA)
++struct ggml_cuda_tier_entry {
++    CUdeviceptr va, va2;
++    size_t      total;
++    std::vector<std::pair<size_t, size_t>> host_runs; // (offset, length) of the host-backed runs
++};
++static std::mutex                        g_tier_mutex;
++static std::vector<ggml_cuda_tier_entry> g_tier_entries;
++
++static void ggml_cuda_tier_register(CUdeviceptr va, CUdeviceptr va2, size_t total, const std::vector<std::pair<size_t, size_t>> & host_runs) {
++    std::lock_guard<std::mutex> lock(g_tier_mutex);
++    g_tier_entries.push_back({ va, va2, total, host_runs });
++}
++
++static void ggml_cuda_tier_unregister(CUdeviceptr va) {
++    std::lock_guard<std::mutex> lock(g_tier_mutex);
++    for (size_t i = 0; i < g_tier_entries.size(); ++i) {
++        if (g_tier_entries[i].va == va) {
++            g_tier_entries.erase(g_tier_entries.begin() + i);
++            return;
++        }
++    }
++}
++
++// VRAM staging buffers shared by the tiered buffers of one KV cache: slot i backs the i-th host run (K tail, V
++// tail). The layers of a cache run one after another on one stream, so they can share them; another cache (the MTP
++// draft context's) runs on its own stream and can overlap with this one's work, so it gets its own. The cache is
++// the "kv<ptr>" part of the buffer type tag ("kv%p_l%u", llama-kv-cache.cpp). Created at the first request and kept
++// for the life of the process; a later, longer run gets no alias.
++static std::string ggml_cuda_tier_staging_key(const std::string & name) {
++    const size_t a = name.find("_tier_");
++    if (a == std::string::npos) {
++        return name;
++    }
++    const size_t b = name.find("_l", a + 6);
++    return name.substr(a + 6, b == std::string::npos ? std::string::npos : b - (a + 6));
++}
++
++static bool ggml_cuda_tier_staging_handle(int physical, const std::string & key, int slot, size_t len, CUmemGenericAllocationHandle * out) {
++    static std::mutex m;
++    static std::map<std::pair<std::string, int>, std::pair<CUmemGenericAllocationHandle, size_t>> handles;
++    std::lock_guard<std::mutex> lock(m);
++    auto it = handles.find({ key, slot });
++    if (it == handles.end()) {
++        CUmemAllocationProp pd = {};
++        pd.type          = CU_MEM_ALLOCATION_TYPE_PINNED;
++        pd.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
++        pd.location.id   = physical;
++        CUmemGenericAllocationHandle h;
++        if (cuMemCreate(&h, len, &pd, 0) != CUDA_SUCCESS) {
++            return false;
++        }
++        GGML_LOG_INFO("%s: staging buffer %s/%d: %.2f MiB VRAM\n", __func__, key.c_str(), slot, len/1048576.0);
++        it = handles.emplace(std::make_pair(key, slot), std::make_pair(h, len)).first;
++    }
++    if (it->second.second < len) {
++        return false;
++    }
++    *out = it->second.first;
++    return true;
++}
++
++// For a tensor range [ptr, ptr + nbytes) inside a tiered buffer with a staging alias: copy its host-backed
++// bytes into the staging buffers (stream-ordered) and return the same range in the alias, whose pages are
++// all VRAM. nullptr when ptr is not in such a buffer or no byte of the range is host-backed.
++void * ggml_cuda_tier_stage(const void * ptr, size_t nbytes, cudaStream_t stream) {
++    const CUdeviceptr p = (CUdeviceptr) ptr;
++    const ggml_cuda_tier_entry * e = nullptr;
++    {
++        std::lock_guard<std::mutex> lock(g_tier_mutex);
++        for (auto & it : g_tier_entries) {
++            if (p >= it.va && p < it.va + it.total) {
++                e = &it;
++                break;
++            }
++        }
++    }
++    if (!e) {
++        return nullptr;
++    }
++    const size_t lo = p - e->va, hi = std::min(e->total, lo + nbytes);
++    bool any = false;
++    for (auto & hr : e->host_runs) {
++        const size_t a = std::max(lo, hr.first), b = std::min(hi, hr.first + hr.second);
++        if (a < b) {
++            CUDA_CHECK(cudaMemcpyAsync((void *) (e->va2 + a), (const void *) (e->va + a), b - a, cudaMemcpyDeviceToDevice, stream));
++            any = true;
++        }
++    }
++    return any ? (void *) (e->va2 + lo) : nullptr;
++}
++
++static ggml_backend_buffer_t ggml_backend_cuda_tier_alloc(ggml_backend_buffer_type_t buft, size_t size) {
++    ggml_backend_cuda_buffer_type_context * bctx = (ggml_backend_cuda_buffer_type_context *) buft->context;
++    const int device   = bctx->device;
++    const int physical = ggml_cuda_get_physical_device(device);
++
++    CUmemAllocationProp pd = {};
++    pd.type          = CU_MEM_ALLOCATION_TYPE_PINNED;
++    pd.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
++    pd.location.id   = physical;
++
++    CUmemAllocationProp ph = {};
++    ph.type          = CU_MEM_ALLOCATION_TYPE_PINNED;
++    ph.location.type = CU_MEM_LOCATION_TYPE_HOST;
++    ph.location.id   = 0;
++
++    size_t gd = 0, gh = 0;
++    CU_CHECK(cuMemGetAllocationGranularity(&gd, &pd, CU_MEM_ALLOC_GRANULARITY_MINIMUM));
++    if (cuMemGetAllocationGranularity(&gh, &ph, CU_MEM_ALLOC_GRANULARITY_MINIMUM) != CUDA_SUCCESS || gh == 0) {
++        gh = gd;
++    }
++    const size_t gran  = std::max(gd, gh);
++    const size_t total = GGML_PAD(size, gran);
++    const int    parts = std::max(1, bctx->n_parts);
++    const size_t part  = size / parts;
++
++    // page p is VRAM when its start lies in the head of its part
++    const size_t n_pages = total / gran;
++    // GGML_CUDA_KV_TIER_STAGING_FRAC=f: only the first f x part bytes of each host tail get a staging buffer (see the
++    // staging alias below); the rest of the tail is its own allocation, mapped in place in the alias. Unset: whole tail.
++    static const double stage_frac = [] {
++        const char * e = getenv("GGML_CUDA_KV_TIER_STAGING_FRAC");
++        return e ? std::max(0.0, atof(e)) : 2.0;
++    }();
++    std::vector<bool> in_vram(n_pages);
++    std::vector<bool> staged(n_pages);
++    size_t n_vram = 0;
++    for (size_t p = 0; p < n_pages; ++p) {
++        const size_t off  = p * gran;
++        const size_t ip   = std::min<size_t>(off / std::max<size_t>(part, 1), parts - 1);
++        const size_t head = (size_t) (bctx->vram_frac * part);
++        in_vram[p] = off - ip*part < head;
++        staged[p]  = !in_vram[p] && (double) (off - ip*part - head) < stage_frac * (double) part;
++        n_vram += in_vram[p];
++    }
++
++    CUdeviceptr va = 0;
++    CUresult r = cuMemAddressReserve(&va, total, gran, 0, 0);
++    if (r != CUDA_SUCCESS) {
++        GGML_LOG_ERROR("%s: cuMemAddressReserve(%.1f MiB) failed: %d\n", __func__, total/1048576.0, (int) r);
++        return nullptr;
++    }
++
++    struct run { CUdeviceptr ptr; size_t len; CUmemGenericAllocationHandle h; bool staged; };
++    std::vector<run> runs;
++    auto undo = [runs_p = &runs, va, total]() {
++        for (auto & rr : *runs_p) {
++            cuMemUnmap(rr.ptr, rr.len);
++            cuMemRelease(rr.h);
++        }
++        cuMemAddressFree(va, total);
++    };
++
++    for (size_t p = 0; p < n_pages; ) {
++        size_t q = p;
++        while (q < n_pages && in_vram[q] == in_vram[p] && staged[q] == staged[p]) {
++            ++q;
++        }
++        const size_t len = (q - p) * gran;
++        CUmemGenericAllocationHandle h;
++        r = cuMemCreate(&h, len, in_vram[p] ? &pd : &ph, 0);
++        if (r != CUDA_SUCCESS) {
++            const char * es = nullptr; cuGetErrorString(r, &es);
++            GGML_LOG_ERROR("%s: cuMemCreate(%s, %.1f MiB) failed: %s\n", __func__, in_vram[p] ? "vram" : "host", len/1048576.0, es ? es : "?");
++            undo();
++            return nullptr;
++        }
++        r = cuMemMap(va + p*gran, len, 0, h, 0);
++        if (r != CUDA_SUCCESS) {
++            cuMemRelease(h);
++            GGML_LOG_ERROR("%s: cuMemMap failed: %d\n", __func__, (int) r);
++            undo();
++            return nullptr;
++        }
++        runs.push_back({ va + p*gran, len, h, (bool) staged[p] });
++        p = q;
++    }
++
++    CUmemAccessDesc ad = {};
++    ad.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
++    ad.location.id   = physical;
++    ad.flags         = CU_MEM_ACCESS_FLAGS_PROT_READWRITE;
++    r = cuMemSetAccess(va, total, &ad, 1);
++    if (r != CUDA_SUCCESS) {
++        GGML_LOG_ERROR("%s: cuMemSetAccess failed: %d\n", __func__, (int) r);
++        undo();
++        return nullptr;
++    }
++
++    GGML_LOG_INFO("%s: %s %.2f MiB: %.2f MiB VRAM + %.2f MiB host (%zu runs, %d parts)\n", __func__, bctx->name.c_str(),
++        size/1048576.0, n_vram*gran/1048576.0, (n_pages - n_vram)*gran/1048576.0, runs.size(), parts);
++
++    // staging alias (see the comment above ggml_cuda_tier_entry)
++    CUdeviceptr va2 = 0;
++    std::vector<std::pair<size_t, size_t>> host_runs;
++    {
++        static const bool staging = [] { const char * e = getenv("GGML_CUDA_KV_TIER_STAGING"); return !e || atoi(e) != 0; }();
++        if (staging && cuMemAddressReserve(&va2, total, gran, 0, 0) == CUDA_SUCCESS) {
++            bool ok = true;
++            int  ih = 0;
++            std::vector<CUdeviceptr> mapped;
++            for (auto & rr : runs) {
++                const size_t off = rr.ptr - va;
++                CUmemGenericAllocationHandle h = rr.h;
++                if (rr.staged) {
++                    CUmemGenericAllocationHandle bh;
++                    if (!ggml_cuda_tier_staging_handle(physical, ggml_cuda_tier_staging_key(bctx->name), ih++, rr.len, &bh)) {
++                        ok = false;
++                        break;
++                    }
++                    h = bh;
++                    host_runs.push_back({ off, rr.len });
++                }
++                if (cuMemMap(va2 + off, rr.len, 0, h, 0) != CUDA_SUCCESS) {
++                    ok = false;
++                    break;
++                }
++                mapped.push_back(va2 + off);
++            }
++            ok = ok && cuMemSetAccess(va2, total, &ad, 1) == CUDA_SUCCESS;
++            if (!ok) {
++                for (size_t i = 0; i < mapped.size(); ++i) {
++                    cuMemUnmap(mapped[i], runs[i].len);
++                }
++                cuMemAddressFree(va2, total);
++                va2 = 0;
++                host_runs.clear();
++                GGML_LOG_WARN("%s: no staging alias for %s: its host tail is read over PCIe in place\n", __func__, bctx->name.c_str());
++            } else {
++                ggml_cuda_tier_register(va, va2, total, host_runs);
++            }
++        }
++    }
++
++    ggml_backend_cuda_buffer_context * ctx = new ggml_backend_cuda_buffer_context(device, (void *) va);
++    ctx->release = [runs, va, va2, total, device]() {
++        ggml_cuda_set_device(device);
++        cudaDeviceSynchronize();
++        if (va2) {
++            ggml_cuda_tier_unregister(va);
++            for (auto & rr : runs) {
++                cuMemUnmap(va2 + (rr.ptr - va), rr.len);
++            }
++            cuMemAddressFree(va2, total);
++        }
++        for (auto & rr : runs) {
++            cuMemUnmap(rr.ptr, rr.len);
++            cuMemRelease(rr.h);
++        }
++        cuMemAddressFree(va, total);
++    };
++    return ggml_backend_buffer_init(buft, ggml_backend_cuda_buffer_interface, ctx, size);
++}
++#else
++void * ggml_cuda_tier_stage(const void * ptr, size_t nbytes, cudaStream_t stream) {
++    GGML_UNUSED(ptr); GGML_UNUSED(nbytes); GGML_UNUSED(stream);
++    return nullptr;
++}
++
++static ggml_backend_buffer_t ggml_backend_cuda_tier_alloc(ggml_backend_buffer_type_t buft, size_t size) {
++    GGML_UNUSED(size);
++    GGML_LOG_ERROR("%s: tiered buffers need CUDA VMM (build without GGML_CUDA_NO_VMM)\n", __func__);
++    GGML_UNUSED(buft);
++    return nullptr;
++}
++#endif
++
++// Tiered KV, prefill side. Graphs that run without CUDA graphs (prefill micro-batches) get two changes:
++//  1. set_rows nodes that write into a tiered buffer write through its all-VRAM alias, so the new rows of the host
++//     part land in the VRAM staging buffer; a write-back kernel then copies them to their host pages as whole
++//     16-byte stores. The quantizing set_rows kernels write each row in small pieces, which over PCIe cost a fixed
++//     ~0.68 ms per prefill token once the micro-batch is past the VRAM line (RTX 4070, 512-token micro-batches).
++//  2. The host rows of attention op k are copied into staging on a second stream while the main stream computes the
++//     layers between op k-1 and op k (staging is shared by all layers, so the copy starts when op k-1 has read it).
++//     The main stream waits for that copy before the layer's set_rows writes staging, and op k reads the alias.
++// Both read and write the same bytes as the synchronous path. GGML_CUDA_KV_TIER_REDIRECT=0 and
++// GGML_CUDA_KV_TIER_PREFETCH=0 disable them. Anything unexpected (an attention op out of graph order) stops the
++// prefetch for the rest of the graph, and the remaining attention ops take the synchronous copy.
++#if defined(GGML_USE_VMM) && !defined(GGML_USE_HIP) && !defined(GGML_USE_MUSA)
++static const ggml_cuda_tier_entry * ggml_cuda_tier_find(const void * ptr) {
++    const CUdeviceptr p = (CUdeviceptr) ptr;
++    std::lock_guard<std::mutex> lock(g_tier_mutex);
++    for (auto & it : g_tier_entries) {
++        if (p >= it.va && p < it.va + it.total) {
++            return &it;
++        }
++    }
++    return nullptr;
++}
++
++// first host run of e that intersects [lo, hi) (offsets in the tiered buffer), as [a, b)
++static bool ggml_cuda_tier_host_part(const ggml_cuda_tier_entry * e, size_t lo, size_t hi, size_t * a, size_t * b) {
++    for (auto & hr : e->host_runs) {
++        const size_t x = std::max(lo, hr.first), y = std::min(hi, hr.first + hr.second);
++        if (x < y) {
++            *a = x;
++            *b = y;
++            return true;
++        }
++    }
++    return false;
++}
++
++static bool ggml_cuda_tier_reaches_host(const ggml_tensor * t) {
++    const ggml_cuda_tier_entry * e = ggml_cuda_tier_find(t->data);
++    if (!e) {
++        return false;
++    }
++    const size_t lo = (CUdeviceptr) t->data - e->va;
++    size_t a, b;
++    return ggml_cuda_tier_host_part(e, lo, std::min(e->total, lo + ggml_nbytes(t)), &a, &b);
++}
++
++// A graph whose attention reads the host tail of a tiered KV cache runs without a CUDA graph: the prefetch pipeline
++// (ggml_cuda_tier_graph_begin: the copy engine stages the next attention op's host rows while this one computes) runs
++// only on that path, and it beats the CUDA graph at depth (RTX 4070, 262k window, 192k deep, lookup off: decode
++// 19.8 -> 25.0 tok/s). Graphs below the tier line keep their CUDA graphs. GGML_CUDA_KV_TIER_GRAPHS=1: old behaviour.
++static bool ggml_cuda_tier_graph_wants_pipeline(const ggml_cgraph * cgraph) {
++    static const bool keep_graphs = [] {
++        const char * v = getenv("GGML_CUDA_KV_TIER_GRAPHS");
++        return v != nullptr && atoi(v) != 0;
++    }();
++    static const bool prefetch_on = [] {
++        const char * v = getenv("GGML_CUDA_KV_TIER_PREFETCH");
++        return v == nullptr || atoi(v) != 0;
++    }();
++    if (keep_graphs || !prefetch_on) {
++        return false;
++    }
++    {
++        std::lock_guard<std::mutex> lock(g_tier_mutex);
++        if (g_tier_entries.empty()) {
++            return false;
++        }
++    }
++    for (int i = 0; i < cgraph->n_nodes; ++i) {
++        const ggml_tensor * n = cgraph->nodes[i];
++        if (n->op == GGML_OP_FLASH_ATTN_EXT && n->src[1] && n->src[2] && n->src[1] != n->src[2] &&
++                (ggml_cuda_tier_reaches_host(n->src[1]) || ggml_cuda_tier_reaches_host(n->src[2]))) {
++            return true;
++        }
++    }
++    return false;
++}
++
++// one block per index: copy row idx[r] from the alias (VRAM staging) to the original range (host pages) when the
++// row touches the host run [h_lo, h_hi) (offsets from the tensor base); rows in VRAM are the same pages in both
++template <typename idx_t>
++static __global__ void k_tier_write_back(const char * __restrict__ alias, char * __restrict__ orig, const idx_t * __restrict__ idx,
++        const size_t row_stride, const size_t row_bytes, const size_t h_lo, const size_t h_hi, const int vec) {
++    const size_t off = (size_t) idx[blockIdx.x]*row_stride;
++    if (off + row_bytes <= h_lo || off >= h_hi) {
++        return;
++    }
++    if (vec == 16) {
++        const int4 * s = (const int4 *) (alias + off);
++        int4       * d = (int4       *) (orig  + off);
++        for (size_t k = threadIdx.x; k < row_bytes/16; k += blockDim.x) {
++            d[k] = s[k];
++        }
++    } else if (vec == 4) {
++        const int * s = (const int *) (alias + off);
++        int       * d = (int       *) (orig  + off);
++        for (size_t k = threadIdx.x; k < row_bytes/4; k += blockDim.x) {
++            d[k] = s[k];
++        }
++    } else {
++        for (size_t k = threadIdx.x; k < row_bytes; k += blockDim.x) {
++            orig[off + k] = alias[off + k];
++        }
++    }
++}
++
++// copy the host-backed bytes of [lo, hi) (offsets in the tiered buffer) into the staging alias
++static void ggml_cuda_tier_copy_range(const ggml_cuda_tier_entry * e, size_t lo, size_t hi, cudaStream_t stream) {
++    for (auto & hr : e->host_runs) {
++        const size_t a = std::max(lo, hr.first), b = std::min(hi, hr.first + hr.second);
++        if (a < b) {
++            CUDA_CHECK(cudaMemcpyAsync((void *) (e->va2 + a), (const void *) (e->va + a), b - a, cudaMemcpyDeviceToDevice, stream));
++        }
++    }
++}
++
++static void ggml_cuda_tier_wait(ggml_backend_cuda_context & ctx, ggml_cuda_tier_state & ts) {
++    if (ts.inflight) {
++        CUDA_CHECK(cudaStreamWaitEvent(ctx.stream(), ts.copied, 0));
++        ts.inflight = false;
++    }
++}
++
++static void ggml_cuda_tier_prefetch(ggml_backend_cuda_context & ctx, ggml_cuda_tier_state & ts, const ggml_tensor * fa) {
++    cudaStream_t side = ctx.stream(ctx.device, GGML_CUDA_MAX_STREAMS - 1);
++    CUDA_CHECK(cudaStreamWaitEvent(side, ts.read, 0));
++    for (int s = 1; s <= 2; ++s) {
++        const ggml_tensor * t = fa->src[s];
++        const ggml_cuda_tier_entry * e = ggml_cuda_tier_find(t->data);
++        if (e) {
++            const size_t lo = (CUdeviceptr) t->data - e->va;
++            ggml_cuda_tier_copy_range(e, lo, std::min(e->total, lo + ggml_nbytes(t)), side);
++        }
++    }
++    CUDA_CHECK(cudaEventRecord(ts.copied, side));
++    ts.inflight = true;
++}
++
++static void ggml_cuda_tier_graph_begin(ggml_backend_cuda_context & ctx, ggml_cuda_tier_state & ts, const ggml_cgraph * cgraph, bool enable) {
++    ts.rd.clear();
++    ts.rd_next = 0;
++    ts.fa.clear();
++    ts.next = 0;
++    static const bool redirect_on = [] {
++        const char * v = getenv("GGML_CUDA_KV_TIER_REDIRECT");
++        return v == nullptr || atoi(v) != 0;
++    }();
++    static const bool prefetch_on = [] {
++        const char * v = getenv("GGML_CUDA_KV_TIER_PREFETCH");
++        return v == nullptr || atoi(v) != 0;
++    }();
++    if (!enable || (!redirect_on && !prefetch_on)) {
++        return;
++    }
++    {
++        std::lock_guard<std::mutex> lock(g_tier_mutex);
++        if (g_tier_entries.empty()) {
++            return;
++        }
++    }
++    // every set_rows into a tiered buffer must go through the alias when the prefetch runs: a row written in place
++    // after the prefetch read its host page would be stale in staging
++    bool all_redirected = true;
++    for (int i = 0; i < cgraph->n_nodes; ++i) {
++        ggml_tensor * n = cgraph->nodes[i];
++        if (n->op == GGML_OP_SET_ROWS && n->data) {
++            const ggml_cuda_tier_entry * e = ggml_cuda_tier_find(n->data);
++            const size_t base = e ? (CUdeviceptr) n->data - e->va : 0;
++            size_t a, b;
++            if (e && ggml_cuda_tier_host_part(e, base, std::min(e->total, base + ggml_nbytes(n)), &a, &b)) {
++                const ggml_tensor * idx = n->src[1];
++                const bool flat = idx && (idx->type == GGML_TYPE_I64 || idx->type == GGML_TYPE_I32) && ggml_is_contiguous(idx) &&
++                    idx->ne[1] == 1 && idx->ne[2] == 1 && idx->ne[3] == 1 && n->ne[2] == 1 && n->ne[3] == 1;
++                if (redirect_on && flat) {
++                    ts.rd.push_back({ i, n, n->data, e, base, a - base, b - base });
++                } else {
++                    all_redirected = false;
++                }
++            }
++        }
++        if (prefetch_on && n->op == GGML_OP_FLASH_ATTN_EXT && n->src[1] && n->src[2] && n->src[1] != n->src[2] &&
++                (ggml_cuda_tier_reaches_host(n->src[1]) || ggml_cuda_tier_reaches_host(n->src[2]))) {
++            ts.fa.push_back(n);
++        }
++    }
++    if (!all_redirected) {
++        ts.fa.clear();
++    }
++    for (auto & r : ts.rd) {
++        const ggml_cuda_tier_entry * e = (const ggml_cuda_tier_entry *) r.entry;
++        r.node->data = (void *) (e->va2 + r.base);
++    }
++    if (!ts.fa.empty()) {
++        if (ts.read == nullptr) {
++            CUDA_CHECK(cudaEventCreateWithFlags(&ts.read,   cudaEventDisableTiming));
++            CUDA_CHECK(cudaEventCreateWithFlags(&ts.copied, cudaEventDisableTiming));
++        }
++        // work already queued on the main stream can still read the staging buffers
++        CUDA_CHECK(cudaEventRecord(ts.read, ctx.stream()));
++        ggml_cuda_tier_prefetch(ctx, ts, ts.fa[0]);
++    }
++}
++
++// before graph node i: write back the redirected set_rows nodes computed so far, and let the main stream wait for
++// the prefetch when a redirected set_rows (or the fused group that ends in it) comes within the next nodes
++static void ggml_cuda_tier_step(ggml_backend_cuda_context & ctx, ggml_cuda_tier_state & ts, int i) {
++    while (ts.rd_next < ts.rd.size() && ts.rd[ts.rd_next].at < i) {
++        ggml_cuda_tier_redirect & r = ts.rd[ts.rd_next++];
++        const ggml_cuda_tier_entry * e = (const ggml_cuda_tier_entry *) r.entry;
++        const ggml_tensor * n   = r.node;
++        const ggml_tensor * idx = n->src[1];
++        const char * alias = (const char *) (e->va2 + r.base);
++        char       * orig  = (char *) r.data;
++        const size_t row_bytes = ggml_row_size(n->type, n->ne[0]);
++        const size_t align = (size_t) r.base | (size_t) n->nb[1] | row_bytes;
++        const int    vec = align % 16 == 0 ? 16 : align % 4 == 0 ? 4 : 1;
++        if (idx->ne[0] == 0) {
++            // nothing written
++        } else if (idx->type == GGML_TYPE_I64) {
++            k_tier_write_back<<<(unsigned) idx->ne[0], 128, 0, ctx.stream()>>>(alias, orig, (const int64_t *) idx->data,
++                n->nb[1], row_bytes, r.h_lo, r.h_hi, vec);
++        } else {
++            k_tier_write_back<<<(unsigned) idx->ne[0], 128, 0, ctx.stream()>>>(alias, orig, (const int32_t *) idx->data,
++                n->nb[1], row_bytes, r.h_lo, r.h_hi, vec);
++        }
++        CUDA_CHECK(cudaGetLastError());
++        r.node->data = r.data;
++    }
++    if (ts.inflight && ts.rd_next < ts.rd.size() && ts.rd[ts.rd_next].at <= i + 4) {
++        ggml_cuda_tier_wait(ctx, ts);
++    }
++}
++
++static void ggml_cuda_tier_graph_end(ggml_backend_cuda_context & ctx, ggml_cuda_tier_state & ts, int n_nodes) {
++    ggml_cuda_tier_step(ctx, ts, n_nodes);
++    ggml_cuda_tier_wait(ctx, ts);
++    ts.rd.clear();
++    ts.rd_next = 0;
++    ts.fa.clear();
++    ts.next = 0;
++}
++
++// called by ggml_cuda_flash_attn_ext: true when this op is the next one of the prefetch pipeline (its K/V host rows
++// are in staging, the alias addresses are returned); false: the op takes the synchronous copy
++bool ggml_cuda_tier_fa_begin(ggml_backend_cuda_context & ctx, const ggml_tensor * dst, void ** K_alias, void ** V_alias) {
++    ggml_cuda_tier_state & ts = ggml_cuda_tier_state_of(ctx);
++    if (ts.next < ts.fa.size()) {
++        if (ts.fa[ts.next] == dst) {
++            ggml_cuda_tier_wait(ctx, ts);
++            for (int s = 1; s <= 2; ++s) {
++                const ggml_tensor * t = dst->src[s];
++                const ggml_cuda_tier_entry * e = ggml_cuda_tier_find(t->data);
++                *(s == 1 ? K_alias : V_alias) = e ? (void *) (e->va2 + ((CUdeviceptr) t->data - e->va)) : nullptr;
++            }
++            return true;
++        }
++        ts.next = ts.fa.size();
++    }
++    // a prefetch of a stopped pipeline must be done before the synchronous copy reuses the staging buffers
++    ggml_cuda_tier_wait(ctx, ts);
++    return false;
++}
++
++void ggml_cuda_tier_fa_end(ggml_backend_cuda_context & ctx) {
++    ggml_cuda_tier_state & ts = ggml_cuda_tier_state_of(ctx);
++    CUDA_CHECK(cudaEventRecord(ts.read, ctx.stream()));
++    if (++ts.next < ts.fa.size()) {
++        ggml_cuda_tier_prefetch(ctx, ts, ts.fa[ts.next]);
++    }
++}
++#else
++static bool ggml_cuda_tier_graph_wants_pipeline(const ggml_cgraph * cgraph) {
++    GGML_UNUSED(cgraph);
++    return false;
++}
++static void ggml_cuda_tier_graph_begin(ggml_backend_cuda_context & ctx, ggml_cuda_tier_state & ts, const ggml_cgraph * cgraph, bool enable) {
++    GGML_UNUSED(ctx); GGML_UNUSED(ts); GGML_UNUSED(cgraph); GGML_UNUSED(enable);
++}
++static void ggml_cuda_tier_step(ggml_backend_cuda_context & ctx, ggml_cuda_tier_state & ts, int i) {
++    GGML_UNUSED(ctx); GGML_UNUSED(ts); GGML_UNUSED(i);
++}
++static void ggml_cuda_tier_graph_end(ggml_backend_cuda_context & ctx, ggml_cuda_tier_state & ts, int n_nodes) {
++    GGML_UNUSED(ctx); GGML_UNUSED(ts); GGML_UNUSED(n_nodes);
++}
++bool ggml_cuda_tier_fa_begin(ggml_backend_cuda_context & ctx, const ggml_tensor * dst, void ** K_alias, void ** V_alias) {
++    GGML_UNUSED(ctx); GGML_UNUSED(dst); GGML_UNUSED(K_alias); GGML_UNUSED(V_alias);
++    return false;
++}
++void ggml_cuda_tier_fa_end(ggml_backend_cuda_context & ctx) {
++    GGML_UNUSED(ctx);
++}
++#endif
++
++// A device buffer type whose buffers keep vram_frac of each of n_parts equal parts in VRAM and the rest in
++// pinned host memory mapped into the same device range. `tag` makes the name unique so a caller can ask
++// for one buffer per tensor group. Returns nullptr when the device has no VMM.
++ggml_backend_buffer_type_t ggml_backend_cuda_tier_buffer_type(int device, double vram_frac, int n_parts, const char * tag) {
++    static std::mutex mutex;
++    std::lock_guard<std::mutex> lock(mutex);
++    static std::map<std::string, ggml_backend_buffer_type *> cache;
++
++    if (device < 0 || device >= ggml_backend_cuda_get_device_count() || !ggml_cuda_info().devices[device].vmm) {
++        return nullptr;
++    }
++    const std::string name = std::string(GGML_CUDA_NAME) + std::to_string(device) + "_tier_" + (tag ? tag : "") +
++        "_" + std::to_string((int) (vram_frac * 1e6)) + "_" + std::to_string(n_parts);
++    auto it = cache.find(name);
++    if (it != cache.end()) {
++        return it->second;
++    }
++    auto * ctx = new ggml_backend_cuda_buffer_type_context{device, name};
++    ctx->vram_frac = std::max(0.0, std::min(1.0, vram_frac));
++    ctx->n_parts   = std::max(1, n_parts);
++    auto * buft = new ggml_backend_buffer_type{
++        /* .iface    = */ ggml_backend_cuda_buffer_type_interface,
++        /* .device   = */ ggml_backend_reg_dev_get(ggml_backend_cuda_reg(), device),
++        /* .context  = */ ctx,
++    };
++    cache[name] = buft;
++    return buft;
++}
++
+ // Communication context for multi-GPU AllReduce during tensor parallelism.
+ //
+ // Created once per meta backend instance.  Resources for the selected mode
+@@ -2448,7 +3106,7 @@ static void ggml_backend_cuda_set_tensor_async(ggml_backend_t backend, ggml_tens
+     ggml_backend_cuda_context * cuda_ctx = (ggml_backend_cuda_context *) backend->context;
+     ggml_backend_buffer_t buf = tensor->view_src ? tensor->view_src->buffer : tensor->buffer;
+ 
+-    GGML_ASSERT(buf->buft == ggml_backend_cuda_buffer_type(cuda_ctx->device) && "unsupported buffer type");
++    GGML_ASSERT(ggml_backend_buft_is_cuda(buf->buft) && ((ggml_backend_cuda_buffer_type_context *) buf->buft->context)->device == cuda_ctx->device && "unsupported buffer type");
+ 
+     CUDA_CHECK(cudaMemcpyAsync((char *) tensor->data + offset, data, size, cudaMemcpyHostToDevice, cuda_ctx->stream()));
+ }
+@@ -2457,7 +3115,7 @@ static void ggml_backend_cuda_get_tensor_async(ggml_backend_t backend, const ggm
+     ggml_backend_cuda_context * cuda_ctx = (ggml_backend_cuda_context *) backend->context;
+     ggml_backend_buffer_t buf = tensor->view_src ? tensor->view_src->buffer : tensor->buffer;
+ 
+-    GGML_ASSERT(buf->buft == ggml_backend_cuda_buffer_type(cuda_ctx->device) && "unsupported buffer type");
++    GGML_ASSERT(ggml_backend_buft_is_cuda(buf->buft) && ((ggml_backend_cuda_buffer_type_context *) buf->buft->context)->device == cuda_ctx->device && "unsupported buffer type");
+ 
+     CUDA_CHECK(cudaMemcpyAsync(data, (const char *) tensor->data + offset, size, cudaMemcpyDeviceToHost, cuda_ctx->stream()));
+ }
+@@ -2467,7 +3125,7 @@ static void ggml_backend_cuda_set_tensor_2d_async(ggml_backend_t backend, struct
+     ggml_backend_cuda_context * cuda_ctx = (ggml_backend_cuda_context *) backend->context;
+     ggml_backend_buffer_t buf = tensor->view_src ? tensor->view_src->buffer : tensor->buffer;
+ 
+-    GGML_ASSERT(buf->buft == ggml_backend_cuda_buffer_type(cuda_ctx->device) && "unsupported buffer type");
++    GGML_ASSERT(ggml_backend_buft_is_cuda(buf->buft) && ((ggml_backend_cuda_buffer_type_context *) buf->buft->context)->device == cuda_ctx->device && "unsupported buffer type");
+ 
+     CUDA_CHECK(cudaMemcpy2DAsync(
+         (char *) tensor->data + offset, stride_tensor, data, stride_data, size, n_copies, cudaMemcpyHostToDevice, cuda_ctx->stream()));
+@@ -2478,7 +3136,7 @@ static void ggml_backend_cuda_get_tensor_2d_async(ggml_backend_t backend, const
+     ggml_backend_cuda_context * cuda_ctx = (ggml_backend_cuda_context *) backend->context;
+     ggml_backend_buffer_t buf = tensor->view_src ? tensor->view_src->buffer : tensor->buffer;
+ 
+-    GGML_ASSERT(buf->buft == ggml_backend_cuda_buffer_type(cuda_ctx->device) && "unsupported buffer type");
++    GGML_ASSERT(ggml_backend_buft_is_cuda(buf->buft) && ((ggml_backend_cuda_buffer_type_context *) buf->buft->context)->device == cuda_ctx->device && "unsupported buffer type");
+ 
+     CUDA_CHECK(cudaMemcpy2DAsync(
+         data, stride_data, (const char *) tensor->data + offset, stride_tensor, size, n_copies, cudaMemcpyDeviceToHost, cuda_ctx->stream()));
+@@ -2559,6 +3217,20 @@ static bool ggml_cuda_is_view_or_noop(const ggml_tensor * t) {
+ #ifdef USE_CUDA_GRAPH
+ static bool ggml_cuda_graph_check_compability(ggml_cgraph * cgraph) {
+ 
++    {
++        // the tier prefetch pipeline instead (see ggml_cuda_tier_graph_wants_pipeline); one log line per switch
++        static int last = -1;
++        const bool pipe = ggml_cuda_tier_graph_wants_pipeline(cgraph);
++        if ((int) pipe != last) {
++            last = (int) pipe;
++            GGML_LOG_WARN("%s: attention %s the host tail of the tiered KV cache: CUDA graphs %s\n", __func__,
++                pipe ? "reads" : "does not read", pipe ? "off, tier prefetch pipeline on" : "on");
++        }
++        if (pipe) {
++            return false;
++        }
++    }
++
+     bool use_cuda_graph = true;
+     // Loop over nodes in GGML graph to obtain info needed for CUDA graph
+ 
+@@ -4682,8 +5354,15 @@ static void ggml_cuda_graph_evaluate_and_capture(ggml_backend_cuda_context * cud
+             cuda_ctx->gdn_gathers().reset();
+             cuda_ctx->fwht_q8().reset();
+ 
++            ggml_cuda_tier_state & tier = ggml_cuda_tier_state_of(*cuda_ctx);
++            ggml_cuda_tier_graph_begin(*cuda_ctx, tier, cgraph, !use_cuda_graph && !should_launch_concurrent_events);
++            const bool tier_active = !tier.rd.empty() || !tier.fa.empty();
++
+             for (int i = 0; i < cgraph->n_nodes; i++) {
+                 ggml_tensor * node = cgraph->nodes[i];
++                if (tier_active) {
++                    ggml_cuda_tier_step(*cuda_ctx, tier, i);
++                }
+                 if (is_concurrent_event_active) {
+                     GGML_ASSERT(concurrent_event);
+ 
+@@ -4858,12 +5537,12 @@ static void ggml_cuda_graph_evaluate_and_capture(ggml_backend_cuda_context * cud
+                 // On integrated GPUs (APUs, e.g. RDNA3.5) the scheduler may place a
+                 // node's output on the host-visible buffer, which the compute path
+                 // handles. Allow that here, mirroring the src-tensor check below.
+-                assert(node->buffer->buft == ggml_backend_cuda_buffer_type(cuda_ctx->device) ||
++                assert(ggml_backend_buft_is_cuda(node->buffer->buft) ||
+                        (integrated && ggml_backend_buft_is_cuda_host(node->buffer->buft)));
+                 for (int j = 0; j < GGML_MAX_SRC; j++) {
+                     if (node->src[j] != nullptr) {
+                         assert(node->src[j]->buffer);
+-                        assert(node->src[j]->buffer->buft == ggml_backend_cuda_buffer_type(cuda_ctx->device) ||
++                        assert(ggml_backend_buft_is_cuda(node->src[j]->buffer->buft) ||
+                                (integrated && ggml_backend_buft_is_cuda_host(node->src[j]->buffer->buft)));
+                     }
+                 }
+@@ -4881,6 +5560,10 @@ static void ggml_cuda_graph_evaluate_and_capture(ggml_backend_cuda_context * cud
+                     try_launch_concurrent_event(node);
+                }
+             }
++
++            if (tier_active) {
++                ggml_cuda_tier_graph_end(*cuda_ctx, tier, cgraph->n_nodes);
++            }
+         }
+ 
+ #ifdef USE_CUDA_GRAPH
+@@ -5989,8 +6672,9 @@ static bool ggml_backend_cuda_device_supports_op(ggml_backend_dev_t dev, const g
+             return true;
+         case GGML_OP_GATED_DELTA_NET:
+             // rows-indexed state read (src[6]) not implemented on CUDA yet;
+-            // reject so it falls back instead of silently reading src[5] as a scratch
+-            if (op->src[6] != NULL) {
++            // reject so it falls back instead of silently reading src[5] as a scratch.
++            // The replay form (op param 2 > 0) uses src[6] for its per-sequence info instead.
++            if (op->src[6] != NULL && ggml_get_op_params_i32(op, 2) <= 0) {
+                 return false;
+             }
+             //TODO: enable once MUSA compiler is solved https://github.com/ggml-org/llama.cpp/pull/19504#issuecomment-4018634327
+@@ -6204,6 +6888,9 @@ static void * ggml_backend_cuda_reg_get_proc_address(ggml_backend_reg_t reg, con
+     if (strcmp(name, "ggml_backend_get_features") == 0) {
+         return (void *)ggml_backend_cuda_get_features;
+     }
++    if (strcmp(name, "ggml_backend_cuda_tier_buffer_type") == 0) {
++        return (void *)ggml_backend_cuda_tier_buffer_type;
++    }
+     return nullptr;
+ }
+ 
+diff --git a/ggml/src/ggml-cuda/mma.cuh b/ggml/src/ggml-cuda/mma.cuh
+index 8d7c69d..3e4946b 100644
+--- a/ggml/src/ggml-cuda/mma.cuh
++++ b/ggml/src/ggml-cuda/mma.cuh
+@@ -782,6 +782,20 @@ namespace ggml_cuda_mma {
+         }
+     }
+ 
++    // Byte offset of tile element (i, j). If swz, XOR swizzle it to avoid bank conflicts without row padding.
++    template <bool swz, typename T>
++    static __device__ __forceinline__ int swizzle_bytes(const int i, const int j, const int stride) {
++        static_assert(!swz || sizeof(T) == 4, "swizzled tiles need 32 bit elements");
++        const int off = (i*stride + j) * (int) sizeof(T);
++        return swz ? off ^ ((i & 7) << 4) : off;
++    }
++
++    template <bool swz, typename T>
++    static __device__ __forceinline__ const T * swizzle(
++            const T * __restrict__ tile_base, const int i, const int j, const int stride) {
++        return (const T *) ((const char *) tile_base + swizzle_bytes<swz, T>(i, j, stride));
++    }
++
+     template <typename T>
+     static __device__ __forceinline__ void load_ldmatrix(
+             tile<8, 8, T> & t, const T * __restrict__ xs0, const int stride) {
+@@ -858,6 +872,36 @@ namespace ggml_cuda_mma {
+ #endif // TURING_MMA_AVAILABLE
+     }
+ 
++    // Load from tile element (i0, j0), swz tells if the tile is stored swizzled.
++    template <bool swz, int I, int J, typename T, data_layout dl>
++    static __device__ __forceinline__ void load_ldmatrix(
++            tile<I, J, T, dl> & t, const T * __restrict__ tile_base, const int i0, const int j0, const int stride) {
++        if constexpr (!swz) {
++            load_ldmatrix(t, tile_base + i0*stride + j0, stride);
++            return;
++        }
++#if defined(TURING_MMA_AVAILABLE)
++        static_assert(I == 8 || I == 16, "bad tile width");
++        static_assert(J ==  8, "bad tile height");
++        const int i = i0 + threadIdx.x % t.I;
++        const int j = j0 + ((threadIdx.x / t.I) * (t.J / 2)) % t.J;
++        int * xi = (int *) t.x;
++        const unsigned address = (unsigned) __cvta_generic_to_shared(swizzle<true>(tile_base, i, j, stride));
++        if constexpr (I == 16) {
++            asm volatile("ldmatrix.sync.aligned.m8n8.x4.shared.b16 {%0, %1, %2, %3}, [%4];"
++                : "=r"(xi[0]), "=r"(xi[1]), "=r"(xi[2]), "=r"(xi[3])
++                : "r"(address) : "memory");
++        } else {
++            asm volatile("ldmatrix.sync.aligned.m8n8.x2.shared.b16 {%0, %1}, [%2];"
++                : "=r"(xi[0]), "=r"(xi[1])
++                : "r"(address) : "memory");
++        }
++#else
++        GGML_UNUSED_VARS(t, tile_base, i0, j0, stride);
++        NO_DEVICE_CODE;
++#endif // defined(TURING_MMA_AVAILABLE)
++    }
++
+     static __device__ __forceinline__ void load_ldmatrix(
+             tile<8, 4, half2, DATA_LAYOUT_I_MAJOR_MIRRORED> & t, const half2 * __restrict__ xs0, const int stride) {
+         ggml_cuda_memcpy_1<4*sizeof(half2)>(t.x, xs0 + t.get_i(0)*stride);
+@@ -885,13 +929,19 @@ namespace ggml_cuda_mma {
+     static __device__ __forceinline__ void load_ldmatrix_trans(
+             tile<I, 8, T, dl> & t, const T * __restrict__ xs0, const int stride) {
+ #ifdef TURING_MMA_AVAILABLE
+-        static_assert(I == 16, "bad tile width");
++        static_assert(I == 8 || I == 16, "bad tile width");
+         static_assert(dl == DATA_LAYOUT_I_MAJOR, "bad data layout");
+         int * xi = (int *) t.x;
+-        const int * xs = (const int *) xs0 + (threadIdx.x % t.I) * stride + (threadIdx.x / t.I) * (t.J / 2);
+-        asm volatile("ldmatrix.sync.aligned.m8n8.x4.trans.b16 {%0, %1, %2, %3}, [%4];"
+-            : "=r"(xi[0]), "=r"(xi[2]), "=r"(xi[1]), "=r"(xi[3])
+-            : "l"(xs));
++        const int * xs = (const int *) xs0 + (threadIdx.x % 16) * stride + (I == 16 ? (threadIdx.x / 16) * (t.J / 2) : 0);
++        if constexpr (I == 16) {
++            asm volatile("ldmatrix.sync.aligned.m8n8.x4.trans.b16 {%0, %1, %2, %3}, [%4];"
++                : "=r"(xi[0]), "=r"(xi[2]), "=r"(xi[1]), "=r"(xi[3])
++                : "l"(xs));
++        } else {
++            asm volatile("ldmatrix.sync.aligned.m8n8.x2.trans.b16 {%0, %1}, [%2];"
++                : "=r"(xi[0]), "=r"(xi[1])
++                : "l"(xs));
++        }
+ #elif defined(AMD_MFMA_AVAILABLE) || defined(AMD_WMMA_AVAILABLE)
+         static_assert(dl == DATA_LAYOUT_I_MAJOR || dl == DATA_LAYOUT_I_MAJOR_MIRRORED, "bad data layout");
+         if constexpr (I == 32) {
+@@ -917,6 +967,36 @@ namespace ggml_cuda_mma {
+ #endif // TURING_MMA_AVAILABLE
+     }
+ 
++    // Load from tile element (i0, j0), swz tells if the tile is stored swizzled.
++    template <bool swz, int I, typename T, data_layout dl>
++    static __device__ __forceinline__ void load_ldmatrix_trans(
++            tile<I, 8, T, dl> & t, const T * __restrict__ tile_base, const int i0, const int j0, const int stride) {
++        if constexpr (!swz) {
++            load_ldmatrix_trans(t, tile_base + i0*stride + j0, stride);
++            return;
++        }
++#if defined(TURING_MMA_AVAILABLE)
++        static_assert(I == 8 || I == 16, "bad tile width");
++        static_assert(dl == DATA_LAYOUT_I_MAJOR, "bad data layout");
++        const int i = i0 + threadIdx.x % 16;
++        const int j = j0 + (I == 16 ? (threadIdx.x / 16) * (t.J / 2) : 0);
++        int * xi = (int *) t.x;
++        const unsigned address = (unsigned) __cvta_generic_to_shared(swizzle<true>(tile_base, i, j, stride));
++        if constexpr (I == 16) {
++            asm volatile("ldmatrix.sync.aligned.m8n8.x4.trans.shared.b16 {%0, %1, %2, %3}, [%4];"
++                : "=r"(xi[0]), "=r"(xi[2]), "=r"(xi[1]), "=r"(xi[3])
++                : "r"(address) : "memory");
++        } else {
++            asm volatile("ldmatrix.sync.aligned.m8n8.x2.trans.shared.b16 {%0, %1}, [%2];"
++                : "=r"(xi[0]), "=r"(xi[1])
++                : "r"(address) : "memory");
++        }
++#else
++        GGML_UNUSED_VARS(t, tile_base, i0, j0, stride);
++        NO_DEVICE_CODE;
++#endif // defined(TURING_MMA_AVAILABLE)
++    }
++
+     static __device__ __forceinline__ void mma(
+             tile<16, 8, int> & D, const tile<16, 4, int> & A, const tile<8, 4, int> & B) {
+ #ifdef TURING_MMA_AVAILABLE
+diff --git a/ggml/src/ggml.c b/ggml/src/ggml.c
+index 7626557..03f1115 100644
+--- a/ggml/src/ggml.c
++++ b/ggml/src/ggml.c
+@@ -6427,6 +6427,59 @@ struct ggml_tensor * ggml_gated_delta_net_rows(
+     return result;
+ }
+ 
++struct ggml_tensor * ggml_gated_delta_net_replay_raw(
++        struct ggml_context * ctx,
++        struct ggml_tensor  * q,
++        struct ggml_tensor  * k,
++        struct ggml_tensor  * v,
++        struct ggml_tensor  * g,
++        struct ggml_tensor  * beta,
++        struct ggml_tensor  * state,
++        struct ggml_tensor  * pend,
++        struct ggml_tensor  * info,
++        int                   n_pend) {
++    GGML_ASSERT(ggml_is_contiguous_rows(q));
++    GGML_ASSERT(ggml_is_contiguous_rows(k));
++    GGML_ASSERT(ggml_is_contiguous_rows(v));
++    GGML_ASSERT(ggml_is_contiguous(g));
++    GGML_ASSERT(ggml_is_contiguous(beta));
++    GGML_ASSERT(ggml_is_contiguous(state));
++    GGML_ASSERT(q->type == GGML_TYPE_F32 && k->type == GGML_TYPE_F32 && v->type == GGML_TYPE_F32);
++    GGML_ASSERT(g->type == GGML_TYPE_F32 && beta->type == GGML_TYPE_F32 && state->type == GGML_TYPE_F32);
++
++    const int64_t S_v      = v->ne[0];
++    const int64_t H        = v->ne[1];
++    const int64_t n_tokens = v->ne[2];
++    const int64_t n_seqs   = v->ne[3];
++
++    GGML_ASSERT(g->ne[0] == 1 && beta->ne[0] == 1); // scalar gates (the pending skip needs the raw-gate form)
++    GGML_ASSERT(state->ne[0] == S_v && state->ne[1] == S_v && state->ne[2] == H && state->ne[3] == n_seqs);
++    GGML_ASSERT(n_pend >= 1);
++    GGML_ASSERT(pend->type == GGML_TYPE_F32 && pend->nb[0] == sizeof(float));
++    GGML_ASSERT(pend->ne[0] == (int64_t) n_pend * (k->ne[0] * k->ne[1] + S_v * H + 2 * H) + 1);
++    GGML_ASSERT(info->type == GGML_TYPE_I32 && ggml_is_contiguous(info) && ggml_nelements(info) == 3 * n_seqs);
++
++    const int64_t row_w      = S_v * H;
++    const int64_t pend_rows  = (pend->ne[0] * n_seqs + row_w - 1) / row_w;
++    const int64_t ne[4] = { row_w, n_tokens * n_seqs + S_v * n_seqs + pend_rows, 1, 1 };
++    struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_F32, 4, ne);
++
++    ggml_set_op_params_i32(result, 0, 1);       // K: one state slot (the commit point)
++    ggml_set_op_params_i32(result, 2, n_pend);  // replay
++
++    result->op     = GGML_OP_GATED_DELTA_NET;
++    result->src[0] = q;
++    result->src[1] = k;
++    result->src[2] = v;
++    result->src[3] = g;
++    result->src[4] = beta;
++    result->src[5] = state;
++    result->src[6] = info;
++    result->src[9] = pend;
++
++    return result;
++}
++
+ void ggml_gated_delta_net_set_raw_gates(
+         struct ggml_tensor  * gdn,
+         struct ggml_tensor  * dt_bias,
+diff --git a/include/llama.h b/include/llama.h
+index deb1e12..555ff32 100644
+--- a/include/llama.h
++++ b/include/llama.h
+@@ -396,6 +396,12 @@ extern "C" {
+         // see tools/kv-mean-center to generate this file and docs/kv-mean-center.md for details.
+         const char * path_kv_mean_center;
+ 
++        // tiered KV cache [EXPERIMENTAL]: keep only the first n_kv_vram_cells cells of each K/V tensor in
++        // device memory and the rest in pinned host memory mapped into the same device range (CUDA VMM), so
++        // the context can be larger than what fits in VRAM. Positions past the line are read over PCIe, only
++        // once a sequence is that deep. Output is identical to an all-device cache. 0 = all in device memory.
++        uint32_t n_kv_vram_cells;
++
+         // Abort callback
+         // if it returns true, execution of llama_decode() will be aborted
+         // currently works only with CPU execution
+diff --git a/src/llama-context.cpp b/src/llama-context.cpp
+index 3a37572..04fe39d 100644
+--- a/src/llama-context.cpp
++++ b/src/llama-context.cpp
+@@ -178,6 +178,7 @@ llama_context::llama_context(
+     const auto & hparams = model.hparams;
+ 
+     cparams.n_seq_max = std::max(1u, params.n_seq_max);
++    cparams.n_kv_vram_cells = params.n_kv_vram_cells;
+     if (cparams.n_seq_max > LLAMA_MAX_SEQ) {
+         throw std::runtime_error("n_seq_max must be <= " + std::to_string(LLAMA_MAX_SEQ));
+     }
+@@ -4074,6 +4075,7 @@ llama_context_params llama_context_default_params() {
+         /*.type_k                      =*/ GGML_TYPE_F16,
+         /*.type_v                      =*/ GGML_TYPE_F16,
+         /*.path_kv_mean_center         =*/ nullptr,
++        /*.n_kv_vram_cells             =*/ 0,
+         /*.abort_callback              =*/ nullptr,
+         /*.abort_callback_data         =*/ nullptr,
+         /*.embeddings                  =*/ false,
+diff --git a/src/llama-cparams.h b/src/llama-cparams.h
+index 2481496..1862dee 100644
+--- a/src/llama-cparams.h
++++ b/src/llama-cparams.h
+@@ -18,6 +18,7 @@ struct llama_cparams {
+     uint32_t n_rs_seq;        // number of recurrent-state snapshots per seq for rollback
+     uint32_t n_outputs_max;   // max outputs supported by the context
+     uint32_t n_outputs_max_per_seq;
++    uint32_t n_kv_vram_cells; // tiered KV: cells past this live in host memory (0 = all in device memory)
+     int32_t  n_threads;       // number of threads to use for generation
+     int32_t  n_threads_batch; // number of threads to use for batch processing
+ 
+diff --git a/src/llama-grammar.cpp b/src/llama-grammar.cpp
+index c685346..aa50647 100644
+--- a/src/llama-grammar.cpp
++++ b/src/llama-grammar.cpp
+@@ -1335,15 +1335,32 @@ struct llama_grammar * llama_grammar_clone_impl(const struct llama_grammar & gra
+     };
+ 
+     // redirect elements in stacks to point to new rules
++    // (each stack element is found by a binary search over the rules' start addresses: the search over every element
++    // of every rule cost O(stack elements x grammar size) per clone, and the server clones the sampler on every
++    // speculative step - with a grammar for 100 tool schemas that was about 10 ms per step)
++    std::vector<std::pair<const llama_grammar_element *, size_t>> starts;
++    starts.reserve(grammar.rules.size());
++    for (size_t ir0 = 0; ir0 < grammar.rules.size(); ir0++) {
++        if (!grammar.rules[ir0].empty()) {
++            starts.emplace_back(grammar.rules[ir0].data(), ir0);
++        }
++    }
++    std::sort(starts.begin(), starts.end(), [](const auto & a, const auto & b) { return std::less<const llama_grammar_element *>()(a.first, b.first); });
+     for (size_t is = 0; is < result->stacks.size(); is++) {
+         for (size_t ie = 0; ie < result->stacks[is].size(); ie++) {
+-            for (size_t ir0 = 0; ir0 < grammar.rules.size(); ir0++) {
+-                for (size_t ir1 = 0; ir1 < grammar.rules[ir0].size(); ir1++) {
+-                    if (grammar.stacks[is][ie] == &grammar.rules[ir0][ir1]) {
+-                        result->stacks[is][ie] =  &result->rules[ir0][ir1];
+-                    }
+-                }
++            const llama_grammar_element * pe = grammar.stacks[is][ie];
++            auto it = std::upper_bound(starts.begin(), starts.end(), pe,
++                [](const llama_grammar_element * v, const auto & e) { return std::less<const llama_grammar_element *>()(v, e.first); });
++            if (it == starts.begin()) {
++                continue;
++            }
++            --it;
++            const size_t ir0 = it->second;
++            const auto & rule = grammar.rules[ir0];
++            if (!std::less<const llama_grammar_element *>()(pe, rule.data() + rule.size())) {
++                continue;
+             }
++            result->stacks[is][ie] = &result->rules[ir0][(size_t) (pe - rule.data())];
+         }
+     }
+ 
+diff --git a/src/llama-graph.cpp b/src/llama-graph.cpp
+index c5e428a..869842f 100644
+--- a/src/llama-graph.cpp
++++ b/src/llama-graph.cpp
+@@ -376,6 +376,23 @@ void llm_graph_input_cls::set_input(const llama_ubatch * ubatch) {
+ void llm_graph_input_rs::set_input_rs(const llama_memory_recurrent_context * mctx_cur, const llama_ubatch * ubatch) {
+     const int64_t n_rs = mctx_cur->get_n_rs();
+ 
++    // replay rollback: before s_copy(), which consumes the rollback index
++    if (s_copy0 && s_copy0->buffer) {   // unallocated when no layer of this graph reads it
++        GGML_ASSERT(ggml_backend_buffer_is_host(s_copy0->buffer));
++        int32_t * data = (int32_t *) s_copy0->data;
++        for (uint32_t i = 0; i < n_rs; ++i) {
++            data[i] = mctx_cur->s_copy0(i);
++        }
++    }
++    if (s_pinfo && s_pinfo->buffer) {
++        GGML_ASSERT(ggml_backend_buffer_is_host(s_pinfo->buffer));
++        int32_t * data = (int32_t *) s_pinfo->data;
++        const int64_t n_seqs = s_pinfo->ne[0] / 3;
++        for (int64_t s = 0; s < n_seqs; ++s) {
++            mctx_cur->s_pend_info(s, data[s], data[n_seqs + s], data[2*n_seqs + s]);
++        }
++    }
++
+     if (s_copy) {
+         GGML_ASSERT(ggml_backend_buffer_is_host(s_copy->buffer));
+         int32_t * data = (int32_t *) s_copy->data;
+@@ -3641,6 +3658,17 @@ static std::unique_ptr<llm_graph_input_rs> build_rs_inp_impl(
+     inp->head = mctx_cur->get_head();
+     inp->rs_z = mctx_cur->get_rs_z();
+ 
++    if (mctx_cur->get_replay()) {
++        inp->s_copy0 = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_rs);
++        ggml_set_input(inp->s_copy0);
++
++        inp->s_copy0_main  = ggml_view_1d(ctx0, inp->s_copy0, n_seqs, 0);
++        inp->s_copy0_extra = ggml_view_1d(ctx0, inp->s_copy0, n_rs - n_seqs, n_seqs * inp->s_copy0->nb[0]);
++
++        inp->s_pinfo = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, 3 * n_seqs);
++        ggml_set_input(inp->s_pinfo);
++    }
++
+     return inp;
+ }
+ 
+diff --git a/src/llama-graph.h b/src/llama-graph.h
+index 19dab84..2342b00 100644
+--- a/src/llama-graph.h
++++ b/src/llama-graph.h
+@@ -341,6 +341,12 @@ public:
+     ggml_tensor * s_copy_main;   // I32 [n_seqs]
+     ggml_tensor * s_copy_extra;  // I32 [n_rs - n_seqs]
+ 
++    // replay rollback (llama_memory_recurrent::p_l), else nullptr
++    ggml_tensor * s_copy0       = nullptr; // I32 [n_rs]: S / pending rows (one plane)
++    ggml_tensor * s_copy0_main  = nullptr; // I32 [n_seqs]
++    ggml_tensor * s_copy0_extra = nullptr; // I32 [n_rs - n_seqs]
++    ggml_tensor * s_pinfo       = nullptr; // I32 [3 * n_seqs]: pending row, rejected count, fresh
++
+     // GDN rows mode only (see build_rs_write_rows): I64 [n_write*n_seqs]
+     // cache-row indices for the snapshot SET_ROWS scatter; created lazily,
+     // shared across recurrent layers
+diff --git a/src/llama-kv-cache.cpp b/src/llama-kv-cache.cpp
+index 2ac1dc5..c1c9194 100644
+--- a/src/llama-kv-cache.cpp
++++ b/src/llama-kv-cache.cpp
+@@ -80,7 +80,8 @@ llama_kv_cache::llama_kv_cache(
+            llama_memory_t   mem_other,
+     const layer_filter_cb & filter,
+     const  layer_reuse_cb & reuse,
+-    const  layer_share_cb & share) :
++    const  layer_share_cb & share,
++                 uint32_t   n_kv_vram_cells) :
+     model(model), hparams(hparams), v_trans(v_trans),
+     n_seq_max(n_seq_max), n_stream(unified ? 1 : n_seq_max), n_pad(n_pad), n_swa(n_swa), swa_type(swa_type),
+     other(static_cast<llama_kv_cache *>(mem_other)),
+@@ -163,6 +164,12 @@ llama_kv_cache::llama_kv_cache(
+ 
+     const bool is_mla = hparams.is_mla();
+ 
++    const uint32_t tier_cells = GGML_PAD(n_kv_vram_cells, n_pad);
++    if (tier_cells > 0 && tier_cells < kv_size) {
++        LLAMA_LOG_INFO("%s: tiered KV: cells [0, %u) in VRAM, [%u, %u) in host memory\n",
++                __func__, tier_cells, tier_cells, kv_size);
++    }
++
+     for (uint32_t il = 0; il < n_layer; il++) {
+         if (!hparams.has_kv(il)) {
+             LLAMA_LOG_DEBUG("%s: layer %3d: does not have KV cache\n", __func__, il);
+@@ -219,6 +226,31 @@ llama_kv_cache::llama_kv_cache(
+             buft = ggml_backend_dev_buffer_type(dev);
+ 
+             dev_name = ggml_backend_dev_name(dev);
++
++            // n_kv_vram_cells = N: tiered KV. Cells [0, N) of this layer's K and V stay in VRAM, cells
++            // [N, kv_size) live in pinned system RAM mapped into the same device range (CUDA VMM), so the
++            // window can exceed VRAM and the extra positions cost PCIe reads only once a sequence reaches
++            // them. Kernels are unchanged and results are identical to an all-VRAM cache. Backends without
++            // ggml_backend_cuda_tier_buffer_type (or without VMM) keep the ordinary device buffer.
++            if (tier_cells > 0 && tier_cells < kv_size && n_stream == 1 && !is_mla &&
++                    n_embd_k_gqa == n_embd_v_gqa && type_k == type_v) {
++                using tier_fn_t = ggml_backend_buffer_type_t (*)(int, double, int, const char *);
++                ggml_backend_reg_t reg = ggml_backend_dev_backend_reg(dev);
++                auto * fn = reg ? (tier_fn_t) ggml_backend_reg_get_proc_address(reg, "ggml_backend_cuda_tier_buffer_type") : nullptr;
++                const char * dn = ggml_backend_dev_name(dev);
++                int dev_idx = -1;
++                if (dn && strncmp(dn, "CUDA", 4) == 0) {
++                    dev_idx = atoi(dn + 4);
++                }
++                if (fn && dev_idx >= 0) {
++                    char tag[32];
++                    snprintf(tag, sizeof(tag), "kv%p_l%u", (void *) this, il);
++                    ggml_backend_buffer_type_t tb = fn(dev_idx, (double) tier_cells / (double) kv_size, 2, tag);
++                    if (tb) {
++                        buft = tb;
++                    }
++                }
++            }
+         }
+ 
+         LLAMA_LOG_DEBUG("%s: layer %3d: dev = %s\n", __func__, il, dev_name);
+diff --git a/src/llama-kv-cache.h b/src/llama-kv-cache.h
+index 7f3d91b..f25a276 100644
+--- a/src/llama-kv-cache.h
++++ b/src/llama-kv-cache.h
+@@ -112,7 +112,8 @@ public:
+                llama_memory_t   mem_other,
+         const layer_filter_cb & filter,
+         const  layer_reuse_cb & reuse,
+-        const  layer_share_cb & share);
++        const  layer_share_cb & share,
++                     uint32_t   n_kv_vram_cells = 0); // tiered KV: cells past this live in host memory (0 = all VRAM)
+ 
+     ~llama_kv_cache() = default;
+ 
+diff --git a/src/llama-memory-hybrid.cpp b/src/llama-memory-hybrid.cpp
+index 42c7381..a0fe07e 100644
+--- a/src/llama-memory-hybrid.cpp
++++ b/src/llama-memory-hybrid.cpp
+@@ -29,7 +29,8 @@ llama_memory_hybrid::llama_memory_hybrid(
+                      bool   unified,
+                             /* layer filters */
+     const layer_filter_cb & filter_attn,
+-    const layer_filter_cb & filter_recr) :
++    const layer_filter_cb & filter_recr,
++                 uint32_t   n_kv_vram_cells) :
+     hparams(model.hparams),
+     mem_attn(new llama_kv_cache(
+         model,
+@@ -49,7 +50,8 @@ llama_memory_hybrid::llama_memory_hybrid(
+             [&](int32_t il) { return !hparams.is_recr(il); }
+             : filter_attn,
+         nullptr,
+-        nullptr
++        nullptr,
++        n_kv_vram_cells
+     )),
+     mem_recr(new llama_memory_recurrent(
+         model,
+diff --git a/src/llama-memory-hybrid.h b/src/llama-memory-hybrid.h
+index 484eafb..52ea297 100644
+--- a/src/llama-memory-hybrid.h
++++ b/src/llama-memory-hybrid.h
+@@ -39,7 +39,8 @@ public:
+                      bool   unified,
+                             /* layer filters */
+     const layer_filter_cb & filter_attn = nullptr,
+-    const layer_filter_cb & filter_recr = nullptr);
++    const layer_filter_cb & filter_recr = nullptr,
++                 uint32_t   n_kv_vram_cells = 0); // tiered KV for the attention layers (see llama_context_params)
+ 
+     ~llama_memory_hybrid() = default;
+ 
+diff --git a/src/llama-memory-recurrent.cpp b/src/llama-memory-recurrent.cpp
+index 8085245..9637775 100644
+--- a/src/llama-memory-recurrent.cpp
++++ b/src/llama-memory-recurrent.cpp
+@@ -8,6 +8,7 @@
+ 
+ #include <algorithm>
+ #include <cassert>
++#include <cmath>
+ #include <cstdlib>
+ #include <cstring>
+ #include <limits>
+@@ -54,7 +55,7 @@ llama_memory_recurrent::llama_memory_recurrent(
+         auto it = ctx_map.find(buft);
+         if (it == ctx_map.end()) {
+             ggml_init_params params = {
+-                /*.mem_size   =*/ size_t(2u*n_layer*ggml_tensor_overhead()),
++                /*.mem_size   =*/ size_t(3u*n_layer*ggml_tensor_overhead()),
+                 /*.mem_buffer =*/ NULL,
+                 /*.no_alloc   =*/ true,
+             };
+@@ -109,6 +110,36 @@ llama_memory_recurrent::llama_memory_recurrent(
+ 
+     r_l.resize(n_layer);
+     s_l.resize(n_layer);
++    p_l.resize(n_layer);
++
++    {
++        const char * env = getenv("LLAMA_RS_REPLAY");
++        const bool want = env && atoi(env) != 0;
++        // the skip of a rejected token needs the fused GDN op with raw gates (qwen35.cpp: F32 ssm_dt / ssm_a)
++        bool raw_ok = !rpl && offload && type_s == GGML_TYPE_F32 && model.arch == LLM_ARCH_QWEN35 &&
++                      getenv("GGML_GDN_RAW_GATES_DISABLE") == nullptr;
++        bool any = false;
++        for (int i = 0; raw_ok && i < n_layer; i++) {
++            if (filter && !filter(i)) continue;
++            any = true;
++            const auto & l = model.layers[i];
++            ggml_backend_dev_t dev = model.dev_layer(i);
++            ggml_backend_reg_t reg = dev ? ggml_backend_dev_backend_reg(dev) : nullptr;
++            raw_ok = l.ssm_dt && l.ssm_dt->type == GGML_TYPE_F32 && l.ssm_a && l.ssm_a->type == GGML_TYPE_F32 &&
++                     reg && strcmp(ggml_backend_reg_name(reg), "CUDA") == 0;
++        }
++        // one sequence per context: with more, find_slot relocates cells and only their S rows move (not the pending rows)
++        replay = want && n_rs_seq > 0 && raw_ok && any && n_seq_max == 1 && hparams.ssm_d_state > 0 && hparams.ssm_dt_rank > 0;
++        if (want && !replay) {
++            LLAMA_LOG_WARN("%s: LLAMA_RS_REPLAY ignored (needs n_rs_seq > 0, one sequence, every recurrent layer on CUDA "
++                           "and a qwen35 model with raw GDN gates)\n", __func__);
++        }
++        if (replay) {
++            pend_k = hparams.ssm_d_state * hparams.ssm_n_group;
++            pend_v = hparams.ssm_d_inner;
++            pend_h = hparams.ssm_dt_rank;
++        }
++    }
+ 
+     for (int i = 0; i < n_layer; i++) {
+         if (filter && !filter(i)) {
+@@ -135,14 +166,19 @@ llama_memory_recurrent::llama_memory_recurrent(
+         }
+ 
+         const uint32_t n_rows   = mem_size * (1 + n_rs_seq);
+-        // ARC-LAB replay: S needs plane 0 (base) and plane 1 (record banks) only; the conv state keeps all its planes
+-        const uint32_t n_rows_s = rpl ? mem_size * 2 : n_rows;
++        // SYCL replay keeps two S planes. CUDA replay keeps one. The conv state keeps all planes.
++        const uint32_t n_rows_s = replay ? mem_size : (rpl ? mem_size * 2 : n_rows);
+         ggml_tensor * r = ggml_new_tensor_2d(ctx, type_r, hparams.n_embd_r(), n_rows);
+         ggml_tensor * s = ggml_new_tensor_2d(ctx, type_s, hparams.n_embd_s(), n_rows_s);
+         ggml_format_name(r, "cache_r_l%d", i);
+         ggml_format_name(s, "cache_s_l%d", i);
+         r_l[i] = r;
+         s_l[i] = s;
++        if (replay) {
++            ggml_tensor * p = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, (int64_t) pend_tok() * n_rs_seq + 1, mem_size);
++            ggml_format_name(p, "cache_p_l%d", i);
++            p_l[i] = p;
++        }
+     }
+ 
+     // allocate tensors and initialize the buffers to avoid NaNs in the padding
+@@ -161,9 +197,13 @@ llama_memory_recurrent::llama_memory_recurrent(
+         const size_t memory_size_s = size_s_bytes();
+ 
+         LLAMA_LOG_INFO("%s: size = %7.2f MiB (%6u cells, %3d layers, %2u seqs %2u rs_seq), R (%s): %7.2f MiB, S (%s): %7.2f MiB\n", __func__,
+-                (float)(memory_size_r + memory_size_s) / (1024.0f * 1024.0f), mem_size, n_layer, n_seq_max, n_rs_seq,
++                (float)(memory_size_r + memory_size_s + size_p_bytes()) / (1024.0f * 1024.0f), mem_size, n_layer, n_seq_max, n_rs_seq,
+                 ggml_type_name(type_r), (float)memory_size_r / (1024.0f * 1024.0f),
+                 ggml_type_name(type_s), (float)memory_size_s / (1024.0f * 1024.0f));
++        if (replay) {
++            LLAMA_LOG_INFO("%s: replay rollback: one S plane + pending inputs of %u tokens (%u floats a token): P %7.2f MiB\n",
++                    __func__, n_rs_seq, pend_tok(), (float) size_p_bytes() / (1024.0f * 1024.0f));
++        }
+     }
+ }
+ 
+@@ -791,6 +831,18 @@ size_t llama_memory_recurrent::size_r_bytes() const {
+     return size_r_bytes;
+ }
+ 
++size_t llama_memory_recurrent::size_p_bytes() const {
++    size_t size_p_bytes = 0;
++
++    for (const auto & p : p_l) {
++        if (p != nullptr) {
++            size_p_bytes += ggml_nbytes(p);
++        }
++    }
++
++    return size_p_bytes;
++}
++
+ size_t llama_memory_recurrent::size_s_bytes() const {
+     size_t size_s_bytes = 0;
+ 
+@@ -808,7 +860,8 @@ void llama_memory_recurrent::state_write(llama_io_write_i & io, llama_seq_id seq
+ 
+     std::vector<std::pair<uint32_t, uint32_t>> cell_ranges; // ranges, from inclusive, to exclusive
+     std::vector<std::pair<uint32_t, uint32_t>> cell_ranges_data; // logical source row ranges
+-    std::vector<std::pair<uint32_t, uint32_t>> cell_ranges_data_s; // ARC-LAB replay: S rows (base, plane 0)
++    std::vector<std::pair<uint32_t, uint32_t>> cell_ranges_data_s; // replay: S rows (base, plane 0)
++    std::vector<uint32_t> replay_masks;
+     uint32_t cell_count = 0;
+     uint32_t rpl_pending = 0;    // ARC-LAB replay: records still to apply to the written base state
+     uint32_t rpl_bank_cur = 0;
+@@ -850,8 +903,11 @@ void llama_memory_recurrent::state_write(llama_io_write_i & io, llama_seq_id seq
+                 cell_ranges_data.back().second++;
+             }
+ 
+-            if (rpl) {
+-                // the base state lives in plane 0 whatever rs_idx says (rs_idx only picks the conv snapshot)
++            if (replay) {
++                replay_masks.push_back(rs_idx_cur);
++            }
++            if (rpl || replay) {
++                // The base state lives in plane 0. rs_idx selects only the conv snapshot.
+                 const uint32_t cell_id_s = (cell.src >= 0 ? cell.src : (int32_t) i);
+                 if (cell_ranges_data_s.empty() || cell_ranges_data_s.back().second != cell_id_s) {
+                     cell_ranges_data_s.emplace_back(cell_id_s, cell_id_s + 1);
+@@ -901,11 +957,11 @@ void llama_memory_recurrent::state_write(llama_io_write_i & io, llama_seq_id seq
+     io.write(&cell_count, sizeof(cell_count));
+ 
+     state_write_meta(io, cell_ranges, seq_id);
+-    if (!rpl) {
++    if (!rpl && !replay) {
+         state_write_data(io, cell_ranges_data, cell_ranges_data, 0, 0);
+     } else {
+         GGML_ASSERT(cell_count <= 1); // single sequence
+-        state_write_data(io, cell_ranges_data, cell_ranges_data_s, rpl_pending, rpl_bank_cur);
++        state_write_data(io, cell_ranges_data, cell_ranges_data_s, rpl_pending, rpl_bank_cur, replay_masks);
+     }
+ }
+ 
+@@ -960,10 +1016,10 @@ void llama_memory_recurrent::state_write_meta(llama_io_write_i & io, const std::
+ }
+ 
+ void llama_memory_recurrent::state_write_data(llama_io_write_i & io, const std::vector<std::pair<uint32_t, uint32_t>> & cell_ranges,
+-        const std::vector<std::pair<uint32_t, uint32_t>> & cell_ranges_s, uint32_t rpl_pending, uint32_t rpl_bank_cur) const {
+-    // ARC-LAB replay: with records pending the state is base + records; the header then says 2 (a reader without
+-    // replay rejects it as an incompatible S layout instead of loading a stale state), and the records follow S
+-    const uint32_t s_trans = rpl_pending > 0 ? 2 : 0;
++        const std::vector<std::pair<uint32_t, uint32_t>> & cell_ranges_s, uint32_t rpl_pending, uint32_t rpl_bank_cur,
++        const std::vector<uint32_t> & replay_masks) const {
++    // Layout 2 stores SYCL update records. Layout 3 stores CUDA raw pending inputs.
++    const uint32_t s_trans = replay ? 3 : (rpl_pending > 0 ? 2 : 0);
+     const uint32_t n_layer = hparams.n_layer();
+ 
+     io.write(&s_trans, sizeof(s_trans));
+@@ -1045,6 +1101,25 @@ void llama_memory_recurrent::state_write_data(llama_io_write_i & io, const std::
+         }
+     }
+ 
++    if (replay) {
++        const uint32_t n_pend = n_rs_seq;
++        const uint32_t p_tok  = pend_tok();
++        GGML_ASSERT(replay_masks.size() == (cell_ranges_s.empty() ? 0 : 1));
++        io.write(&n_pend, sizeof(n_pend));
++        io.write(&p_tok, sizeof(p_tok));
++        for (const uint32_t mask : replay_masks) {
++            io.write(&mask, sizeof(mask));
++        }
++        for (uint32_t il = 0; il < n_layer; ++il) {
++            if (p_l[il] == nullptr) continue;
++            const uint64_t p_size_row = ggml_row_size(GGML_TYPE_F32, (int64_t) p_tok * n_pend + 1);
++            io.write(&p_size_row, sizeof(p_size_row));
++            for (const auto & range : cell_ranges_s) {
++                io.write_tensor(p_l[il], range.first * p_size_row, (range.second - range.first) * p_size_row);
++            }
++        }
++    }
++
+     if (rpl_pending > 0) {
+         // ARC-LAB replay: the pending update records of the (single) written cell, per layer
+         GGML_ASSERT(cell_ranges_s.size() == 1 && cell_ranges_s[0].second - cell_ranges_s[0].first == 1);
+@@ -1169,8 +1244,8 @@ bool llama_memory_recurrent::state_read_data(llama_io_read_i & io, uint32_t cell
+         LLAMA_LOG_ERROR("%s: not enough cells in kv cache to restore state (%u > %u)\n", __func__, cell_count, size);
+         return false;
+     }
+-    // ARC-LAB replay: 2 = plain S layout followed by pending update records (written only when replay is on)
+-    if (s_trans != 0 && !(s_trans == 2 && rpl)) {
++    // Reject replay layouts from a different implementation.
++    if (s_trans != 0 && !(s_trans == 2 && rpl) && !(s_trans == 3 && replay)) {
+         LLAMA_LOG_ERROR("%s: incompatible s transposition\n", __func__);
+         return false;
+     }
+@@ -1233,6 +1308,61 @@ bool llama_memory_recurrent::state_read_data(llama_io_read_i & io, uint32_t cell
+                 io.read_tensor(s_l[il], head * s_size_row, cell_count * s_size_row);
+             }
+         }
++
++        if (replay) {
++            const uint32_t n_pend = n_rs_seq;
++            const uint32_t p_tok  = pend_tok();
++            std::vector<uint32_t> masks(cell_count, 0);   // rejected pending tokens per cell (the rollback at the save)
++            if (s_trans == 3) {
++                uint32_t n_pend_ref = 0;
++                uint32_t p_tok_ref  = 0;
++                io.read(&n_pend_ref, sizeof(n_pend_ref));
++                io.read(&p_tok_ref,  sizeof(p_tok_ref));
++                if (n_pend_ref != n_pend || p_tok_ref != p_tok) {
++                    LLAMA_LOG_ERROR("%s: mismatched replay layout (%u x %u instead of %u x %u)\n", __func__,
++                            n_pend_ref, p_tok_ref, n_pend, p_tok);
++                    return false;
++                }
++                for (uint32_t i = 0; i < cell_count; ++i) {
++                    io.read(&masks[i], sizeof(masks[i]));
++                    if (masks[i] > n_pend) {
++                        LLAMA_LOG_ERROR("%s: bad replay mask %u\n", __func__, masks[i]);
++                        return false;
++                    }
++                }
++            }
++            const size_t row_floats = (size_t) p_tok * n_pend + 1;   // + the valid count
++            std::vector<float> buf(row_floats * cell_count, 0.0f);
++            for (uint32_t il = 0; il < n_layer; ++il) {
++                if (p_l[il] == nullptr) continue;
++                if (s_trans == 3) {
++                    uint64_t p_size_row_ref = 0;
++                    io.read(&p_size_row_ref, sizeof(p_size_row_ref));
++                    if (p_size_row_ref != row_floats * sizeof(float)) {
++                        LLAMA_LOG_ERROR("%s: mismatched p row size (%zu != %zu, layer %d)\n", __func__,
++                                (size_t) p_size_row_ref, row_floats * sizeof(float), il);
++                        return false;
++                    }
++                    if (cell_count) {
++                        io.read(buf.data(), buf.size() * sizeof(float));
++                    }
++                } else {
++                    std::fill(buf.begin(), buf.end(), 0.0f);   // a plain S file: count 0, no pending token
++                }
++                // the rejected (last masks[i]) pending tokens of each cell leave the valid count
++                for (uint32_t i = 0; i < cell_count; ++i) {
++                    float & cnt = buf[i * row_floats + row_floats - 1];
++                    if (!std::isfinite(cnt) || cnt < 0.0f || (double) cnt > n_pend || std::floor(cnt) != cnt) {
++                        LLAMA_LOG_ERROR("%s: invalid replay pending count (layer %u)\n", __func__, il);
++                        return false;
++                    }
++                    cnt = std::max(0.0f, cnt - (float) masks[i]);
++                }
++                if (cell_count) {
++                    ggml_backend_tensor_set(p_l[il], buf.data(), head * row_floats * sizeof(float), buf.size() * sizeof(float));
++                }
++            }
++        }
+     } else {
+         // For each layer, read the values for each cell (transposed)
+         for (uint32_t il = 0; il < n_layer; ++il) {
+@@ -1378,6 +1508,40 @@ ggml_tensor * llama_memory_recurrent_context::get_s_l(int32_t il) const {
+     return mem->s_l[il];
+ }
+ 
++ggml_tensor * llama_memory_recurrent_context::get_p_l(int32_t il) const {
++    return mem->p_l[il];
++}
++
++bool llama_memory_recurrent_context::get_replay() const {
++    return mem->replay;
++}
++
++uint32_t llama_memory_recurrent_context::get_n_pend() const {
++    return mem->replay ? mem->n_rs_seq : 0;
++}
++
++int32_t llama_memory_recurrent_context::s_copy0(int i) const {
++    return mem->cells[i + mem->head].src0;
++}
++
++void llama_memory_recurrent_context::s_pend_info(int i, int32_t & row, int32_t & rejected, int32_t & fresh) const {
++    const uint32_t cell_idx = i + mem->head;
++    const auto & cell = mem->cells[cell_idx];
++    row      = cell.src0;
++    rejected = 0;
++    fresh    = cell.src0 < 0 || cell.src0 == mem->rs_z;   // a new (zeroed) state: its pending inputs are not its own
++    if (fresh) {
++        row = std::max<int32_t>(cell.src0, 0);
++        return;
++    }
++    if (!cell.seq_id.empty()) {
++        const llama_seq_id seq = *cell.seq_id.begin();
++        if (seq >= 0 && (size_t) seq < mem->rs_idx.size()) {
++            rejected = (int32_t) mem->rs_idx[seq];
++        }
++    }
++}
++
+ int32_t llama_memory_recurrent_context::s_copy(int i) const {
+     const uint32_t cell_idx = i + mem->head;
+     const int32_t  src0     = mem->cells[cell_idx].src0;
+diff --git a/src/llama-memory-recurrent.h b/src/llama-memory-recurrent.h
+index f83671a..d0d901d 100644
+--- a/src/llama-memory-recurrent.h
++++ b/src/llama-memory-recurrent.h
+@@ -126,6 +126,17 @@ public:
+     std::vector<ggml_tensor *> r_l;
+     std::vector<ggml_tensor *> s_l;
+ 
++    // replay rollback (LLAMA_RS_REPLAY=1, qwen35 GDN layers with raw gates): S keeps one plane, and p_l keeps the GDN
++    // inputs of the last n_rs_seq tokens of each cell (row = n_rs_seq tokens of [k | v | gate | beta], then the count
++    // of valid ones). The GDN kernel runs the valid ones that were not rejected before the batch
++    // (ggml_gated_delta_net_replay_raw). The conv state (r_l) keeps its snapshot planes.
++    bool     replay = false;
++    uint32_t pend_k = 0; // k floats per token (ssm_d_state * ssm_n_group)
++    uint32_t pend_v = 0; // v floats per token (ssm_d_inner)
++    uint32_t pend_h = 0; // gate floats per token = beta floats per token (ssm_dt_rank)
++    uint32_t pend_tok() const { return pend_k + pend_v + 2*pend_h; }
++    std::vector<ggml_tensor *> p_l;
++
+ private:
+     //const llama_model & model;
+     const llama_hparams & hparams;
+@@ -139,10 +150,12 @@ private:
+ 
+     size_t size_r_bytes() const;
+     size_t size_s_bytes() const;
++    size_t size_p_bytes() const;
+ 
+     void state_write_meta(llama_io_write_i & io, const std::vector<std::pair<uint32_t, uint32_t>> & cell_ranges, llama_seq_id seq_id = -1) const;
+     void state_write_data(llama_io_write_i & io, const std::vector<std::pair<uint32_t, uint32_t>> & cell_ranges,
+-            const std::vector<std::pair<uint32_t, uint32_t>> & cell_ranges_s, uint32_t rpl_pending, uint32_t rpl_bank_cur) const;
++            const std::vector<std::pair<uint32_t, uint32_t>> & cell_ranges_s, uint32_t rpl_pending, uint32_t rpl_bank_cur,
++            const std::vector<uint32_t> & replay_masks = {}) const;
+ 
+     bool state_read_meta(llama_io_read_i & io, uint32_t cell_count, llama_seq_id dest_seq_id = -1);
+     bool state_read_data(llama_io_read_i & io, uint32_t cell_count);
+@@ -185,9 +198,16 @@ public:
+ 
+     ggml_tensor * get_r_l(int32_t il) const;
+     ggml_tensor * get_s_l(int32_t il) const;
++    ggml_tensor * get_p_l(int32_t il) const;
+ 
+     int32_t s_copy(int i) const;
+ 
++    // CUDA replay reads these inputs before s_copy() consumes the rollback index.
++    bool     get_replay() const;
++    uint32_t get_n_pend() const;
++    int32_t  s_copy0(int i) const;
++    void     s_pend_info(int i, int32_t & row, int32_t & rejected, int32_t & fresh) const;
++
+     // ARC-LAB GDN replay (see llama_memory_recurrent::rpl)
+     bool    get_rpl() const;
+     int32_t rpl_row(int i) const; // plane-0 S row the state of rs i is read from
+diff --git a/src/llama-model.cpp b/src/llama-model.cpp
+index a31e031..f242150 100644
+--- a/src/llama-model.cpp
++++ b/src/llama-model.cpp
+@@ -2832,7 +2832,8 @@ llama_memory_i * llama_model::create_memory(const llama_memory_params & params,
+                             /* offload           */ cparams.offload_kqv,
+                             /* unified           */ cparams.kv_unified,
+                             /* filter_attn       */ std::move(filter_attn),
+-                            /* filter_recr       */ std::move(filter_recr));
++                            /* filter_recr       */ std::move(filter_recr),
++                            /* n_kv_vram_cells   */ cparams.n_kv_vram_cells);
+                     }
+                 } else {
+                     llama_kv_cache::layer_filter_cb filter = nullptr;
+@@ -2934,7 +2935,8 @@ llama_memory_i * llama_model::create_memory(const llama_memory_params & params,
+                                 nullptr,
+                                 filter,
+                                 nullptr,
+-                                nullptr);
++                                nullptr,
++                                cparams.n_kv_vram_cells);
+                     }
+                 }
+             }
+diff --git a/src/models/delta-net-base.cpp b/src/models/delta-net-base.cpp
+index 9321308..8544975 100644
+--- a/src/models/delta-net-base.cpp
++++ b/src/models/delta-net-base.cpp
+@@ -555,6 +555,46 @@ ggml_tensor * llm_build_delta_net_base::build_recurrent_attn(
+ 
+     GGML_ASSERT(state_rows == nullptr || keep); // rows mode is a ring-path optimization
+ 
++    if (inp->s_pinfo) {
++        // replay rollback (llama_memory_recurrent::p_l, ggml_gated_delta_net_replay_raw): the GDN kernel runs this cell's
++        // pending tokens (the inputs of its last P tokens, without the rejected ones) before the batch, writes the
++        // state P tokens before the end to its output (the CUDA cache fusion writes it straight into the S plane:
++        // the first copy below) and the inputs of the last P tokens after it (the second copy, into p_l).
++        const bool raw = gdn_raw_beta && gdn_raw_alpha && gdn_raw_dt_bias && gdn_raw_a;
++        GGML_ASSERT(raw && state_rows == nullptr && "replay rollback needs the fused GDN op with raw gates");
++
++        const int64_t P     = mctx_cur->get_n_pend();
++        const int64_t D     = S_v * S_v * H_v;
++        ggml_tensor * p_all = mctx_cur->get_p_l(il);
++        GGML_ASSERT(p_all && p_all->ne[0] == P * (k->ne[0] * k->ne[1] + S_v * H_v + 2 * H_v) + 1);
++
++        ggml_tensor * gdn_out = ggml_gated_delta_net_replay_raw(ctx0, q, k, v, gdn_raw_alpha, gdn_raw_beta, s, p_all,
++                                                            inp->s_pinfo, (int) P);
++        ggml_gated_delta_net_set_raw_gates(gdn_out, gdn_raw_dt_bias, gdn_raw_a);
++        res->add_fused_node({n_seq_tokens > 1 ? LLM_FUSED_OP_GDN_CH : LLM_FUSED_OP_GDN_AR, gdn_out, il});
++
++        ggml_tensor * output = ggml_view_4d(ctx0, gdn_out,
++            S_v, H_v, n_seq_tokens, n_seqs,
++            ggml_row_size(gdn_out->type, S_v),
++            ggml_row_size(gdn_out->type, S_v * H_v),
++            ggml_row_size(gdn_out->type, S_v * H_v * n_seq_tokens),
++            0);
++        cb(output, "attn_output", il);
++
++        const int64_t attn_elems = S_v * H_v * n_seq_tokens * n_seqs;
++        ggml_tensor * s_commit = ggml_view_2d(ctx0, gdn_out, D, n_seqs, ggml_row_size(gdn_out->type, D),
++            ggml_row_size(gdn_out->type, attn_elems));
++        ggml_build_forward_expand(gf, ggml_cpy(ctx0, s_commit,
++            ggml_view_2d(ctx0, ssm_states_all, D, n_seqs, ssm_states_all->nb[1], kv_head * ssm_states_all->nb[1])));
++
++        ggml_tensor * p_new = ggml_view_2d(ctx0, gdn_out, p_all->ne[0], n_seqs, ggml_row_size(gdn_out->type, p_all->ne[0]),
++            ggml_row_size(gdn_out->type, attn_elems + D * n_seqs));
++        ggml_build_forward_expand(gf, ggml_cpy(ctx0, p_new,
++            ggml_view_2d(ctx0, p_all, p_all->ne[0], n_seqs, p_all->nb[1], kv_head * p_all->nb[1])));
++
++        return output;
++    }
++
+     if (!keep) {
+         auto attn_out = build_delta_net(q, k, v, g, b, s, il);
+         ggml_tensor * output    = attn_out.first;
+diff --git a/src/models/qwen35.cpp b/src/models/qwen35.cpp
+index 9147986..9f707e4 100644
+--- a/src/models/qwen35.cpp
++++ b/src/models/qwen35.cpp
+@@ -496,7 +496,8 @@ ggml_tensor * llama_model_qwen35::graph::build_layer_attn_linear(
+     // row in plane 0, gathered with its own row indices (s_copy carries the conv rollback plane)
+     const bool gdn_rpl = inp->s_rpl_ctrl != nullptr;
+ 
+-    const bool gdn_state_rows = gdn_state_rows_env && gdn_state_rows_dev_ok && cparams.n_rs_seq > 0 && !gdn_rpl;
++    const bool gdn_state_rows = gdn_state_rows_env && gdn_state_rows_dev_ok && cparams.n_rs_seq > 0 &&
++                                !gdn_rpl && !inp->s_pinfo;
+ 
+     ggml_tensor * state;
+     if (gdn_rpl) {
+@@ -504,6 +505,11 @@ ggml_tensor * llama_model_qwen35::graph::build_layer_attn_linear(
+                 mctx_cur->get_n_rs(), mctx_cur->get_head(), mctx_cur->get_size(), mctx_cur->get_rs_z());
+         state = ggml_reshape_4d(ctx0, state, head_v_dim, head_v_dim, num_v_heads, n_seqs);
+         cb(state, "state_predelta", il);
++    } else if (inp->s_pinfo) {
++        state = build_rs(ssm_states_all, inp->s_copy0_main, inp->s_copy0_extra, hparams.n_embd_s(), n_seqs,
++                mctx_cur->get_n_rs(), mctx_cur->get_head(), mctx_cur->get_size(), mctx_cur->get_rs_z());
++        state = ggml_reshape_4d(ctx0, state, head_v_dim, head_v_dim, num_v_heads, n_seqs);
++        cb(state, "state_predelta", il);
+     } else if (gdn_state_rows) {
+         state = build_rs_cache_view(inp, ssm_states_all, hparams.n_embd_s(), n_seqs);
+         cb(state, "state_cache_view", il);
+diff --git a/tests/test-backend-ops.cpp b/tests/test-backend-ops.cpp
+index bb39c3d..d969ff2 100644
+--- a/tests/test-backend-ops.cpp
++++ b/tests/test-backend-ops.cpp
+@@ -11028,6 +11028,30 @@ static std::vector<std::unique_ptr<test_case>> make_test_cases_eval() {
+     test_cases.emplace_back(new test_gated_delta_net(GGML_TYPE_F32, 4, 64,  33, 1, 1, false, true));
+     test_cases.emplace_back(new test_gated_delta_net(GGML_TYPE_F32, 4, 64, 100, 1, 1, false, true));
+ 
++    // MMA-eligible GDN shapes: whole heads, value slices, tails, and the HIP prefill threshold.
++    test_cases.emplace_back(new test_gated_delta_net(GGML_TYPE_F32, 16, 128,   65, 1, 1));
++    test_cases.emplace_back(new test_gated_delta_net(GGML_TYPE_F32, 16, 128,   65, 3, 4));
++    test_cases.emplace_back(new test_gated_delta_net(GGML_TYPE_F32, 16, 128,   64, 1, 4));
++    test_cases.emplace_back(new test_gated_delta_net(GGML_TYPE_F32, 16, 128,  257, 1, 3));
++    test_cases.emplace_back(new test_gated_delta_net(GGML_TYPE_F32, 16, 128,  512, 1, 2));
++    test_cases.emplace_back(new test_gated_delta_net(GGML_TYPE_F32, 16, 128,  513, 1, 3));
++    test_cases.emplace_back(new test_gated_delta_net(GGML_TYPE_F32, 16, 128,  513, 2, 2, true));
++    test_cases.emplace_back(new test_gated_delta_net(GGML_TYPE_F32, 16, 128, 2048, 1, 2));
++    // Keep the WebGPU dispatch below 65535 workgroups (32 per token for this shape).
++    test_cases.emplace_back(new test_gated_delta_net(GGML_TYPE_F32, 16, 128, 2047, 2, 3));
++    // Qwen3.8-27B shape (16 K heads, 48 V heads): raw gates and K > 1 snapshots with the chunked MMA kernel (the
++    // MMA kernel runs n - K tokens, the recurrent kernel the last K with the snapshot slots); below 64 MMA tokens and
++    // with several sequences the recurrent kernel runs alone.
++    test_cases.emplace_back(new test_gated_delta_net(GGML_TYPE_F32, 16, 128,  512, 1, 3, false, false, /*K=*/1, false, -1, /*raw=*/true));
++    test_cases.emplace_back(new test_gated_delta_net(GGML_TYPE_F32, 16, 128,  512, 1, 3, false, false, /*K=*/3, false, -1, /*raw=*/true));
++    test_cases.emplace_back(new test_gated_delta_net(GGML_TYPE_F32, 16, 128,  512, 1, 3, false, false, /*K=*/5, false, -1, /*raw=*/false));
++    test_cases.emplace_back(new test_gated_delta_net(GGML_TYPE_F32, 16, 128,  100, 1, 3, false, false, /*K=*/4, false, -1, /*raw=*/true));
++    test_cases.emplace_back(new test_gated_delta_net(GGML_TYPE_F32, 16, 128,   67, 1, 3, false, false, /*K=*/4, false, -1, /*raw=*/true));
++    test_cases.emplace_back(new test_gated_delta_net(GGML_TYPE_F32, 16, 128,  200, 2, 3, false, false, /*K=*/3, false, -1, /*raw=*/true));
++    test_cases.emplace_back(new test_gated_delta_net(GGML_TYPE_F32, 16, 128, 2048, 1, 3, false, false, /*K=*/3, false, -1, /*raw=*/true));
++    test_cases.emplace_back(new test_gated_delta_net(GGML_TYPE_F32, 16, 128,  512, 1, 3, false, false, /*K=*/3, /*rows=*/true, -1, /*raw=*/true));
++    test_cases.emplace_back(new test_gated_delta_net(GGML_TYPE_F32, 16, 128,  512, 1, 3, false, false, /*K=*/1, /*rows=*/true, -1, /*raw=*/true));
++
+     // K > 1: output keeps the last min(n_tokens, K) per-token snapshots, ordered most-recent-first
+     // (slot 0 = final state, slot s = state s tokens back).
+     // exact-match cases (K == n_seq_tokens):
+diff --git a/tools/server/server-context.cpp b/tools/server/server-context.cpp
+index d02038c..67b5c73 100644
+--- a/tools/server/server-context.cpp
++++ b/tools/server/server-context.cpp
+@@ -3538,8 +3538,11 @@ private:
+                         slot.init_sampler();
+                     } else {
+                         // skip ordinary mid-prompt checkpoints, unless the batch starts a user
+-                        // message or we are near the end of the prompt
+-                        if (!is_user_start && !near_prompt_end) {
++                        // message, we are near the end of the prompt, or --checkpoint-every-nt is due
++                        const bool every_nt_due = params_base.checkpoint_every_nt > 0 &&
++                            n_tokens_start >= (slot.prompt.checkpoints.empty() ? 0 : slot.prompt.checkpoints.back().n_tokens) +
++                                              params_base.checkpoint_every_nt;
++                        if (!is_user_start && !near_prompt_end && !every_nt_due) {
+                             do_checkpoint = false;
+                         }
+                     }
+@@ -3688,6 +3691,24 @@ private:
+             }
+         }
+ 
++        // Remove old MTP draft rows. Keep absolute positions and the target cache.
++        const bool spec_mtp = std::find(params_base.speculative.types.begin(),
++                                      params_base.speculative.types.end(),
++                                      COMMON_SPECULATIVE_TYPE_DRAFT_MTP) != params_base.speculative.types.end();
++        if (spec_process && spec_mtp && ctx_dft && batch_view.n_tokens > 0 &&
++                params_base.speculative.draft.n_window > 0) {
++            llama_pos pos_min = batch_view.pos[0];
++            for (int i = 1; i < batch_view.n_tokens; ++i) {
++                pos_min = std::min(pos_min, batch_view.pos[i]);
++            }
++            const llama_pos hi = pos_min - params_base.speculative.draft.n_window;
++            if (hi > 0) {
++                for (auto & slot : slots) {
++                    llama_memory_seq_rm(llama_get_memory(ctx_dft), slot.id, 0, hi);
++                }
++            }
++        }
++
+         if (spec_process) {
+             bool ok = true;
+             queue_tasks.yield_to_queue([&]() {

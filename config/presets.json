@@ -1,0 +1,854 @@
+{
+  "flint-256k": {
+    "description": "Flint UD-Q3_K_XL at 256K with Q8 KV and CPU MoE cutoff 33.",
+    "settings": {
+      "model": "flint",
+      "context": 262144,
+      "cpu_moe_layers": 33,
+      "kv_cache": "q8_0",
+      "cache_ram": 32768,
+      "cpu_offload_gb": 0,
+      "batch_tokens": 2048,
+      "ubatch_tokens": 1024
+    },
+    "measurement": {
+      "status": "unmeasured",
+      "ttft_seconds": null,
+      "decode_tps": null,
+      "gpu_mib": null,
+      "note": "Based on the posted RTX 3060 preview recipe, with a 32 GiB prompt cache. Local throughput and filled 256K context remain unmeasured."
+    }
+  },
+  "9b-128k": {
+    "description": "Bonsai2 9B at 128K with MTP decoding.",
+    "settings": {
+      "model": "bonsai2-9b",
+      "context": 131072,
+      "speculative": "mtp",
+      "prompt_lookup": false,
+      "kv_cache": "q8_0",
+      "draft_kv_cache": "q8_0",
+      "draft_tokens": 2,
+      "cache_ram": 32768,
+      "cpu_offload_gb": 0
+    },
+    "measurement": {
+      "status": "ok",
+      "scope": "filled-context",
+      "ttft_seconds": 64.9531776169897,
+      "decode_tps": 136.83842422952367,
+      "gpu_mib": 6511.0,
+      "gpu_measurement": "peak",
+      "source": "results/optimization-bonsai2-9b-131072-mtp-capacity.json"
+    }
+  },
+  "9b-192k": {
+    "description": "Bonsai2 9B at 192K with MTP decoding.",
+    "settings": {
+      "model": "bonsai2-9b",
+      "context": 196608,
+      "speculative": "mtp",
+      "prompt_lookup": false,
+      "kv_cache": "q8_0",
+      "draft_kv_cache": "q8_0",
+      "draft_tokens": 2,
+      "cache_ram": 32768,
+      "cpu_offload_gb": 0
+    },
+    "measurement": {
+      "status": "ok",
+      "scope": "filled-context",
+      "ttft_seconds": 113.71824804702192,
+      "decode_tps": 106.28462685660685,
+      "gpu_mib": 7751.0,
+      "gpu_measurement": "peak",
+      "source": "results/optimization-bonsai2-9b-196608-mtp-capacity.json"
+    }
+  },
+  "9b-256k": {
+    "description": "Bonsai2 9B at 256K with MTP decoding.",
+    "settings": {
+      "model": "bonsai2-9b",
+      "context": 262144,
+      "speculative": "mtp",
+      "prompt_lookup": false,
+      "kv_cache": "q8_0",
+      "draft_kv_cache": "q8_0",
+      "draft_tokens": 2,
+      "cache_ram": 32768,
+      "cpu_offload_gb": 0
+    },
+    "measurement": {
+      "status": "ok",
+      "ttft_seconds": 174.3826730499859,
+      "decode_tps": 100.70380772286312,
+      "gpu_mib": 8991.0,
+      "source": "results/optimization-bonsai2-9b-262144-mtp-capacity.json",
+      "workloads": [
+        {
+          "prompt_tokens": 4096,
+          "everyday_tps": 152.69370976038945,
+          "code_tps": 229.64667556843472,
+          "source": "results/optimization-workloads.jsonl"
+        }
+      ]
+    }
+  },
+  "27b-128k": {
+    "description": "Bonsai2 27B at 128K with community DFlash2 decoding.",
+    "settings": {
+      "model": "bonsai2-27b",
+      "context": 131072,
+      "speculative": "dflash",
+      "prompt_lookup": false,
+      "kv_cache": "q4_0",
+      "draft_kv_cache": "q4_0",
+      "draft_tokens": 3,
+      "cache_ram": 32768,
+      "cpu_offload_gb": 0
+    },
+    "measurement": {
+      "status": "ok",
+      "scope": "filled-context",
+      "ttft_seconds": 194.3890156710113,
+      "decode_tps": 99.97143673236219,
+      "gpu_mib": 11002.0,
+      "source": "results/top-bonsai2-27b-131072-dflash-3-capacity.json",
+      "workloads": [
+        {
+          "prompt_tokens": 4096,
+          "everyday_tps": 77.76058243402977,
+          "code_tps": 138.98690012644943,
+          "source": "results/top-workloads.jsonl"
+        }
+      ]
+    }
+  },
+  "27b-192k": {
+    "description": "Bonsai2 27B at 192K with community DFlash2 decoding.",
+    "settings": {
+      "model": "bonsai2-27b",
+      "context": 196608,
+      "speculative": "dflash",
+      "prompt_lookup": false,
+      "kv_cache": "q4_0",
+      "draft_kv_cache": "q4_0",
+      "draft_tokens": 3,
+      "cache_ram": 32768,
+      "cpu_offload_gb": 0
+    },
+    "measurement": {
+      "status": "ok",
+      "scope": "filled-context",
+      "ttft_seconds": 342.0092113020073,
+      "decode_tps": 84.62566575548556,
+      "gpu_mib": 11335.0,
+      "source": "results/top-bonsai2-27b-196608-dflash-3-capacity.json",
+      "workloads": [
+        {
+          "prompt_tokens": 4096,
+          "everyday_tps": 76.83524942732606,
+          "code_tps": 139.82082753749577,
+          "source": "results/top-workloads.jsonl"
+        }
+      ],
+      "opencode": {
+        "native_tps": 105.43069452470017,
+        "workflow_tps": 43.45053299008262,
+        "wall_seconds": 4.787052900996059,
+        "output_tokens": 208,
+        "source": "results/opencode-bonsai2-27b-196608-dflash-3-opencode-coding.json"
+      }
+    }
+  },
+  "27b-256k": {
+    "description": "Bonsai2 27B at 256K with MTP decoding.",
+    "settings": {
+      "model": "bonsai2-27b",
+      "context": 262144,
+      "speculative": "mtp",
+      "prompt_lookup": false,
+      "kv_cache": "q4_0",
+      "draft_kv_cache": "q4_0",
+      "draft_tokens": 2,
+      "cache_ram": 32768,
+      "cpu_offload_gb": 0
+    },
+    "measurement": {
+      "status": "ok",
+      "date": "2026-10-19",
+      "scope": "filled-context",
+      "draft_tokens": 2,
+      "mtp_chain": true,
+      "ttft_seconds": 541.8724233519752,
+      "decode_tps": 44.83066816197107,
+      "gpu_mib": 11944.0,
+      "gpu_measurement": "peak total device memory across the completed case",
+      "source": "experiments/benchmarks/runs/20261019-quiet-baseline/27b-stock-mtp2/capacity.json",
+      "capacity_prompt_tokens": 262079,
+      "capacity_output_tokens": 64,
+      "capacity_gpu_peak_mib": 11941.0,
+      "resource_peaks": {
+        "rss_kib": 15580060,
+        "scope_memory_bytes": 15911206912,
+        "gpu_mib": 11944.0,
+        "gpu_temperature_c": 73.0
+      },
+      "resource_source": "experiments/benchmarks/runs/20261019-quiet-baseline/27b-stock-mtp2/trial.json",
+      "note": "Capacity uses repetitive text and 64 forced output tokens. It can favor speculation. These rates do not measure coding quality.",
+      "opencode_long": {
+        "pre_tps": 54.439344660931944,
+        "post_tps": 90.56290038823276,
+        "cold_ttft_seconds": 402.372471522016,
+        "warm_seconds": 75.71336994401645,
+        "passed_phases": 6,
+        "source": "experiments/benchmarks/runs/20261019-quiet-baseline/27b-stock-mtp2/opencode.json",
+        "request_source": "experiments/benchmarks/runs/20261019-quiet-baseline/27b-stock-mtp2/proxy/requests.jsonl",
+        "initial_input_tokens": 212756,
+        "note": "Constructed public-source OpenCode history. Warm time covers all five follow-ups, including compaction."
+      },
+      "historical_short_measurements": {
+        "note": "These historical records do not match the current MTP2, xhigh, 32768 MiB launch settings.",
+        "workloads_note": "Historical 4096-token plain-completion records with label mtp in the saved JSONL. They do not record all launch settings.",
+        "workloads": [
+          {
+            "prompt_tokens": 4096,
+            "everyday_tps": 74.30999351350151,
+            "code_tps": 91.69784708580461,
+            "source": "results/top-workloads.jsonl"
+          }
+        ],
+        "opencode": {
+          "native_tps": 87.84072890186508,
+          "workflow_tps": 49.36914754456922,
+          "wall_seconds": 7.069192347000353,
+          "output_tokens": 349,
+          "source": "results/opencode-bonsai2-27b-262144-mtp-opencode-coding.json",
+          "date": "2026-10-17",
+          "tested_settings": {
+            "model": "bonsai2-27b",
+            "context": 262144,
+            "speculative": "mtp",
+            "draft_tokens": 1,
+            "cache_ram_mib": 8192,
+            "reasoning_effort": "medium",
+            "batch_tokens": 256,
+            "ubatch_tokens": 64
+          }
+        }
+      }
+    }
+  },
+  "27b-128k-mtp": {
+    "description": "Bonsai2 27B at 128K with MTP decoding.",
+    "settings": {
+      "model": "bonsai2-27b",
+      "context": 131072,
+      "speculative": "mtp",
+      "prompt_lookup": false,
+      "kv_cache": "q4_0",
+      "draft_kv_cache": "q4_0",
+      "draft_tokens": 1,
+      "cache_ram": 32768,
+      "cpu_offload_gb": 0
+    },
+    "measurement": {
+      "status": "ok",
+      "scope": "filled-context",
+      "ttft_seconds": 196.65636677702423,
+      "decode_tps": 38.59360020093176,
+      "gpu_mib": 10071.0,
+      "source": "results/optimization-bonsai2-27b-131072-mtp-capacity.json"
+    }
+  },
+  "27b-192k-mtp": {
+    "description": "Bonsai2 27B at 192K with MTP decoding.",
+    "settings": {
+      "model": "bonsai2-27b",
+      "context": 196608,
+      "speculative": "mtp",
+      "prompt_lookup": false,
+      "kv_cache": "q4_0",
+      "draft_kv_cache": "q4_0",
+      "draft_tokens": 1,
+      "cache_ram": 32768,
+      "cpu_offload_gb": 0
+    },
+    "measurement": {
+      "status": "ok",
+      "scope": "filled-context",
+      "ttft_seconds": 347.76295181098976,
+      "decode_tps": 30.998048599035815,
+      "gpu_mib": 11318.0,
+      "source": "results/optimization-bonsai2-27b-196608-mtp-capacity.json"
+    }
+  },
+  "dory-1loop": {
+    "description": "Dory with 1 round and FP8 last-loop KV cache.",
+    "settings": {
+      "model": "dory",
+      "context": 262144,
+      "rounds": 1,
+      "cpu_offload_gb": 0
+    },
+    "measurement": {
+      "status": "ok",
+      "scope": "filled-context",
+      "ttft_seconds": 173.3211,
+      "decode_tps": 14.38,
+      "gpu_mib": 11185,
+      "gpu_measurement": "peak",
+      "source": "results/dory-rounds-1-capacity.json"
+    }
+  },
+  "dory-2loop": {
+    "description": "Dory with 2 rounds, FP8 last-loop KV, and 2 GiB native host cache.",
+    "settings": {
+      "model": "dory",
+      "context": 262144,
+      "rounds": 2,
+      "cpu_offload_gb": 0,
+      "kv_offload_gb": 2
+    },
+    "measurement": {
+      "status": "ok",
+      "scope": "filled-context",
+      "ttft_seconds": 270.7051,
+      "decode_tps": 9.16,
+      "gpu_mib": 10499,
+      "gpu_measurement": "snapshot",
+      "source": "results/dory-2loop-native-cache-capacity.json"
+    }
+  },
+  "dory-4loop": {
+    "description": "Dory with 4 recurrent rounds and FP8 last-loop KV cache.",
+    "settings": {
+      "model": "dory",
+      "context": 262144,
+      "rounds": 4,
+      "cpu_offload_gb": 0
+    },
+    "measurement": {
+      "status": "ok",
+      "scope": "filled-context",
+      "ttft_seconds": 459.2279,
+      "decode_tps": 5.36,
+      "gpu_mib": 11199,
+      "gpu_measurement": "peak",
+      "source": "results/dory-rounds-4-capacity.json"
+    }
+  },
+  "27b-256k-mtp": {
+    "description": "Bonsai2 27B at 256K with MTP decoding.",
+    "settings": {
+      "model": "bonsai2-27b",
+      "context": 262144,
+      "speculative": "mtp",
+      "prompt_lookup": false,
+      "kv_cache": "q4_0",
+      "draft_kv_cache": "q4_0",
+      "draft_tokens": 1,
+      "cache_ram": 32768,
+      "cpu_offload_gb": 0
+    },
+    "measurement": {
+      "status": "ok",
+      "scope": "filled-context",
+      "ttft_seconds": 535.5521387660119,
+      "decode_tps": 25.426540303487958,
+      "gpu_mib": 11790.0,
+      "gpu_measurement": "peak",
+      "source": "results/top-bonsai2-27b-262144-mtp-capacity.json"
+    }
+  },
+  "27b-256k-lookup": {
+    "description": "Bonsai2 27B at 256K with calibrated Q4 KV and prompt lookup.",
+    "settings": {
+      "model": "bonsai2-27b",
+      "context": 262144,
+      "speculative": "none",
+      "prompt_lookup": true,
+      "kv_cache": "q4_0",
+      "draft_kv_cache": "q4_0",
+      "draft_tokens": 1,
+      "cache_ram": 32768,
+      "cpu_offload_gb": 0,
+      "kv_mean_center": "auto"
+    },
+    "measurement": {
+      "status": "ok",
+      "scope": "filled-context",
+      "ttft_seconds": 503.3455342979869,
+      "decode_tps": 111.25336629729372,
+      "gpu_mib": 11014.0,
+      "gpu_measurement": "peak",
+      "source": "results/top-bonsai2-27b-262144-calibrated-lookup-capacity.json",
+      "note": "Requires the local model-specific calibration file. Answer-quality gains were not measured.",
+      "workloads": [
+        {
+          "prompt_tokens": 4096,
+          "everyday_tps": 57.43477897948353,
+          "code_tps": 192.0782570383315,
+          "source": "results/top-workloads.jsonl"
+        }
+      ]
+    }
+  },
+  "9b-256k-edit": {
+    "description": "Bonsai2 9B at 256K with MTP and prompt lookup for editing.",
+    "settings": {
+      "model": "bonsai2-9b",
+      "context": 262144,
+      "speculative": "mtp",
+      "prompt_lookup": true,
+      "kv_cache": "q8_0",
+      "draft_kv_cache": "q8_0",
+      "draft_tokens": 2,
+      "cache_ram": 32768,
+      "cpu_offload_gb": 0
+    },
+    "measurement": {
+      "status": "ok",
+      "scope": "filled-context",
+      "ttft_seconds": 174.89732416701736,
+      "decode_tps": 59.23268290206298,
+      "gpu_mib": 8282.0,
+      "gpu_measurement": "peak",
+      "source": "results/top-bonsai2-9b-262144-mtp-lookup-capacity.json",
+      "note": "Faster code-copy prompts, but slower than MTP alone on the filled-context prompt.",
+      "workloads": [
+        {
+          "prompt_tokens": 4096,
+          "everyday_tps": 153.31932619877477,
+          "code_tps": 430.55043876196777,
+          "source": "results/top-workloads.jsonl"
+        }
+      ]
+    }
+  },
+  "dory-2loop-nocache": {
+    "description": "Dory with 2 rounds and no native host KV cache.",
+    "settings": {
+      "model": "dory",
+      "context": 262144,
+      "rounds": 2,
+      "cpu_offload_gb": 0
+    },
+    "measurement": {
+      "status": "ok",
+      "scope": "filled-context",
+      "ttft_seconds": 278.0621,
+      "decode_tps": 7.39,
+      "gpu_mib": 11175,
+      "gpu_measurement": "snapshot",
+      "source": "dory/results/256k-filled/results.jsonl"
+    }
+  },
+  "27b-256k-native": {
+    "description": "Bonsai2 27B at 256K with native MTP2, chained drafting, and a 16K draft window. Measurements completed before the reported CPU load.",
+    "settings": {
+      "model": "bonsai2-27b",
+      "context": 262144,
+      "runtime": "bonsai-native",
+      "speculative": "mtp",
+      "prompt_lookup": false,
+      "kv_cache": "q4_0",
+      "draft_kv_cache": "q4_0",
+      "draft_tokens": 2,
+      "mtp_chain": true,
+      "draft_window": 16384,
+      "mma_decode_min_kv": 0,
+      "reasoning_effort": "xhigh",
+      "batch_tokens": 256,
+      "ubatch_tokens": 64,
+      "cpu_offload_gb": 0,
+      "cache_ram": 32768
+    },
+    "measurement": {
+      "status": "ok",
+      "date": "2026-10-19",
+      "scope": "filled-context",
+      "draft_tokens": 2,
+      "mtp_chain": true,
+      "ttft_seconds": 522.6611912720255,
+      "decode_tps": 65.41750385496005,
+      "gpu_mib": 11837.0,
+      "gpu_measurement": "peak total device memory across the completed case",
+      "source": "experiments/benchmarks/runs/20261019-quiet-candidates/27b-native-window16k/capacity.json",
+      "capacity_prompt_tokens": 262079,
+      "capacity_output_tokens": 64,
+      "capacity_gpu_peak_mib": 11837.0,
+      "resource_peaks": {
+        "rss_kib": 21532748,
+        "scope_memory_bytes": 21720907776,
+        "gpu_mib": 11837.0,
+        "gpu_temperature_c": 74.0
+      },
+      "resource_source": "experiments/benchmarks/runs/20261019-quiet-candidates/27b-native-window16k/trial.json",
+      "note": "Capacity uses repetitive text and 64 forced output tokens. It can favor speculation. These rates do not measure coding quality.",
+      "opencode_long": {
+        "pre_tps": 64.53220085647517,
+        "post_tps": 88.89986418076302,
+        "cold_ttft_seconds": 386.781662542955,
+        "warm_seconds": 78.21079272287898,
+        "passed_phases": 6,
+        "source": "experiments/benchmarks/runs/20261019-quiet-candidates/27b-native-window16k/opencode.json",
+        "request_source": "experiments/benchmarks/runs/20261019-quiet-candidates/27b-native-window16k/proxy/requests.jsonl",
+        "initial_input_tokens": 212756,
+        "note": "Constructed public-source OpenCode history. Warm time covers all five follow-ups, including compaction."
+      }
+    }
+  },
+  "27b-256k-native-lookup": {
+    "description": "Bonsai2 27B at 256K with native MTP2, chained drafting, a 16K draft window, and ngram-mod lookup limit 32. This run partly overlaps reported non-GPU load from about 18:45 CEST. Workflow wall times are qualified. Capacity uses repetitive text that favors lookup.",
+    "settings": {
+      "model": "bonsai2-27b",
+      "context": 262144,
+      "runtime": "bonsai-native",
+      "speculative": "mtp",
+      "prompt_lookup": true,
+      "kv_cache": "q4_0",
+      "draft_kv_cache": "q4_0",
+      "draft_tokens": 2,
+      "mtp_chain": true,
+      "draft_window": 16384,
+      "mma_decode_min_kv": 0,
+      "reasoning_effort": "xhigh",
+      "batch_tokens": 256,
+      "ubatch_tokens": 64,
+      "cpu_offload_gb": 0,
+      "cache_ram": 32768,
+      "lookup_type": "ngram-mod",
+      "lookup_tokens": 32
+    },
+    "measurement": {
+      "status": "ok",
+      "date": "2026-10-19",
+      "scope": "filled-context",
+      "draft_tokens": 2,
+      "mtp_chain": true,
+      "ttft_seconds": 524.0059433259885,
+      "decode_tps": 199.73938765610583,
+      "gpu_mib": 11847.0,
+      "gpu_measurement": "peak total device memory across the completed case",
+      "source": "experiments/benchmarks/runs/20261019-quiet-candidates/27b-native-lookup32/capacity.json",
+      "capacity_prompt_tokens": 262079,
+      "capacity_output_tokens": 64,
+      "capacity_gpu_peak_mib": 11837.0,
+      "resource_peaks": {
+        "rss_kib": 13738180,
+        "scope_memory_bytes": 13722882048,
+        "gpu_mib": 11847.0,
+        "gpu_temperature_c": 75.0
+      },
+      "resource_source": "experiments/benchmarks/runs/20261019-quiet-candidates/27b-native-lookup32/trial.json",
+      "note": "Capacity uses repetitive text and 64 forced output tokens. It can favor speculation. These rates do not measure coding quality. The capacity prompt is lookup-friendly. The trial partly overlaps user-reported non-GPU load from about 2026-10-19 18:45 CEST; workflow wall times are not quiet-machine results.",
+      "opencode_long": {
+        "pre_tps": 59.55790879538452,
+        "post_tps": 88.12891613319519,
+        "cold_ttft_seconds": 386.74412723298883,
+        "warm_seconds": 71.8098732290091,
+        "passed_phases": 6,
+        "source": "experiments/benchmarks/runs/20261019-quiet-candidates/27b-native-lookup32/opencode.json",
+        "request_source": "experiments/benchmarks/runs/20261019-quiet-candidates/27b-native-lookup32/proxy/requests.jsonl",
+        "initial_input_tokens": 212759,
+        "note": "Constructed public-source OpenCode history. Warm time covers all five follow-ups, including compaction. The trial partly overlaps reported host load. Host load can affect prefill, tools, and compaction."
+      }
+    }
+  },
+  "27b-256k-native-spill": {
+    "description": "Bonsai2 27B at 256K with native MTP2, a 16K draft window, and 128K active KV positions in VRAM. Remaining active KV uses RAM. This is the measured GPU-headroom option.",
+    "settings": {
+      "model": "bonsai2-27b",
+      "context": 262144,
+      "runtime": "bonsai-native",
+      "speculative": "mtp",
+      "prompt_lookup": false,
+      "kv_cache": "q4_0",
+      "draft_kv_cache": "q4_0",
+      "draft_tokens": 2,
+      "mtp_chain": true,
+      "draft_window": 16384,
+      "mma_decode_min_kv": 0,
+      "reasoning_effort": "xhigh",
+      "batch_tokens": 256,
+      "ubatch_tokens": 64,
+      "cpu_offload_gb": 0,
+      "cache_ram": 32768,
+      "kv_vram_cells": 131072
+    },
+    "measurement": {
+      "status": "ok",
+      "date": "2026-10-19",
+      "scope": "filled-context",
+      "draft_tokens": 2,
+      "mtp_chain": true,
+      "ttft_seconds": 539.8251933790161,
+      "decode_tps": 24.41578453341436,
+      "gpu_mib": 9704.0,
+      "gpu_measurement": "peak total device memory across the completed case",
+      "source": "experiments/benchmarks/runs/20261019-targets/27b-native-kv-spill/capacity.json",
+      "capacity_prompt_tokens": 262079,
+      "capacity_output_tokens": 64,
+      "case_gpu_peak_mib": 9704.0,
+      "resource_peaks": {
+        "rss_kib": 21429284,
+        "scope_memory_bytes": 24036651008,
+        "gpu_mib": 9704.0,
+        "gpu_temperature_c": 74.0
+      },
+      "resource_source": "experiments/benchmarks/runs/20261019-targets/27b-native-kv-spill/trial.json",
+      "note": "Active KV allocation: 2304 MiB VRAM and 2304 MiB host. Attention computes on the GPU. Capacity uses repetitive text and 64 forced tokens. This run overlaps the open reported host-load interval.",
+      "opencode_long": {
+        "pre_tps": 29.780181322345705,
+        "post_tps": 92.81164695177435,
+        "cold_ttft_seconds": 392.9602886560024,
+        "warm_seconds": 105.92936142999679,
+        "passed_phases": 6,
+        "source": "experiments/benchmarks/runs/20261019-targets/27b-native-kv-spill/opencode.json",
+        "request_source": "experiments/benchmarks/runs/20261019-targets/27b-native-kv-spill/proxy/requests.jsonl",
+        "initial_input_tokens": 212759,
+        "note": "All six workflow phases passed. Active KV spill saved about 2.1 GiB of sampled device memory but reduced long-history decode. Host-load qualification applies. The 32 GiB snapshot limit is separate from the active KV host allocation."
+      }
+    }
+  },
+  "27b-256k-medium": {
+    "description": "Bonsai2 27B at 256K with stock MTP2, chained drafting, and medium reasoning effort. This is an optional shorter-reasoning setting. Xhigh remains the default.",
+    "settings": {
+      "model": "bonsai2-27b",
+      "context": 262144,
+      "speculative": "mtp",
+      "prompt_lookup": false,
+      "kv_cache": "q4_0",
+      "draft_kv_cache": "q4_0",
+      "draft_tokens": 2,
+      "cache_ram": 32768,
+      "cpu_offload_gb": 0,
+      "runtime": "stock",
+      "mtp_chain": true,
+      "reasoning_effort": "medium",
+      "batch_tokens": 256,
+      "ubatch_tokens": 64
+    },
+    "measurement": {
+      "status": "ok",
+      "date": "2026-10-19",
+      "scope": "filled-context",
+      "draft_tokens": 2,
+      "mtp_chain": true,
+      "ttft_seconds": 540.6559786110302,
+      "decode_tps": 44.980690432178754,
+      "gpu_mib": 11939.0,
+      "gpu_measurement": "peak total device memory across the completed case",
+      "source": "experiments/benchmarks/runs/20261019-targets/27b-stock-medium/capacity.json",
+      "capacity_prompt_tokens": 262079,
+      "capacity_output_tokens": 64,
+      "case_gpu_peak_mib": 11939.0,
+      "resource_peaks": {
+        "rss_kib": 26535980,
+        "scope_memory_bytes": 27048980480,
+        "gpu_mib": 11939.0,
+        "gpu_temperature_c": 75.0
+      },
+      "resource_source": "experiments/benchmarks/runs/20261019-targets/27b-stock-medium/trial.json",
+      "note": "Capacity uses repetitive text and 64 forced output tokens. The run overlaps the open reported host-load interval. Medium effort showed little decode improvement in this fixture and does not establish equal general coding quality.",
+      "opencode_long": {
+        "pre_tps": 54.6952096542205,
+        "post_tps": 91.32078296343423,
+        "cold_ttft_seconds": 400.89245910197496,
+        "warm_seconds": 72.02209366095485,
+        "passed_phases": 6,
+        "source": "experiments/benchmarks/runs/20261019-targets/27b-stock-medium/opencode.json",
+        "request_source": "experiments/benchmarks/runs/20261019-targets/27b-stock-medium/proxy/requests.jsonl",
+        "initial_input_tokens": 212712,
+        "note": "All six workflow phases passed. Warm time includes compaction. Output lengths differ. Host-load qualification applies."
+      }
+    }
+  },
+  "27b-256k-native-mma": {
+    "description": "Bonsai2 27B at 256K with native MTP2, chained drafting, a 16K draft window, and MMA threshold 256. Optional measured control. It showed no established extra long-history speed benefit over the window-only preset.",
+    "settings": {
+      "model": "bonsai2-27b",
+      "context": 262144,
+      "runtime": "bonsai-native",
+      "speculative": "mtp",
+      "prompt_lookup": false,
+      "kv_cache": "q4_0",
+      "draft_kv_cache": "q4_0",
+      "draft_tokens": 2,
+      "mtp_chain": true,
+      "draft_window": 16384,
+      "mma_decode_min_kv": 256,
+      "reasoning_effort": "xhigh",
+      "batch_tokens": 256,
+      "ubatch_tokens": 64,
+      "cpu_offload_gb": 0,
+      "cache_ram": 32768
+    },
+    "measurement": {
+      "status": "ok",
+      "date": "2026-10-19",
+      "scope": "filled-context",
+      "draft_tokens": 2,
+      "mtp_chain": true,
+      "ttft_seconds": 525.6632450619945,
+      "decode_tps": 66.2369326622726,
+      "gpu_mib": 11962.0,
+      "gpu_measurement": "peak total device memory across the completed case",
+      "source": "experiments/benchmarks/runs/20261019-targets/27b-native-window16k-mma/capacity.json",
+      "capacity_prompt_tokens": 262079,
+      "capacity_output_tokens": 64,
+      "case_gpu_peak_mib": 11962.0,
+      "resource_peaks": {
+        "rss_kib": 21547048,
+        "scope_memory_bytes": 21735284736,
+        "gpu_mib": 11962.0,
+        "gpu_temperature_c": 74.0
+      },
+      "resource_source": "experiments/benchmarks/runs/20261019-targets/27b-native-window16k-mma/trial.json",
+      "note": "Capacity uses repetitive text and 64 forced output tokens. The run overlaps the open reported host-load interval. Single trials do not establish a small performance ranking.",
+      "opencode_long": {
+        "pre_tps": 64.54479549121864,
+        "post_tps": 92.5638817111685,
+        "cold_ttft_seconds": 386.72978909499943,
+        "warm_seconds": 80.203243841941,
+        "passed_phases": 6,
+        "source": "experiments/benchmarks/runs/20261019-targets/27b-native-window16k-mma/opencode.json",
+        "request_source": "experiments/benchmarks/runs/20261019-targets/27b-native-window16k-mma/proxy/requests.jsonl",
+        "initial_input_tokens": 212762,
+        "note": "All six workflow phases passed. Long-history decode matched the window-only preset. Output lengths and summaries differ. Host-load qualification applies."
+      }
+    }
+  },
+  "27b-256k-next": {
+    "description": "Candidate trained MTP head and long-message checkpoints.",
+    "settings": {
+      "model": "bonsai2-27b",
+      "context": 262144,
+      "runtime": "bonsai-next",
+      "speculative": "mtp",
+      "prompt_lookup": false,
+      "kv_cache": "q4_0",
+      "draft_kv_cache": "q4_0",
+      "draft_tokens": 2,
+      "mtp_chain": true,
+      "draft_window": 16384,
+      "mma_decode_min_kv": 0,
+      "reasoning_effort": "xhigh",
+      "batch_tokens": 256,
+      "ubatch_tokens": 64,
+      "cpu_offload_gb": 0,
+      "cache_ram": 32768,
+      "mtp_head": "procreations",
+      "checkpoint_every": 8192,
+      "replay": false,
+      "gdn_mma": true
+    },
+    "measurement": {
+      "status": "ok",
+      "ttft_seconds": 84.13053457699999,
+      "decode_tps": 79.42492724478974,
+      "gpu_mib": 11604.0,
+      "source": "results/bonsai-next-20261026/next-default-omp/summary.json",
+      "note": "2026-10-26 actual OMP64K, xhigh; trained head, checkpoints, replay off, ubatch64. Pre/post-compaction 79.4/101.5 tok/s. All workflow checks pass. Single sampled run; outputs differ. The optimized128 preset has faster prefill."
+    }
+  },
+  "27b-256k-replay": {
+    "description": "Candidate trained MTP head and long-message checkpoints; CUDA replay rollback.",
+    "settings": {
+      "model": "bonsai2-27b",
+      "context": 262144,
+      "runtime": "bonsai-next",
+      "speculative": "mtp",
+      "prompt_lookup": false,
+      "kv_cache": "q4_0",
+      "draft_kv_cache": "q4_0",
+      "draft_tokens": 2,
+      "mtp_chain": true,
+      "draft_window": 16384,
+      "mma_decode_min_kv": 0,
+      "reasoning_effort": "xhigh",
+      "batch_tokens": 256,
+      "ubatch_tokens": 64,
+      "cpu_offload_gb": 0,
+      "cache_ram": 32768,
+      "mtp_head": "procreations",
+      "checkpoint_every": 8192,
+      "replay": true,
+      "gdn_mma": true
+    },
+    "measurement": {
+      "status": "unmeasured",
+      "ttft_seconds": null,
+      "decode_tps": null,
+      "gpu_mib": null,
+      "note": "Native64K checkpoint and replay checks pass: cold83.1s, edited prompt33.8s; repeated output matches. Actual OMP measurements use the optimized128 preset instead."
+    }
+  },
+  "27b-256k-optimized": {
+    "description": "Bonsai 27B with long-message checkpoints, recurrent replay and 128-token chunked prefill; procreations MTP head.",
+    "settings": {
+      "model": "bonsai2-27b",
+      "context": 262144,
+      "runtime": "bonsai-next",
+      "speculative": "mtp",
+      "prompt_lookup": false,
+      "kv_cache": "q4_0",
+      "draft_kv_cache": "q4_0",
+      "draft_tokens": 2,
+      "mtp_chain": true,
+      "draft_window": 16384,
+      "mma_decode_min_kv": 0,
+      "reasoning_effort": "xhigh",
+      "batch_tokens": 256,
+      "ubatch_tokens": 128,
+      "cpu_offload_gb": 0,
+      "cache_ram": 32768,
+      "mtp_head": "procreations",
+      "checkpoint_every": 8192,
+      "replay": true,
+      "gdn_mma": true
+    },
+    "measurement": {
+      "status": "ok",
+      "ttft_seconds": 63.745437087999996,
+      "decode_tps": 84.46048078520947,
+      "gpu_mib": 11502.0,
+      "source": "results/bonsai-next-20261026/next-replay-mma128-omp-v2/summary.json",
+      "note": "2026-10-26: actual OMP, 65517 input tokens, xhigh, MTP2/chaining. Pre/post-compaction decode 84.5/103.1 tok/s; six measured phases 179.3s. All workflow checks pass. Single sampled run; generated lengths differ. Model cap48GiB, no swap. Target capacity256K; this measurement fills64K. Additional actual192K run:65.3/96.6tok/s before/after compaction; repairs, recall and compaction pass, cancellation recovery fails once. Selected as the default at Matti's request on 2026-10-26. See results/bonsai-next-20261026/summary.md."
+    }
+  },
+  "27b-256k-optimized-teacher": {
+    "description": "Bonsai 27B with long-message checkpoints, recurrent replay and 128-token chunked prefill; teacher MTP head.",
+    "settings": {
+      "model": "bonsai2-27b",
+      "context": 262144,
+      "runtime": "bonsai-next",
+      "speculative": "mtp",
+      "prompt_lookup": false,
+      "kv_cache": "q4_0",
+      "draft_kv_cache": "q4_0",
+      "draft_tokens": 2,
+      "mtp_chain": true,
+      "draft_window": 16384,
+      "mma_decode_min_kv": 0,
+      "reasoning_effort": "xhigh",
+      "batch_tokens": 256,
+      "ubatch_tokens": 128,
+      "cpu_offload_gb": 0,
+      "cache_ram": 32768,
+      "mtp_head": "teacher",
+      "checkpoint_every": 8192,
+      "replay": true,
+      "gdn_mma": true
+    },
+    "measurement": {
+      "status": "ok",
+      "ttft_seconds": 64.098050973,
+      "decode_tps": 79.85955666812316,
+      "gpu_mib": 11408.0,
+      "source": "results/bonsai-next-20261026/next-teacher-replay-mma128-omp/summary.json",
+      "note": "2026-10-26: actual OMP, 65517 input tokens, xhigh, MTP2/chaining. Pre/post-compaction decode 79.9/104.9 tok/s; six measured phases 170.6s. All workflow checks pass. Single sampled run; generated lengths differ. Model cap48GiB, no swap. Target capacity256K; this measurement fills64K."
+    }
+  }
+}

@@ -1,0 +1,6290 @@
+{
+  "description": "Constructed 107-schema parser and grammar fixture. Returned calls are validated as JSON and never executed.",
+  "expected": {
+    "name": "benchmark_echo_106",
+    "arguments": {
+      "value": "marigold-427",
+      "checks": [
+        {
+          "index": 0,
+          "ok": true
+        },
+        {
+          "index": 1,
+          "ok": true
+        },
+        {
+          "index": 2,
+          "ok": true
+        },
+        {
+          "index": 3,
+          "ok": true
+        },
+        {
+          "index": 4,
+          "ok": true
+        },
+        {
+          "index": 5,
+          "ok": true
+        },
+        {
+          "index": 6,
+          "ok": true
+        },
+        {
+          "index": 7,
+          "ok": true
+        },
+        {
+          "index": 8,
+          "ok": true
+        },
+        {
+          "index": 9,
+          "ok": true
+        },
+        {
+          "index": 10,
+          "ok": true
+        },
+        {
+          "index": 11,
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "branch": "kestrel-stable",
+        "deadline": "ember-19"
+      }
+    }
+  },
+  "request": {
+    "model": "SELECTED_READY_MODEL",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Call benchmark_echo_106 exactly once with these exact JSON arguments. Do not call another function.\n{\"value\":\"marigold-427\",\"checks\":[{\"index\":0,\"ok\":true},{\"index\":1,\"ok\":true},{\"index\":2,\"ok\":true},{\"index\":3,\"ok\":true},{\"index\":4,\"ok\":true},{\"index\":5,\"ok\":true},{\"index\":6,\"ok\":true},{\"index\":7,\"ok\":true},{\"index\":8,\"ok\":true},{\"index\":9,\"ok\":true},{\"index\":10,\"ok\":true},{\"index\":11,\"ok\":true}],\"metadata\":{\"branch\":\"kestrel-stable\",\"deadline\":\"ember-19\"}}"
+      }
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_000",
+          "description": "Return a benchmark value for fixture 0; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_001",
+          "description": "Return a benchmark value for fixture 1; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_002",
+          "description": "Return a benchmark value for fixture 2; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_003",
+          "description": "Return a benchmark value for fixture 3; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_004",
+          "description": "Return a benchmark value for fixture 4; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_005",
+          "description": "Return a benchmark value for fixture 5; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_006",
+          "description": "Return a benchmark value for fixture 6; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_007",
+          "description": "Return a benchmark value for fixture 7; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_008",
+          "description": "Return a benchmark value for fixture 8; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_009",
+          "description": "Return a benchmark value for fixture 9; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_010",
+          "description": "Return a benchmark value for fixture 10; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_011",
+          "description": "Return a benchmark value for fixture 11; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_012",
+          "description": "Return a benchmark value for fixture 12; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_013",
+          "description": "Return a benchmark value for fixture 13; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_014",
+          "description": "Return a benchmark value for fixture 14; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_015",
+          "description": "Return a benchmark value for fixture 15; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_016",
+          "description": "Return a benchmark value for fixture 16; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_017",
+          "description": "Return a benchmark value for fixture 17; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_018",
+          "description": "Return a benchmark value for fixture 18; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_019",
+          "description": "Return a benchmark value for fixture 19; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_020",
+          "description": "Return a benchmark value for fixture 20; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_021",
+          "description": "Return a benchmark value for fixture 21; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_022",
+          "description": "Return a benchmark value for fixture 22; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_023",
+          "description": "Return a benchmark value for fixture 23; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_024",
+          "description": "Return a benchmark value for fixture 24; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_025",
+          "description": "Return a benchmark value for fixture 25; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_026",
+          "description": "Return a benchmark value for fixture 26; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_027",
+          "description": "Return a benchmark value for fixture 27; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_028",
+          "description": "Return a benchmark value for fixture 28; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_029",
+          "description": "Return a benchmark value for fixture 29; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_030",
+          "description": "Return a benchmark value for fixture 30; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_031",
+          "description": "Return a benchmark value for fixture 31; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_032",
+          "description": "Return a benchmark value for fixture 32; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_033",
+          "description": "Return a benchmark value for fixture 33; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_034",
+          "description": "Return a benchmark value for fixture 34; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_035",
+          "description": "Return a benchmark value for fixture 35; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_036",
+          "description": "Return a benchmark value for fixture 36; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_037",
+          "description": "Return a benchmark value for fixture 37; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_038",
+          "description": "Return a benchmark value for fixture 38; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_039",
+          "description": "Return a benchmark value for fixture 39; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_040",
+          "description": "Return a benchmark value for fixture 40; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_041",
+          "description": "Return a benchmark value for fixture 41; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_042",
+          "description": "Return a benchmark value for fixture 42; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_043",
+          "description": "Return a benchmark value for fixture 43; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_044",
+          "description": "Return a benchmark value for fixture 44; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_045",
+          "description": "Return a benchmark value for fixture 45; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_046",
+          "description": "Return a benchmark value for fixture 46; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_047",
+          "description": "Return a benchmark value for fixture 47; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_048",
+          "description": "Return a benchmark value for fixture 48; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_049",
+          "description": "Return a benchmark value for fixture 49; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_050",
+          "description": "Return a benchmark value for fixture 50; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_051",
+          "description": "Return a benchmark value for fixture 51; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_052",
+          "description": "Return a benchmark value for fixture 52; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_053",
+          "description": "Return a benchmark value for fixture 53; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_054",
+          "description": "Return a benchmark value for fixture 54; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_055",
+          "description": "Return a benchmark value for fixture 55; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_056",
+          "description": "Return a benchmark value for fixture 56; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_057",
+          "description": "Return a benchmark value for fixture 57; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_058",
+          "description": "Return a benchmark value for fixture 58; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_059",
+          "description": "Return a benchmark value for fixture 59; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_060",
+          "description": "Return a benchmark value for fixture 60; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_061",
+          "description": "Return a benchmark value for fixture 61; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_062",
+          "description": "Return a benchmark value for fixture 62; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_063",
+          "description": "Return a benchmark value for fixture 63; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_064",
+          "description": "Return a benchmark value for fixture 64; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_065",
+          "description": "Return a benchmark value for fixture 65; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_066",
+          "description": "Return a benchmark value for fixture 66; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_067",
+          "description": "Return a benchmark value for fixture 67; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_068",
+          "description": "Return a benchmark value for fixture 68; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_069",
+          "description": "Return a benchmark value for fixture 69; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_070",
+          "description": "Return a benchmark value for fixture 70; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_071",
+          "description": "Return a benchmark value for fixture 71; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_072",
+          "description": "Return a benchmark value for fixture 72; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_073",
+          "description": "Return a benchmark value for fixture 73; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_074",
+          "description": "Return a benchmark value for fixture 74; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_075",
+          "description": "Return a benchmark value for fixture 75; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_076",
+          "description": "Return a benchmark value for fixture 76; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_077",
+          "description": "Return a benchmark value for fixture 77; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_078",
+          "description": "Return a benchmark value for fixture 78; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_079",
+          "description": "Return a benchmark value for fixture 79; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_080",
+          "description": "Return a benchmark value for fixture 80; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_081",
+          "description": "Return a benchmark value for fixture 81; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_082",
+          "description": "Return a benchmark value for fixture 82; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_083",
+          "description": "Return a benchmark value for fixture 83; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_084",
+          "description": "Return a benchmark value for fixture 84; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_085",
+          "description": "Return a benchmark value for fixture 85; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_086",
+          "description": "Return a benchmark value for fixture 86; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_087",
+          "description": "Return a benchmark value for fixture 87; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_088",
+          "description": "Return a benchmark value for fixture 88; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_089",
+          "description": "Return a benchmark value for fixture 89; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_090",
+          "description": "Return a benchmark value for fixture 90; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_091",
+          "description": "Return a benchmark value for fixture 91; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_092",
+          "description": "Return a benchmark value for fixture 92; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_093",
+          "description": "Return a benchmark value for fixture 93; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_094",
+          "description": "Return a benchmark value for fixture 94; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_095",
+          "description": "Return a benchmark value for fixture 95; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_096",
+          "description": "Return a benchmark value for fixture 96; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_097",
+          "description": "Return a benchmark value for fixture 97; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_098",
+          "description": "Return a benchmark value for fixture 98; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_099",
+          "description": "Return a benchmark value for fixture 99; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_100",
+          "description": "Return a benchmark value for fixture 100; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_101",
+          "description": "Return a benchmark value for fixture 101; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_102",
+          "description": "Return a benchmark value for fixture 102; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_103",
+          "description": "Return a benchmark value for fixture 103; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_104",
+          "description": "Return a benchmark value for fixture 104; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_105",
+          "description": "Return a benchmark value for fixture 105; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "benchmark_echo_106",
+          "description": "Return a benchmark value for fixture 106; this tool is never executed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "checks": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "deadline": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "value",
+              "checks",
+              "metadata"
+            ],
+            "additionalProperties": false
+          }
+        }
+      }
+    ],
+    "tool_choice": "required",
+    "parallel_tool_calls": false,
+    "max_tokens": 16000,
+    "temperature": 1,
+    "top_p": 0.95,
+    "seed": 424242,
+    "stream": true,
+    "stream_options": {
+      "include_usage": true
+    }
+  }
+}

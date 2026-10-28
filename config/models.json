@@ -1,0 +1,237 @@
+{
+  "flint": {
+    "repo": "unsloth/flint-GGUF",
+    "revision": "20468edfc38ab43d6914cc88b08cbecb05d0fc62",
+    "filename": "flint-UD-Q3_K_XL.gguf",
+    "size": 18494977472,
+    "sha256": "91b8d85ab6ff7fb095d9a972f9afa6f3fa2b9acb642867a079f3e013ea3c350c",
+    "context": 262144,
+    "directory": "flint",
+    "alias": "flint",
+    "runtime": "flint",
+    "kv_cache": "q8_0",
+    "cpu_moe_layers": 33
+  },
+  "dory-gguf": {
+    "directory": "dory-gguf",
+    "filename": "NVIDIA-Nemotron-Labs-Dory1.0-4B-Q5_K_M.gguf",
+    "repo": "nvidia/NVIDIA-Nemotron-Labs-Dory1.0-4B-GGUF",
+    "revision": "0963c8000791e77b2b1b49aa387d92a6da9988d6",
+    "size": 3673288864,
+    "sha256": "96080be49ffd67b916018b7bdef8c484762576fb52780e10ab98ac4978a660e0",
+    "context": 262144,
+    "alias": "dory-gguf",
+    "runtime": "dory-native",
+    "kv_cache": "q8_0"
+  },
+  "bonsai-ptq1": {
+    "directory": "bonsai2",
+    "filename": "Ternary-Bonsai-2-27B-PTQ1_0-mtp-lean.gguf",
+    "repo": "sudoingx/Ternary-Bonsai-2-27B-PTQ1_0-MTP-GGUF",
+    "revision": "f04a3bd22b7b482675663e99efaba6719347b419",
+    "size": 6297658848,
+    "sha256": "1e33c571a5ce7a9a3e42474d66192923d5a6d77da7fb3a22986dc809522b5685",
+    "context": 98304,
+    "alias": "bonsai2-27b",
+    "runtime": "legacy"
+  },
+  "bonsai-pq2": {
+    "directory": "bonsai2-pq2",
+    "filename": "Ternary-Bonsai-2-27B-PQ2_0.gguf",
+    "repo": "prism-ml/Ternary-Bonsai-2-27B-gguf",
+    "revision": "b072e1d3b35a0a630cece372c2127528e0994386",
+    "size": 7206168928,
+    "sha256": "3907dc1658db1f78a9826bf8d5bcb8dc65db0d466388937af57f2294fae62ec1",
+    "context": 65536,
+    "alias": "bonsai2-27b-pq2",
+    "runtime": "legacy"
+  },
+  "bonsai-abliterated": {
+    "directory": "bonsai2-abliterated-v2",
+    "filename": "Ternary-Bonsai-2-27B-Abliterated-v2-PQ2_0-MTP.gguf",
+    "repo": "BoldingBuilds/Ternary-Bonsai-2-27B-Abliterated-v2-PQ2_0-MTP-GGUF",
+    "revision": "e25d197aa62ce0a2f685fc65d76a41b2416c5e66",
+    "size": 7657489696,
+    "sha256": "a4e4c7b578131595c1694354bd6c74d00920df1f5082647a6126899753ebebf8",
+    "context": 32768,
+    "alias": "bonsai2-27b-abliterated-v2",
+    "runtime": "legacy"
+  },
+  "bonsai-abliterated-ptq1": {
+    "directory": "bonsai2-abliterated-ptq1",
+    "filename": "Ternary-Bonsai-2-27B-Abliterated-PTQ1_0.gguf",
+    "repo": "BoldingBuilds/Ternary-Bonsai-2-27B-Abliterated-PTQ1_0-GGUF",
+    "revision": "b5f8b912289f873f421e7cc6389d1bdda22b3721",
+    "size": 5946648928,
+    "sha256": "94dd53cbad55db5a515f245887c9f0317484502a451ccc0424c7d7788b52900a",
+    "context": 131072,
+    "alias": "bonsai2-27b-abliterated-ptq1",
+    "runtime": "legacy"
+  },
+  "saluki": {
+    "directory": "saluki",
+    "filename": "Underdog-Saluki-27B-1.0-IQ2-mix.gguf",
+    "repo": "ConwayResearch/Underdog-Saluki-27B-1.0",
+    "revision": "1336c0b5d74dfe6ad7f793577092f5effd9f97c6",
+    "size": 7898369152,
+    "sha256": "4a673518b11b1c4445f9b9a9d3c40356f5ba39f6a6260dcb25f3fbfd475d9efb",
+    "context": 32768,
+    "alias": "saluki-27b",
+    "runtime": "legacy"
+  },
+  "bonsai2-2b": {
+    "repo": "prism-ml/Ternary-Bonsai-2-2B-gguf",
+    "revision": "683f7be2629342a50987627b40881e54761a2430",
+    "filename": "Ternary-Bonsai-2-2B-PQ2_0.gguf",
+    "size": 517312992,
+    "sha256": "d5f01a4ecaf49239653308ee732ad1a0c5f802c0ddb997549fc7b694c8b45928",
+    "context": 262144,
+    "directory": "bonsai2-2b",
+    "alias": "bonsai2-2b",
+    "runtime": "prism",
+    "kv_cache": "f16"
+  },
+  "bonsai2-4b": {
+    "repo": "prism-ml/Ternary-Bonsai-2-4B-gguf",
+    "revision": "8d6557168168f91ea6697a4a49ed2ef622b53adb",
+    "filename": "Ternary-Bonsai-2-4B-PQ2_0.gguf",
+    "size": 1146465120,
+    "sha256": "d406b1e912c0d2a4c124ad10bf38a76ae662fdc4d24b176451403dc7b7f30409",
+    "context": 262144,
+    "directory": "bonsai2-4b",
+    "alias": "bonsai2-4b",
+    "runtime": "prism",
+    "kv_cache": "f16",
+    "mtp": {
+      "directory": "bonsai2-4b-mtp",
+      "filename": "Ternary-Bonsai-2-4B-PQ2_0-MTP-Q8_0.gguf",
+      "repo": "prism-ml/Ternary-Bonsai-2-4B-gguf",
+      "revision": "8d6557168168f91ea6697a4a49ed2ef622b53adb",
+      "size": 1274642176,
+      "sha256": "0acf517de1dc3d85c403a60df6b8b07a4878ac174f368d4390be98406a4d6c0d"
+    },
+    "dflash": {
+      "directory": "bonsai2-4b-dflash2",
+      "filename": "Ternary-Bonsai-2-4B-DFlash2-BF16.gguf",
+      "repo": "prism-ml/Ternary-Bonsai-2-4B-gguf",
+      "revision": "8d6557168168f91ea6697a4a49ed2ef622b53adb",
+      "size": 1575278208,
+      "sha256": "4402be311018d01e31ecd0a894326e2f7bd28bc27a288c5b949799fe000808d8"
+    }
+  },
+  "bonsai2-9b": {
+    "repo": "prism-ml/Ternary-Bonsai-2-9B-gguf",
+    "revision": "5b2abb02362efbed46bbe204014b02837778b2c2",
+    "filename": "Ternary-Bonsai-2-9B-PQ2_0.gguf",
+    "size": 2416851840,
+    "sha256": "7a89ab48f5038c704480f60781f9b8d4035351f5f6beb7d11fad80001fde23f9",
+    "context": 262144,
+    "directory": "bonsai2-9b",
+    "alias": "bonsai2-9b",
+    "runtime": "prism",
+    "kv_cache": "q8_0",
+    "mtp": {
+      "directory": "bonsai2-9b-mtp",
+      "filename": "Ternary-Bonsai-2-9B-PQ2_0-MTP-Q8_0.gguf",
+      "repo": "prism-ml/Ternary-Bonsai-2-9B-gguf",
+      "revision": "5b2abb02362efbed46bbe204014b02837778b2c2",
+      "size": 2675410720,
+      "sha256": "c79fcdfaf6b7bf47089b50dadcfd11f9ce7d3e96adf3bbefde7912e5ef69e22b"
+    },
+    "dflash": {
+      "directory": "bonsai2-9b-dflash2",
+      "filename": "Ternary-Bonsai-2-9B-DFlash2-Q8_0.gguf",
+      "repo": "prism-ml/Ternary-Bonsai-2-9B-gguf",
+      "revision": "5b2abb02362efbed46bbe204014b02837778b2c2",
+      "size": 1574233856,
+      "sha256": "95149abdd584f7a69ea5ead38790d5481454428d2c1616527ff0d45422a762b4"
+    }
+  },
+  "bonsai2-27b": {
+    "repo": "prism-ml/Ternary-Bonsai-2-27B-gguf",
+    "revision": "b072e1d3b35a0a630cece372c2127528e0994386",
+    "filename": "Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+    "size": 5946648928,
+    "sha256": "53107f530aa52eb00912263ab1ee29bd199261c87cd7b4ad4ca1318c1fe33ee3",
+    "context": 262144,
+    "directory": "bonsai2-27b",
+    "alias": "bonsai2-27b",
+    "runtime": "prism",
+    "kv_cache": "q4_0",
+    "mtp": {
+      "directory": "bonsai2",
+      "filename": "Ternary-Bonsai-2-27B-PTQ1_0-mtp-lean.gguf",
+      "repo": "sudoingx/Ternary-Bonsai-2-27B-PTQ1_0-MTP-GGUF",
+      "revision": "f04a3bd22b7b482675663e99efaba6719347b419",
+      "size": 6297658848,
+      "sha256": "1e33c571a5ce7a9a3e42474d66192923d5a6d77da7fb3a22986dc809522b5685"
+    },
+    "dflash": {
+      "directory": "bonsai2-27b-dflash2",
+      "filename": "Qwen3.8-27B-DFlash2-r3-Q4_K_M.gguf",
+      "repo": "naklitechie/Qwen3.8-27B-DFlash2-ternary-bonsai2",
+      "revision": "0059b38aa255698b1a87305eb3fbb5a3cfd616e2",
+      "size": 1143006912,
+      "sha256": "6c11956fde5f52867e3255991b30405ae931d205a35caf3fc87a2c3865aa6530"
+    },
+    "mtp_procreations": {
+      "directory": "bonsai2-27b-procreations",
+      "filename": "Ternary-Bonsai-2-27B-PTQ1_0-mtp-procreations.gguf",
+      "repo": "ProCreations/Ternary-Bonsai-2-27B-MTP",
+      "revision": "efffdea64c1f9e93cc7fa6bb24f72ae9d66ecf51",
+      "size": 6397969888,
+      "sha256": "ed55a7aa3202505b00d3314b9a63a15bf178dc347611dae7e8570d12ba647594",
+      "generated": true,
+      "donor_filename": "Ternary-Bonsai-2-27B-PQ2_0-MTP-Q8_0.gguf"
+    }
+  },
+  "deepseek-v4.1-1017-iq1-m": {
+    "alias": "deepseek-v4.1-1017-iq1-m",
+    "runtime": "strata",
+    "context": 262144
+  },
+  "qwen3.8": {
+    "alias": "qwen3.8",
+    "runtime": "strata-qwen",
+    "context": 262144,
+    "kv_cache": "int8"
+  },
+  "groot-19b": {
+    "repo": "GrootTeam/Groot-19B-A3B-261023-GGUF",
+    "revision": "2fa1ec958e3bbf7312cf0af97802ff26bfdc5260",
+    "filename": "Groot-19B-A3B-261023-Q4_K_M.gguf",
+    "size": 11657618560,
+    "sha256": "0716cae1f19a39a786a463f7b8c068d50b3d7a74532fce73e5ea23ed98130796",
+    "context": 262144,
+    "directory": "groot-19b",
+    "alias": "groot-19b",
+    "runtime": "llamacpp",
+    "kv_cache": "q8_0",
+    "cpu_moe_layers": 24,
+    "layers": 40,
+    "cache_ram": 8192,
+    "memory_mib": 32768,
+    "temperature": 0.6,
+    "top_p": 0.95,
+    "top_k": 20,
+    "repeat_penalty": 1.0
+  },
+  "lfm3-1.7b": {
+    "repo": "LiquidAI/LFM3-1.7B-GGUF",
+    "revision": "b3f2ae5d73cd3c91bf40e8ba752c648aa05dffdf",
+    "filename": "LFM3-1.7B-Q8_0.gguf",
+    "size": 1846238496,
+    "sha256": "8f6b24182258205e9e01e21f1f24a1f208c1e8115578825d202ce39976af20b6",
+    "context": 262144,
+    "directory": "lfm3-1.7b",
+    "alias": "lfm3-1.7b",
+    "runtime": "llamacpp",
+    "kv_cache": "q8_0",
+    "cache_ram": 4096,
+    "memory_mib": 16384,
+    "temperature": 0.1,
+    "top_p": 1.0,
+    "top_k": 50,
+    "repeat_penalty": 1.1
+  }
+}

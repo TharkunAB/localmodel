@@ -1,0 +1,87 @@
+[
+  {
+    "path": "common/arg.cpp",
+    "base_sha256": "c1421c56299c5dc26046c18275f565ae2215063ae86e2cacfcf29f4d8588c5d7",
+    "prepared_sha256": "e3637bfbc61e95e748a4d2bebcf1cba6db071d6ee070e1aa937775e84146a9a6"
+  },
+  {
+    "path": "common/common.cpp",
+    "base_sha256": "7f58e40159fba2afd18f72e8678ba031b1a68f16e307a2287ef6c5570f8bdf4f",
+    "prepared_sha256": "7cf43703c652d9906c951b5f9f760f43059e2736285142d1d4866c5a641c567f"
+  },
+  {
+    "path": "common/common.h",
+    "base_sha256": "f0c16f966d165ad318258cc95961872ac1eaf431ce72dbb4cf3878087895e5c6",
+    "prepared_sha256": "3015f97abfedce060374d8b8d269ae7b6a3c0ad086deab50a6336f0baf2508c3"
+  },
+  {
+    "path": "common/speculative.cpp",
+    "base_sha256": "c8cad0219bc9c8c11c04574d3020876646835966412cc9e39eaae5aca805d92d",
+    "prepared_sha256": "1b960316533ccb0ae36601a28b58d87cd45ad30dc62c0cf43d2ac5192061d105"
+  },
+  {
+    "path": "ggml/include/ggml-cuda.h",
+    "base_sha256": "9cbfcea49f6da4d07f41dc22fa8dbf870825faaa2a68e34e65fe30ea6c41e042",
+    "prepared_sha256": "229293984c9b9c2c5fb4e28cd6a60ac78c3fc8b78e641b508556c524ba0b347b"
+  },
+  {
+    "path": "ggml/src/ggml-cuda/fattn.cu",
+    "base_sha256": "5d1425f74d6e2695ba27fafc37687d9e74d3407d09429787df4de04efb9df551",
+    "prepared_sha256": "32841e90990566958c17fef9be15ea9466060eecf5ace7e8887b7b833f0467b6"
+  },
+  {
+    "path": "ggml/src/ggml-cuda/ggml-cuda.cu",
+    "base_sha256": "bf068aab5c6bed9a9d7ecbfa70f9e453847ed5b650afc160acd8745cb42df1ee",
+    "prepared_sha256": "988b84d22c4bc4c6dd8a85f568a8265337edebbefc11bb1cd701de3af80b3d10"
+  },
+  {
+    "path": "include/llama.h",
+    "base_sha256": "50d9375b080df279b9a5d93df9e489f18785b0b9fa98a51045a7c637433e0d9c",
+    "prepared_sha256": "201e23240eb5fd5ee7cd9d5c85f2064bbd21338ebe6f51eee6f0b09db81cd90d"
+  },
+  {
+    "path": "src/llama-context.cpp",
+    "base_sha256": "c37d6f3fcd6cbfd4f111ed880d39f770b70fdb5295742ff5103d651d1498f2c1",
+    "prepared_sha256": "19ec8544ba508e16e91e0b9f9792afd25a382e306404514bd18abf8af1418926"
+  },
+  {
+    "path": "src/llama-cparams.h",
+    "base_sha256": "9a550a5eaf14acde10a23172c70abd94274891f84656665f3826efff39004708",
+    "prepared_sha256": "645f5db7013b3067190f04988c9bf1c59a75a3dd7f497cd9617e2b77b3eacb2c"
+  },
+  {
+    "path": "src/llama-grammar.cpp",
+    "base_sha256": "09c1399e92807addaa925404d1eec8f3f4668305cf29a5949983e979b15ab4ac",
+    "prepared_sha256": "446282d809470061a330bea1bd064796becede90fb189bef7aaff68b14e89a32"
+  },
+  {
+    "path": "src/llama-kv-cache.cpp",
+    "base_sha256": "64aed0ceede1c3226533a8a940c8c880e073011824f35bb6d39b25a884ca90a4",
+    "prepared_sha256": "d1d1653d9235cd6ff77927a66059f639676009aae51a277c11f830cf29810ff1"
+  },
+  {
+    "path": "src/llama-kv-cache.h",
+    "base_sha256": "6e213aae935efbab1abeae55cc0f87680e9a75f401b4ab49bc9358af68b37402",
+    "prepared_sha256": "579eccc7c6e985b2ab908a8c0b26dd79177e63a5f7cb9b56c6771e2ca53a45f9"
+  },
+  {
+    "path": "src/llama-memory-hybrid.cpp",
+    "base_sha256": "b2b193c4a412a91b1fe15a3c239d3b2664b5208ff49d6dba244ff8fec0880f92",
+    "prepared_sha256": "a4e226e47619c42ee11348019370d502796dc30e0ee70cbb5ad23fbf2263819b"
+  },
+  {
+    "path": "src/llama-memory-hybrid.h",
+    "base_sha256": "45919f9364e401eabb80eafab0e396166f21e92d75eb4d4ef4e52fe6d9b92cd5",
+    "prepared_sha256": "8f57023b84295f2d7f6b3f034f003a6f8b8c84d56809fbbe853354616586477f"
+  },
+  {
+    "path": "src/llama-model.cpp",
+    "base_sha256": "d857934052da9215df83232389ad831fa58fef7098b8825ef766a3e446b48d8d",
+    "prepared_sha256": "08c956ca581d25f4d01d1b01e4c0c1bc9f9ab2b63f3d3d0a7309c63383a805c9"
+  },
+  {
+    "path": "tools/server/server-context.cpp",
+    "base_sha256": "1b7b0f796fe703d83f8e25b4a07598c25afa69027df7a9cfa2914a56cb4fcd04",
+    "prepared_sha256": "8c0ec3c1c9fd44d06d375581ed1cd0137265b07e791f1297a7817ae78a28bdc1"
+  }
+]

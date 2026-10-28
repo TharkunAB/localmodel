@@ -1,0 +1,12 @@
+{
+  "hostname": "127.0.0.1",
+  "port": 7467,
+  "origin": "https://collab.example.net:7467",
+  "allowedOrigins": ["https://collab.example.net:7467"],
+  "allowCidrs": ["127.0.0.1/32"],
+  "tls": {
+    "cert": "state/collab/tls/server.pem",
+    "key": "state/collab/tls/server-key.pem"
+  },
+  "caFile": "state/collab/tls/ca.pem"
+}

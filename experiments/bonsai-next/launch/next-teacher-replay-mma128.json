@@ -1,0 +1,18 @@
+{
+  "label": "next-teacher-replay-mma128",
+  "command": [
+    "/home/tritlo/Code/local-models/.venv/bin/python",
+    "/home/tritlo/Code/local-models/localmodel.py",
+    "start",
+    "27b-256k-replay",
+    "--ubatch-tokens",
+    "128",
+    "--mem",
+    "48G",
+    "--mtp-head",
+    "teacher"
+  ],
+  "environment": {
+    "LD_LIBRARY_PATH": "/usr/lib/wsl/lib"
+  }
+}

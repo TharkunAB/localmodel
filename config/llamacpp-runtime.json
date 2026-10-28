@@ -1,0 +1,8 @@
+{
+  "release": "b11946",
+  "source_revision": "8ca4060b7e30e76baaa5670ee1ec1b760b7f8552",
+  "filename": "llama-b11946-bin-ubuntu-cuda-12.8-x64.tar.gz",
+  "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11946/llama-b11946-bin-ubuntu-cuda-12.8-x64.tar.gz",
+  "size": 182382803,
+  "sha256": "c8a2c0344b3e2d9a0c959c0f5fa7403d453ba1824b41520db8b5550dc4f0d514"
+}

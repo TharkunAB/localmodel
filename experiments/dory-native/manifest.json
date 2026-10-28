@@ -1,0 +1,113 @@
+{
+  "id": "dory-native-30306",
+  "status": "prepared-not-built-not-benchmarked",
+  "prepared_at": "2026-10-19",
+  "source_repository": "https://github.com/brianchmielNV/llama.cpp",
+  "source_revision": "43e865ec059a35d57f1167eaea76ca187077f063",
+  "upstream_pr": "https://github.com/ggml-org/llama.cpp/pull/30306",
+  "source_directory": "/home/tritlo/Code/local-models/state/sources/dory-native/43e865ec059a35d57f1167eaea76ca187077f063",
+  "build_directory": "/home/tritlo/Code/local-models/state/builds/dory-native",
+  "binary": "/home/tritlo/Code/local-models/state/builds/dory-native/bin/llama-server",
+  "source_archive": {
+    "url": "https://codeload.github.com/brianchmielNV/llama.cpp/tar.gz/43e865ec059a35d57f1167eaea76ca187077f063",
+    "path": "/home/tritlo/Code/local-models/state/sources/dory-native/43e865ec059a35d57f1167eaea76ca187077f063.tar.gz",
+    "sha256": "bf8aed7048a226cf22b27b5c8871ed746f4d78c84d7e50daf36184862af0fdca",
+    "size": 38191065
+  },
+  "source_files_sha256": "/home/tritlo/Code/local-models/experiments/dory-native/source-files.sha256",
+  "source_files_count": 3793,
+  "cmake_args": [
+    "-DCMAKE_BUILD_TYPE=Release",
+    "-DCMAKE_CUDA_ARCHITECTURES=89-real",
+    "-DCMAKE_CUDA_COMPILER=/home/tritlo/Code/local-models/dory/.venv/lib/python3.12/site-packages/nvidia/cu13/bin/nvcc",
+    "-DCUDAToolkit_ROOT=/home/tritlo/Code/local-models/dory/.venv/lib/python3.12/site-packages/nvidia/cu13",
+    "-DCMAKE_CUDA_FLAGS=-I/home/tritlo/Code/local-models/dory/.venv/lib/python3.12/site-packages/nvidia/cu13/include/cccl",
+    "-DCUDA_cudart_LIBRARY=/home/tritlo/Code/local-models/dory/.venv/lib/python3.12/site-packages/nvidia/cu13/lib/libcudart.so.13",
+    "-DCUDA_cublas_LIBRARY=/home/tritlo/Code/local-models/dory/.venv/lib/python3.12/site-packages/nvidia/cu13/lib/libcublas.so.13",
+    "-DCUDA_cublasLt_LIBRARY=/home/tritlo/Code/local-models/dory/.venv/lib/python3.12/site-packages/nvidia/cu13/lib/libcublasLt.so.13",
+    "-DGGML_CUDA=ON",
+    "-DGGML_RPC=OFF",
+    "-DGGML_NATIVE=OFF",
+    "-DGGML_CUDA_CCCL_VERSION=",
+    "-DLLAMA_BUILD_COMMON=ON",
+    "-DLLAMA_BUILD_TOOLS=ON",
+    "-DLLAMA_BUILD_SERVER=ON",
+    "-DLLAMA_BUILD_TESTS=OFF",
+    "-DLLAMA_BUILD_EXAMPLES=OFF",
+    "-DLLAMA_BUILD_APP=OFF",
+    "-DLLAMA_BUILD_UI=OFF",
+    "-DLLAMA_USE_PREBUILT_UI=OFF",
+    "-DLLAMA_OPENSSL=OFF",
+    "-DLLAMA_SUBPROCESS=OFF",
+    "-DLLAMA_LLGUIDANCE=OFF",
+    "-DFETCHCONTENT_FULLY_DISCONNECTED=ON",
+    "-DLLAMA_BUILD_COMMIT=43e865ec059a35d57f1167eaea76ca187077f063"
+  ],
+  "build_target": "llama-server",
+  "build_jobs": 2,
+  "build_memory_cap": "16G",
+  "build_time_cap": "90m",
+  "environment": {
+    "PATH_prepend": "/home/tritlo/Code/local-models/dory/.venv/lib/python3.12/site-packages/nvidia/cu13/bin",
+    "LD_LIBRARY_PATH_prepend": "/home/tritlo/Code/local-models/dory/.venv/lib/python3.12/site-packages/nvidia/cu13/lib"
+  },
+  "model": {
+    "repository": "nvidia/NVIDIA-Nemotron-Labs-Dory1.0-4B-GGUF",
+    "revision": "0963c8000791e77b2b1b49aa387d92a6da9988d6",
+    "filename": "NVIDIA-Nemotron-Labs-Dory1.0-4B-Q5_K_M.gguf",
+    "size": 3673288864,
+    "sha256": "96080be49ffd67b916018b7bdef8c484762576fb52780e10ab98ac4978a660e0",
+    "downloaded": false
+  },
+  "native_features": [
+    "dory-loops-1-through-4",
+    "dory-last-loop-kv",
+    "q8_0-kv",
+    "jinja-tool-calling",
+    "chat-template-kwargs"
+  ],
+  "server_requirements": {
+    "host": "127.0.0.1",
+    "context": 262144,
+    "parallel": 1,
+    "gpu_layers": 999,
+    "cache_type_k": "q8_0",
+    "cache_type_v": "q8_0",
+    "flash_attention": "on",
+    "fit": "off",
+    "load_mode": "none",
+    "kv_offload": true,
+    "op_offload": true,
+    "offline": true,
+    "context_shift": false,
+    "override_tensor": "^blk\\.[0-9]+\\.(residual_alpha|attn_qk_scale|attn_gate_scale|ffn_gate_scale|ffn_up_scale)\\.weight$=CUDA0,^output_scale\\.weight$=CUDA0,^token_embd\\.weight$=CUDA0",
+    "chat_template_kwargs": {
+      "force_nonempty_content": true
+    },
+    "reasoning": "on",
+    "built_in_tools": false
+  },
+  "report_reproduction": {
+    "batch_size": 2048,
+    "ubatch_size": 1024,
+    "threads": 1,
+    "cache_ram_mib": 0,
+    "num_loops": 2,
+    "kv_cache_mode": "last_loop",
+    "temperature": 1.0,
+    "top_p": 0.95,
+    "top_k": 0,
+    "min_p": 0.0,
+    "repeat_penalty": 1.0
+  },
+  "review": {
+    "scope": "All 17 PR file diffs; full Dory graph/converter; override parser; build dependency switches.",
+    "finding": "No added networking, subprocess execution, URL fetching, telemetry, or tool execution found in Dory PR changes.",
+    "limitations": [
+      "Bounded source review, not a full llama.cpp audit or proof of memory safety.",
+      "Official file digest verifies identity, not numerical fidelity to BF16.",
+      "No model downloaded, no build, no runtime flag validation, no GPU residency check.",
+      "Context shifting and runtime model re-save unsupported; last_loop output depends on prefill chunk size."
+    ]
+  }
+}

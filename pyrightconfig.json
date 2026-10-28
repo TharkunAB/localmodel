@@ -1,0 +1,22 @@
+{
+  "include": [
+    "localmodel.py",
+    "deepseek_strata.py",
+    "opencode_local.py",
+    "opencode_remote.py",
+    "omp_local.py",
+    "omp_remote.py",
+    "collab_local.py",
+    "presets.py",
+    "experiments",
+    "qwen_strata.py"
+  ],
+  "exclude": [
+    "experiments/**/patches",
+    "experiments/**/upstream"
+  ],
+  "typeCheckingMode": "strict",
+  "pythonVersion": "3.12",
+  "venvPath": ".",
+  "venv": ".venv"
+}

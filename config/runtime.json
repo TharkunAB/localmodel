@@ -1,0 +1,10 @@
+{
+  "repo": "PrismML-Eng/llama.cpp",
+  "revision": "e3de715222b2667c54a267441159a5729f11155e",
+  "release": "prism-b10777-e3de715",
+  "filename": "llama-prism-b10777-e3de715-bin-linux-cuda-12.8-x64.tar.gz",
+  "name": "llama-prism-b10777-e3de715-bin-linux-cuda-12.8-x64.tar.gz",
+  "url": "https://github.com/PrismML-Eng/llama.cpp/releases/download/prism-b10777-e3de715/llama-prism-b10777-e3de715-bin-linux-cuda-12.8-x64.tar.gz",
+  "size": 208198074,
+  "sha256": "aa53e2256276e683386effdc8be34b3bd1cdf64ef9dc5d492da69227ac52531b"
+}

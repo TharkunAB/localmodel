@@ -1,0 +1,183 @@
+#!/usr/bin/env python3
+"""Install the reviewed harness packages into this checkout."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+from pathlib import Path, PurePosixPath
+import platform
+import re
+import shlex
+import shutil
+import subprocess
+import sys
+import tarfile
+import tempfile
+from typing import Any, cast
+import urllib.request
+
+
+ROOT = Path(__file__).resolve().parent.parent
+
+
+def read_json(path: Path) -> dict[str, Any]:
+    """Read a package manifest."""
+    return cast(dict[str, Any], json.loads(path.read_text()))
+
+
+def verify_omp(directory: Path, manifest: dict[str, Any]) -> None:
+    """Require the reviewed OMP version and input bundle."""
+    package = directory / "node_modules/@oh-my-pi/pi-coding-agent"
+    if read_json(package / "package.json")["version"] != manifest["version"]:
+        raise RuntimeError(f"The OMP version does not match at {package}.")
+    digest = hashlib.sha256((package / "dist/cli.js").read_bytes()).hexdigest()
+    if digest != manifest["input_sha256"]:
+        raise RuntimeError(f"The OMP bundle does not match the reviewed checksum at {package}.")
+    for name in ("package.json", "bun.lock"):
+        if (directory / name).read_bytes() != (ROOT / "config/omp-package" / name).read_bytes():
+            raise RuntimeError(f"The installed OMP dependency manifest differs: {directory / name}.")
+
+
+def install_omp(manifest: dict[str, Any], *, run: bool) -> None:
+    """Install the locked OMP package without global changes or package scripts."""
+    version = str(manifest["version"])
+    target = ROOT / "state/omp-package" / version
+    dependencies = read_json(ROOT / "config/omp-package/package.json")["dependencies"]
+    if dependencies["@oh-my-pi/pi-coding-agent"] != version:
+        raise RuntimeError("config/omp-package/package.json does not match config/omp-runtime.json.")
+    if target.exists() or target.is_symlink():
+        if target.is_symlink():
+            raise RuntimeError(f"The managed OMP directory must not be a symbolic link: {target}.")
+        verify_omp(target, manifest)
+        print(f"Keep the verified OMP {version} installation: {target}")
+        return
+    command = [
+        "bun", "install", "--frozen-lockfile", "--production", "--omit=optional",
+        "--ignore-scripts", "--linker=hoisted",
+        "--cache-dir", str(ROOT / "state/omp-package/cache"),
+    ]
+    print(f"Install OMP {version} into {target}")
+    print("  Copy config/omp-package/package.json and bun.lock into a temporary directory.")
+    print(f"  {shlex.join(command)}")
+    print("  Check the reviewed bundle checksum, then activate the complete directory.")
+    if not run:
+        return
+    bun = shutil.which("bun")
+    if bun is None:
+        raise RuntimeError("Bun >=1.3.14 is required. Install it from https://bun.com/docs/installation first.")
+    result = subprocess.run([bun, "--version"], check=True, capture_output=True, text=True)
+    match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)(?:[-+].*)?", result.stdout.strip())
+    if match is None or tuple(int(value) for value in match.groups()) < (1, 3, 14):
+        raise RuntimeError(f"Bun >=1.3.14 is required; found {result.stdout.strip()}.")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix=".setup-", dir=target.parent) as temporary:
+        directory = Path(temporary) / "package"
+        directory.mkdir()
+        for name in ("package.json", "bun.lock"):
+            shutil.copyfile(ROOT / "config/omp-package" / name, directory / name)
+        subprocess.run([bun, *command[1:]], cwd=directory, check=True)
+        verify_omp(directory, manifest)
+        directory.rename(target)
+
+
+def extract_package(url: str, digest: str, destination: Path) -> None:
+    """Download one verified npm archive and extract regular files only."""
+    with tempfile.TemporaryFile() as archive:
+        checksum = hashlib.sha256()
+        with urllib.request.urlopen(url, timeout=60) as response:
+            while block := response.read(1024 * 1024):
+                checksum.update(block)
+                archive.write(block)
+        if checksum.hexdigest() != digest:
+            raise RuntimeError(f"The archive checksum does not match: {url}")
+        archive.seek(0)
+        with tarfile.open(fileobj=archive, mode="r:gz") as package:
+            for member in package.getmembers():
+                path = PurePosixPath(member.name)
+                if path.is_absolute() or ".." in path.parts or path.parts[:1] != ("package",):
+                    raise RuntimeError(f"Invalid archive path: {member.name}")
+                target = destination.joinpath(*path.parts[1:])
+                if member.isdir():
+                    target.mkdir(parents=True, exist_ok=True)
+                elif member.isfile():
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    source = package.extractfile(member)
+                    if source is None:
+                        raise RuntimeError(f"Cannot read archive member: {member.name}")
+                    with source, target.open("xb") as output:
+                        shutil.copyfileobj(source, output)
+                    target.chmod(0o755 if member.mode & 0o111 else 0o644)
+                else:
+                    raise RuntimeError(f"The archive contains a link or special file: {member.name}")
+
+
+def verify_goal(directory: Path, manifest: dict[str, Any]) -> None:
+    """Check every installed goal plugin file against the review manifest."""
+    expected = cast(dict[str, str], manifest["files"])
+    actual: dict[str, str] = {}
+    for path in directory.rglob("*"):
+        if path.is_symlink():
+            raise RuntimeError(f"The goal plugin contains a symbolic link: {path}.")
+        if path.is_file():
+            actual[path.relative_to(directory).as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
+    if actual != expected:
+        raise RuntimeError(f"The goal plugin files do not match the review manifest at {directory}.")
+
+
+def install_goal(*, run: bool) -> None:
+    """Install the reviewed goal plugin and its sole runtime dependency."""
+    manifest = read_json(ROOT / "config/opencode-goal-plugin-manifest.json")
+    name, version = str(manifest["package"]), str(manifest["version"])
+    target = ROOT / "state/plugins" / f"{name}-{version}"
+    if target.exists() or target.is_symlink():
+        if target.is_symlink():
+            raise RuntimeError(f"The goal plugin directory must not be a symbolic link: {target}.")
+        verify_goal(target, manifest)
+        print(f"Keep the verified {name} {version} installation: {target}")
+        return
+    dependency = cast(dict[str, str], manifest["dependency"])
+    archives = [
+        (f"https://registry.npmjs.org/{name}/-/{name}-{version}.tgz", str(manifest["source_tarball_sha256"]), ""),
+        (f"https://registry.npmjs.org/{dependency['name']}/-/{dependency['name']}-{dependency['version']}.tgz",
+         dependency["tarball_sha256"], f"node_modules/{dependency['name']}"),
+    ]
+    print(f"Install {name} {version} into {target}")
+    for url, digest, _relative in archives:
+        print(f"  Download {url}\n  Verify SHA256 {digest}")
+    print("  Verify every extracted file. Do not execute package scripts.")
+    if not run:
+        return
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix=".goal-", dir=target.parent) as temporary:
+        directory = Path(temporary) / "package"
+        for url, digest, relative in archives:
+            extract_package(url, digest, directory / relative)
+        verify_goal(directory, manifest)
+        directory.rename(target)
+
+
+def main() -> None:
+    """Preview or install isolated harness dependencies."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--dry-run", action="store_true", help="Print the install plan without downloads or writes.")
+    mode.add_argument("--run", action="store_true", help="Install the pinned OMP package into state/.")
+    parser.add_argument("--with-opencode-goal", action="store_true", help="Also install the reviewed OpenCode goal plugin.")
+    args = parser.parse_args()
+    if args.run and (platform.system() != "Linux" or platform.machine() != "x86_64"):
+        raise RuntimeError("The pinned harness package supports Linux x86_64, including WSL2.")
+    install_omp(read_json(ROOT / "config/omp-runtime.json"), run=args.run)
+    if args.with_opencode_goal:
+        install_goal(run=args.run)
+    print("Prerequisites: Bun >=1.3.14; SearXNG and model endpoints for interactive OMP sessions.")
+    print("Optional OpenCode requires an external v2.0.26 installation at ~/.opencode/bin/opencode.")
+    print("Global packages, profile settings, and services are unchanged.")
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (OSError, ValueError, RuntimeError, subprocess.CalledProcessError, tarfile.TarError) as error:
+        sys.exit(f"Cannot set up the harness: {error}")

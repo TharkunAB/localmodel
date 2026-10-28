@@ -1,0 +1,13 @@
+#!/bin/bash
+# Run the command inside capped's scope, then append the scope's peak memory
+# to $HEAVY_PEAKS (default ~/.local/state/heavy/peaks). The exit code is the command's own.
+rc=0
+"$@" || rc=$?
+cg=$(sed -n 's/^0:://p' /proc/self/cgroup)
+peaks=${HEAVY_PEAKS:-$HOME/.local/state/heavy/peaks}
+if [ -r "/sys/fs/cgroup$cg/memory.peak" ]; then
+    mkdir -p "$(dirname "$peaks")"
+    peak=$(($(cat "/sys/fs/cgroup$cg/memory.peak") / 1048576))
+    printf '%s %s %s %sM %s\n' "$(date +%FT%T)" "${CAPPED_LABEL:-?}" "${CAPPED_MEM:-?}" "$peak" "$rc" >> "$peaks"
+fi
+exit "$rc"

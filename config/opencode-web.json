@@ -1,0 +1,6 @@
+{
+  "websearch": {
+    "provider": "searxng"
+  },
+  "permissions": []
+}

@@ -1,0 +1,12 @@
+{
+  "registerAgents": false,
+  "registerTools": false,
+  "completionAudit": false,
+  "auditMessages": false,
+  "agentGoalAuthority": "status",
+  "allowGoalExecutionFromPlan": false,
+  "maxTurns": 10,
+  "maxDurationMs": 3600000,
+  "maxTokens": 262144,
+  "budgetWrapupRatio": 0.98
+}

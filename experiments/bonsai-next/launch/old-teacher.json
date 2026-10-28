@@ -1,0 +1,14 @@
+{
+  "label": "old-teacher",
+  "command": [
+    "/home/tritlo/Code/local-models/.venv/bin/python",
+    "/home/tritlo/Code/local-models/localmodel.py",
+    "start",
+    "27b-256k-native",
+    "--mem",
+    "48G"
+  ],
+  "environment": {
+    "LD_LIBRARY_PATH": "/usr/lib/wsl/lib"
+  }
+}

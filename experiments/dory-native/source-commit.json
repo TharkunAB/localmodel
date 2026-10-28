@@ -1,0 +1,42 @@
+{
+  "sha": "43e865ec059a35d57f1167eaea76ca187077f063",
+  "html_url": "https://github.com/brianchmielNV/llama.cpp/commit/43e865ec059a35d57f1167eaea76ca187077f063",
+  "commit": {
+    "author": {
+      "name": "Brian Chmiel",
+      "email": "bchmiel@aws-cmh-slurm-1-vscode-01.cm.cluster",
+      "date": "2026-10-15T07:18:44Z"
+    },
+    "committer": {
+      "name": "Brian Chmiel",
+      "email": "bchmiel@aws-cmh-slurm-1-vscode-01.cm.cluster",
+      "date": "2026-10-15T07:20:10Z"
+    },
+    "message": "Merge remote-tracking branch 'upstream/master' into dory-support. all test passed",
+    "tree": {
+      "sha": "a75b7b9016ac247fbd555d2b5d01060ccacb84bf",
+      "url": "https://api.github.com/repos/brianchmielNV/llama.cpp/git/trees/a75b7b9016ac247fbd555d2b5d01060ccacb84bf"
+    },
+    "url": "https://api.github.com/repos/brianchmielNV/llama.cpp/git/commits/43e865ec059a35d57f1167eaea76ca187077f063",
+    "comment_count": 0,
+    "verification": {
+      "verified": false,
+      "reason": "unsigned",
+      "signature": null,
+      "payload": null,
+      "verified_at": null
+    }
+  },
+  "parents": [
+    {
+      "sha": "a99be4aae45c6218b3759a5ecf5234391fae9764",
+      "url": "https://api.github.com/repos/brianchmielNV/llama.cpp/commits/a99be4aae45c6218b3759a5ecf5234391fae9764",
+      "html_url": "https://github.com/brianchmielNV/llama.cpp/commit/a99be4aae45c6218b3759a5ecf5234391fae9764"
+    },
+    {
+      "sha": "6e66cb5d4e9a2b4f02820a9f3053422b92ec4d51",
+      "url": "https://api.github.com/repos/brianchmielNV/llama.cpp/commits/6e66cb5d4e9a2b4f02820a9f3053422b92ec4d51",
+      "html_url": "https://github.com/brianchmielNV/llama.cpp/commit/6e66cb5d4e9a2b4f02820a9f3053422b92ec4d51"
+    }
+  ]
+}

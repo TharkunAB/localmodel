@@ -1,0 +1,207 @@
+#!/usr/bin/env python3
+# pyright: strict
+
+import argparse
+import fcntl
+import hashlib
+import json
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+from typing import NotRequired, TypedDict, cast
+
+
+class Model(TypedDict):
+    directory: str
+    filename: str
+    repo: str
+    revision: str
+    size: int
+    sha256: str
+    mtp: NotRequired["Model"]
+    mtp_procreations: NotRequired["Model"]
+    dflash: NotRequired["Model"]
+
+
+def model_path(root: Path, model: Model) -> Path:
+    directory = root / "models" / model["directory"]
+    path = directory / model["filename"]
+    if (
+        not directory.resolve().is_relative_to(root / "models")
+        or path.parent != directory
+        or path.is_symlink()
+    ):
+        raise RuntimeError(f"Use a regular model file inside its repository storage directory: {path}")
+    return path
+
+
+def stored_bytes(path: Path) -> int:
+    size = path.stat().st_size if path.is_file() else 0
+    cache = path.parent / ".cache"
+    if cache.is_dir() and not cache.is_symlink():
+        size += sum(
+            entry.stat().st_size
+            for entry in cache.rglob("*")
+            if entry.is_file() and not entry.is_symlink()
+        )
+    return size
+
+
+def refuse_in_use(path: Path) -> None:
+    for process in Path("/proc").iterdir():
+        if not process.name.isdecimal():
+            continue
+        try:
+            if process.stat().st_uid != os.getuid():
+                continue
+            arguments = (process / "cmdline").read_bytes().split(b"\0")
+            for index, argument in enumerate(arguments):
+                if argument in (b"-m", b"--model", b"-md", b"--model-draft"):
+                    value = arguments[index + 1]
+                elif argument.startswith((b"--model=", b"--model-draft=")):
+                    value = argument.split(b"=", 1)[1]
+                else:
+                    continue
+                loaded = Path(os.fsdecode(value))
+                if not loaded.is_absolute():
+                    loaded = (process / "cwd").resolve() / loaded
+                if loaded.resolve() == path.resolve():
+                    raise RuntimeError(
+                        f"Model is in use by PID {process.name}. Stop it before changing the file."
+                    )
+        except (OSError, IndexError):
+            continue
+
+
+def verified(path: Path, model: Model) -> bool:
+    if not path.is_file() or path.stat().st_size != model["size"]:
+        return False
+    with path.open("rb") as stream:
+        return hashlib.file_digest(stream, "sha256").hexdigest() == model["sha256"]
+
+
+def main() -> None:
+    root = Path(__file__).resolve().parents[1] / "bonsai"
+    catalog = root.parent / "config/models.json"
+    if not catalog.is_file():
+        catalog = root / "config/models.json"
+    models = cast(dict[str, Model], json.loads(catalog.read_text()))
+    parser = argparse.ArgumentParser(
+        description="Manage the local Bonsai and Saluki model files.",
+        epilog=(
+            "bonsai is an alias for bonsai-ptq1 (non-abliterated PTQ1_0 MTP). "
+            "bonsai-ptq2 is an alias for bonsai-pq2 (non-abliterated PQ2_0)."
+        ),
+    )
+    commands = parser.add_subparsers(dest="command", required=True)
+    commands.add_parser("list", help="Show model names, status, and storage use.")
+    for command, help_text in (
+        ("pull", "Download a model at its pinned revision and verify SHA256."),
+        ("delete", "Delete a model and its partial downloads. Keep its configuration."),
+    ):
+        subparser = commands.add_parser(command, help=help_text)
+        subparser.add_argument("model", choices=[*models, "bonsai", "bonsai-ptq2"])
+        subparser.add_argument(
+            "--variant", choices=("mtp", "mtp_procreations", "dflash"),
+            help="Select the optional MTP model or DFlash drafter.",
+        )
+        if command == "delete":
+            subparser.add_argument("--dry-run", action="store_true", help="Show paths and storage use without deleting files.")
+    arguments = parser.parse_args()
+
+    if arguments.command == "list":
+        print(f"{'MODEL':<28} {'STATUS':<10} {'ON DISK':>10} {'MODEL SIZE':>12}")
+        total = 0
+        for name, model in models.items():
+            path = model_path(root, model)
+            size = stored_bytes(path)
+            total += size
+            if path.is_file() and path.stat().st_size == model["size"]:
+                status = "installed"
+            else:
+                status = "partial" if size else "missing"
+            print(f"{name:<28} {status:<10} {size / 2**30:>6.2f} GiB {model['size'] / 2**30:>8.2f} GiB")
+        print(f"\nModel files and download metadata: {total / 2**30:.2f} GiB")
+        return
+
+    name = cast(str, arguments.model)
+    if name == "bonsai":
+        name = "bonsai-ptq1"
+    elif name == "bonsai-ptq2":
+        name = "bonsai-pq2"
+    model = models[name]
+    variant = cast(str | None, getattr(arguments, "variant", None))
+    if variant == "mtp_procreations" and arguments.command == "pull":
+        subprocess.run([str(root.parent / "bin/localmodel"), "fetch", name,
+                        "--speculative", "mtp", "--mtp-head", "procreations"], check=True)
+        return
+    if variant is not None:
+        artifact = model.get(variant)
+        if artifact is None:
+            raise RuntimeError(f"{name} has no {variant} artifact in the model catalog.")
+        model = artifact
+        name = f"{name}-{variant}"
+    path = model_path(root, model)
+    state = root / "state"
+    state.mkdir(parents=True, exist_ok=True)
+    lock_name = "bonsai" if name in ("bonsai-ptq1", "bonsai2-27b-mtp") else name
+    with (state / f"models-{lock_name}.lock").open("w") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise RuntimeError(f"Another pull or delete is running for {name}.") from None
+
+        if arguments.command == "delete":
+            refuse_in_use(path)
+            size = stored_bytes(path)
+            cache = path.parent / ".cache"
+            if arguments.dry_run:
+                print(f"Would remove {path} and {cache} ({size / 2**30:.2f} GiB).")
+                return
+            path.unlink(missing_ok=True)
+            if cache.is_symlink():
+                cache.unlink()
+            elif cache.exists():
+                shutil.rmtree(cache)
+            restore = f"bonsai2-models pull {arguments.model}" + (f" --variant {variant}" if variant else "")
+            print(f"Deleted {name}: removed {size / 2**30:.2f} GiB. Restore with {restore}.")
+            return
+
+        print(f"Checking {name}...", flush=True)
+        if verified(path, model):
+            print(f"{name} is already installed. SHA256 verified.")
+            return
+        refuse_in_use(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        environment = os.environ.copy()
+        environment.update(
+            HF_HOME=str(state / "huggingface"),
+            HF_XET_CACHE=str(state / "huggingface/xet"),
+            HF_XET_CHUNK_CACHE_SIZE_BYTES="0",
+            HF_XET_HIGH_PERFORMANCE="1",
+            HF_HUB_DISABLE_TELEMETRY="1",
+            HF_HUB_DISABLE_IMPLICIT_TOKEN="1",
+            UV_CACHE_DIR=str(state / "uv"),
+        )
+        command = [
+            "uvx", "--from", "huggingface-hub==2.2.0", "hf", "download",
+            model["repo"], model["filename"], "--revision", model["revision"],
+            "--local-dir", str(path.parent),
+        ]
+        if path.exists():
+            command.append("--force-download")
+        subprocess.run(command, env=environment, check=True)
+        if not verified(path, model):
+            raise RuntimeError(f"SHA256 verification failed for {name}. Run pull again to repair it.")
+        print(f"Installed {name}. SHA256 verified.")
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (OSError, RuntimeError, subprocess.CalledProcessError) as error:
+        sys.exit(str(error))
+    except KeyboardInterrupt:
+        sys.exit(130)

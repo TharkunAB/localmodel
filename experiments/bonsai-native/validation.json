@@ -1,0 +1,57 @@
+{
+  "source_replay_checks": [
+    {
+      "command": [
+        "git",
+        "read-tree",
+        "HEAD"
+      ],
+      "returncode": 0
+    },
+    {
+      "command": [
+        "git",
+        "apply",
+        "--cached",
+        "--check",
+        "/home/tritlo/Code/local-models/experiments/bonsai-native/native.patch"
+      ],
+      "returncode": 0
+    },
+    {
+      "command": [
+        "git",
+        "apply",
+        "--cached",
+        "/home/tritlo/Code/local-models/experiments/bonsai-native/native.patch"
+      ],
+      "returncode": 0
+    },
+    {
+      "command": [
+        "git",
+        "diff",
+        "--exit-code"
+      ],
+      "returncode": 0
+    }
+  ],
+  "prepared_git_tree": "a0b358ca3c122518673f56211806e1bcc2740ebb",
+  "diff_equals_combined_patch": true,
+  "whitespace_check": true,
+  "source_patch_sha256": "588b41428a8f00ad07df811bd63e8cfc714565db9e3af6c9354435870be9467c",
+  "cmake_configured": false,
+  "compiled": false,
+  "inference_run": false,
+  "benchmarks_run": false,
+  "source_hash_check": {
+    "passed": true,
+    "files": 3587,
+    "upstream_patches": 7
+  },
+  "python_strict_type_check": {
+    "passed": true,
+    "errors": 0,
+    "warnings": 0
+  }
+}

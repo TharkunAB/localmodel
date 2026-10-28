@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+set -euo pipefail
+root=$(cd -- "$(dirname -- "$(readlink -f -- "$0")")/.." && pwd)
+if [[ ${1:-} == --help || ${1:-} == -h ]]; then
+  printf '%s\n' \
+    'Usage: searxng-local' \
+    'Run SearXNG at http://127.0.0.1:8888 with engines from config/searxng.yml.' \
+    'JSON API: POST /search with q=QUERY and format=json.' \
+    'Runs in the foreground with a 1 GiB RAM cap and no swap. Stop it with Ctrl-C.' \
+    'Install dependencies with ~/Code/local-models/bin/setup-searxng.'
+  exit 0
+fi
+if [[ $# != 0 ]]; then
+  printf '%s\n' 'Usage: searxng-local' >&2
+  exit 2
+fi
+if [[ ! -x "$root/search/.venv/bin/granian" ]]; then
+  printf '%s\n' "Run $root/bin/setup-searxng first." >&2
+  exit 1
+fi
+mkdir -p "$root/state/searxng/tmp" "$root/state/searxng/cache"
+export SEARXNG_SETTINGS_PATH="$root/config/searxng.yml"
+export TMPDIR="$root/state/searxng/tmp"
+export XDG_CACHE_HOME="$root/state/searxng/cache"
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=$XDG_RUNTIME_DIR/bus}"
+export HEAVY_PEAKS="$root/state/searxng/server-peaks"
+export SEARXNG_SECRET
+SEARXNG_SECRET=$("$root/.venv/bin/python" - "$root/state/searxng/secret" <<'PY'
+import os
+from pathlib import Path
+import secrets
+import sys
+
+path = Path(sys.argv[1])
+try:
+    with open(path, "x", opener=lambda name, flags: os.open(name, flags, 0o600)) as stream:
+        stream.write(secrets.token_hex(32))
+except FileExistsError:
+    pass
+print(path.read_text())
+PY
+)
+cd "$root/search/searxng"
+printf '%s\n' "SearXNG: http://127.0.0.1:8888 (settings: $SEARXNG_SETTINGS_PATH)"
+exec "$root/libexec/capped" --mem 1G \
+  "$root/search/.venv/bin/granian" --interface wsgi --host 127.0.0.1 --port 8888 \
+  --workers 1 --blocking-threads 4 --no-ws --no-access-log searx.webapp:app

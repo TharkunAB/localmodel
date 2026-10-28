@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+set -euo pipefail
+root=$(cd -- "$(dirname -- "$(readlink -f -- "$0")")/.." && pwd)
+source_dir="$root/search/searxng"
+revision=1c10abe2d3e4ab7ddcc4e9da1a7d07dc7ca7f8f4
+
+if [[ ${1:-} == --help || ${1:-} == -h ]]; then
+  printf '%s\n' 'Install the pinned SearXNG source and Python environment without Docker.'
+  exit 0
+fi
+if [[ $# != 0 ]]; then
+  printf '%s\n' 'Usage: setup-searxng' >&2
+  exit 2
+fi
+mkdir -p "$root/search" "$root/state/searxng"
+if [[ ! -d "$source_dir/.git" ]]; then
+  git init "$source_dir"
+  git -C "$source_dir" remote add origin https://github.com/searxng/searxng.git
+  git -C "$source_dir" fetch --depth 1 origin "$revision"
+  git -C "$source_dir" checkout --detach FETCH_HEAD
+fi
+if [[ $(git -C "$source_dir" rev-parse HEAD) != "$revision" ]]; then
+  printf '%s\n' "SearXNG has a different revision at $source_dir. No checkout was changed." >&2
+  exit 1
+fi
+if [[ ! -x "$root/search/.venv/bin/python" ]]; then
+  uv venv --python 3.12 "$root/search/.venv"
+fi
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=$XDG_RUNTIME_DIR/bus}"
+export HEAVY_PEAKS="$root/state/searxng/setup-peaks"
+"$root/libexec/capped" --mem 4G uv pip install \
+  --python "$root/search/.venv/bin/python" \
+  --requirement "$source_dir/requirements.txt" \
+  --requirement "$source_dir/requirements-server.txt"
+"$root/search/.venv/bin/pybabel" --quiet compile --directory "$source_dir/searx/translations"
+uv pip freeze --python "$root/search/.venv/bin/python" > "$root/search/installed-requirements.txt"
+printf '%s\n' "Installed SearXNG $revision. Start it with searxng-local."

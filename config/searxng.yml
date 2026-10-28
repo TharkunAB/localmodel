@@ -1,0 +1,35 @@
+use_default_settings:
+  engines:
+    keep_only:
+      - duckduckgo
+
+general:
+  instance_name: Local model search
+  debug: false
+
+search:
+  formats:
+    - html
+    - json
+  autocomplete: ""
+  default_lang: en
+  safe_search: 0
+
+server:
+  bind_address: 127.0.0.1
+  port: 8888
+  base_url: http://127.0.0.1:8888/
+  limiter: false
+  public_instance: false
+  method: POST
+
+valkey:
+  url: false
+
+outgoing:
+  request_timeout: 10.0
+  max_request_timeout: 15.0
+
+engines:
+  - name: duckduckgo
+    disabled: false

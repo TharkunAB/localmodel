@@ -1,0 +1,17 @@
+{
+  "label": "next-replay-scalar128",
+  "command": [
+    "/home/tritlo/Code/local-models/.venv/bin/python",
+    "/home/tritlo/Code/local-models/localmodel.py",
+    "start",
+    "27b-256k-replay",
+    "--no-gdn-mma",
+    "--mem",
+    "48G",
+    "--ubatch-tokens",
+    "128"
+  ],
+  "environment": {
+    "LD_LIBRARY_PATH": "/usr/lib/wsl/lib"
+  }
+}

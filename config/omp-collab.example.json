@@ -1,0 +1,6 @@
+{
+  "relayUrl": "wss://collab.example.net:7467",
+  "webUrl": "https://collab.example.net:7467",
+  "allowedOrigins": ["https://collab.example.net:7467"],
+  "caFile": "state/collab/tls/ca.pem"
+}

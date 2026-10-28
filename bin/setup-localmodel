@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+# Install the local launchers and explicitly selected runtime dependencies.
+set -euo pipefail
+root=$(cd -- "$(dirname -- "$(readlink -f -- "$0")")/.." && pwd)
+execute=false
+bonsai=false
+strata=false
+harness=false
+search=false
+opencode=false
+bin_dir="$HOME/.local/bin"
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --run) execute=true ;;
+    --dry-run) execute=false ;;
+    --bonsai) bonsai=true ;;
+    --strata) strata=true ;;
+    --harness) harness=true ;;
+    --search) search=true ;;
+    --opencode) opencode=true ;;
+    --all) bonsai=true; strata=true; harness=true; search=true ;;
+    --bin-dir) bin_dir=${2:?--bin-dir requires a directory}; shift ;;
+    -h|--help)
+      cat <<'HELP'
+Usage: setup-localmodel [--run | --dry-run] [--bonsai] [--strata]
+                        [--harness] [--search] [--all] [--opencode] [--bin-dir DIRECTORY]
+
+Default: print the install plan. --run applies it.
+Base: Python 3.12 environment, pinned build tools, and ~/.local/bin links.
+--bonsai: private CUDA toolkit, reviewed source, and optimized Bonsai build.
+--strata: pinned shared Strata control source and DeepSeek engine.
+--harness: pinned OMP package and reviewed local patches.
+--search: pinned SearXNG source and environment, without Docker.
+--all: select all four components. Downloads can use several GB.
+--opencode: also link the optional OpenCode wrappers. Install OpenCode separately.
+
+Requires Linux x86_64, uv, Git, curl, Python 3.12, and systemd user scopes.
+Bonsai also needs GCC/G++, make, and an NVIDIA driver with CUDA 13 support.
+OMP needs Bun. See README.md for system dependencies.
+No models are downloaded. No model or search service is started.
+Existing launcher links must already point to this checkout.
+HELP
+      exit 0 ;;
+    *) printf 'Unknown option: %s\n' "$1" >&2; exit 2 ;;
+  esac
+  shift
+done
+run() {
+  printf '+'
+  printf ' %q' "$@"
+  printf '\n'
+  if $execute; then "$@"; fi
+}
+if $execute; then
+  [[ $(uname -s) == Linux && $(uname -m) == x86_64 ]] || {
+    echo 'This package requires Linux x86_64 (Ubuntu 24.04 or WSL2).' >&2; exit 1;
+  }
+  for command in uv git curl python3 systemd-run systemctl; do
+    command -v "$command" >/dev/null || { echo "Missing dependency: $command" >&2; exit 1; }
+  done
+  export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+  export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=$XDG_RUNTIME_DIR/bus}"
+  systemctl --user show-environment >/dev/null || {
+    echo 'A systemd user manager is required for RAM limits. See README.md.' >&2; exit 1;
+  }
+  export HEAVY_PEAKS="$root/state/setup-peaks"
+fi
+launchers=(localmodel omp-local omp-remote searxng-local omp-collab start-remote-model.sh)
+if $opencode; then launchers+=(opencode-local opencode-remote); fi
+for name in "${launchers[@]}"; do
+  target="$bin_dir/$name"
+  if [[ -e $target || -L $target ]]; then
+    [[ -L $target && $(readlink -f -- "$target") == "$root/bin/$name" ]] || {
+      echo "Refusing to replace $target. Select another --bin-dir or move it yourself." >&2; exit 1;
+    }
+  fi
+done
+run mkdir -p "$root/state" "$root/bonsai/state" "$bin_dir"
+if [[ ! -x "$root/.venv/bin/python" ]]; then
+  run uv venv --python 3.12 "$root/.venv"
+fi
+run "$root/libexec/capped" --mem 4G uv pip install --python "$root/.venv/bin/python" -r "$root/config/native-build-requirements.txt"
+for name in "${launchers[@]}"; do
+  if [[ ! -L "$bin_dir/$name" ]]; then run ln -s "$root/bin/$name" "$bin_dir/$name"; fi
+done
+if $bonsai; then
+  # Keep the historical toolkit path so existing build receipts stay valid.
+  if [[ ! -x "$root/dory/.venv/bin/python" ]]; then
+    run uv venv --python 3.12 "$root/dory/.venv"
+  fi
+  run "$root/libexec/capped" --mem 4G uv pip install --python "$root/dory/.venv/bin/python" -r "$root/config/cuda-build-requirements.txt"
+  run "$root/libexec/capped" --mem 4G "$root/.venv/bin/python" "$root/experiments/prepare-native.py" bonsai-next --run
+  run "$root/.venv/bin/python" "$root/experiments/build-native.py" bonsai-next --run
+fi
+if $strata; then
+  run "$root/libexec/capped" --mem 4G "$root/.venv/bin/python" "$root/experiments/deepseek-strata/runtime.py" --run
+fi
+if $harness; then run "$root/libexec/capped" --mem 4G "$root/.venv/bin/python" "$root/bin/setup-harness" --run; fi
+if $search; then run "$root/bin/setup-searxng"; fi
+if $execute; then
+  printf 'Setup complete. Add %s to PATH. Fetch a model separately; see README.md.\n' "$bin_dir"
+else
+  echo 'Preview only. Add --run to install the selected components.'
+fi

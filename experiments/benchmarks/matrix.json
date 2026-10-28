@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "state": "27B comparison complete 2026-10-19; 9B and Dory archived at user request",
+  "context": 262144,
+  "source_tokens": 205000,
+  "output_tokens": 16000,
+  "seed": 424242,
+  "default_hooks": ["opencode", "capacity"],
+  "cases": [
+    {"name": "27b-stock-mtp2", "stage": "baseline", "model": "bonsai2-27b", "runtime": "stock", "draft_tokens": 2, "chain": true, "effort": "xhigh", "kv": "q4_0", "flags": []},
+    {"name": "27b-native-full", "stage": "native", "model": "bonsai2-27b", "runtime": "bonsai-native", "draft_tokens": 2, "chain": true, "effort": "xhigh", "kv": "q4_0", "flags": ["--mma-decode-min-kv", "0"]},
+    {"name": "27b-native-window16k", "stage": "native", "model": "bonsai2-27b", "runtime": "bonsai-native", "draft_tokens": 2, "chain": true, "effort": "xhigh", "kv": "q4_0", "flags": ["--draft-window", "16384", "--mma-decode-min-kv", "0"]},
+    {"name": "27b-native-lookup32", "stage": "lookup", "model": "bonsai2-27b", "runtime": "bonsai-native", "draft_tokens": 2, "chain": true, "effort": "xhigh", "kv": "q4_0", "flags": ["--draft-window", "16384", "--mma-decode-min-kv", "0", "--prompt-lookup", "--lookup-type", "ngram-mod", "--lookup-tokens", "32"]},
+    {"name": "27b-native-mtp1-mma-off", "stage": "mma", "model": "bonsai2-27b", "runtime": "bonsai-native", "draft_tokens": 1, "chain": true, "effort": "xhigh", "kv": "q4_0", "flags": ["--mma-decode-min-kv", "0"]},
+    {"name": "27b-native-mtp1-mma-on", "stage": "mma", "model": "bonsai2-27b", "runtime": "bonsai-native", "draft_tokens": 1, "chain": true, "effort": "xhigh", "kv": "q4_0", "flags": ["--mma-decode-min-kv", "256"]},
+    {"name": "9b-stock-mtp2", "archived": true, "stage": "models", "model": "bonsai2-9b", "runtime": "stock", "draft_tokens": 2, "chain": true, "effort": "xhigh", "kv": "q4_0", "flags": []},
+    {"name": "9b-native-q8-window16k", "archived": true, "stage": "models", "model": "bonsai2-9b", "runtime": "bonsai-native", "draft_tokens": 2, "draft_kv": "q8_0", "chain": true, "effort": "xhigh", "kv": "q8_0", "flags": ["--draft-window", "16384", "--mma-decode-min-kv", "0", "--prompt-lookup", "--lookup-type", "ngram-mod", "--lookup-tokens", "32"]},
+    {"name": "dory-round1", "archived": true, "stage": "models", "model": "dory-gguf", "rounds": 1, "kv": "q8_0", "flags": []},
+    {"name": "dory-round2", "archived": true, "stage": "models", "model": "dory-gguf", "rounds": 2, "kv": "q8_0", "flags": []},
+    {"name": "dory-round4", "archived": true, "stage": "models", "model": "dory-gguf", "rounds": 4, "kv": "q8_0", "flags": []},
+    {"name": "27b-native-kv-spill", "stage": "optional", "model": "bonsai2-27b", "runtime": "bonsai-native", "draft_tokens": 2, "chain": true, "effort": "xhigh", "kv": "q4_0", "flags": ["--draft-window", "16384", "--mma-decode-min-kv", "0", "--kv-vram-cells", "131072"]},
+    {"name": "27b-stock-medium", "stage": "optional", "model": "bonsai2-27b", "runtime": "stock", "draft_tokens": 2, "chain": true, "effort": "medium", "kv": "q4_0", "flags": []},
+    {"name": "27b-native-window16k-mma", "stage": "combined", "model": "bonsai2-27b", "runtime": "bonsai-native", "draft_tokens": 2, "chain": true, "effort": "xhigh", "kv": "q4_0", "flags": ["--draft-window", "16384", "--mma-decode-min-kv", "256"]}
+  ]
+}

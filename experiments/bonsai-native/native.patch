@@ -1,0 +1,1305 @@
+diff --git a/common/arg.cpp b/common/arg.cpp
+index 94dead3..1b01091 100644
+--- a/common/arg.cpp
++++ b/common/arg.cpp
+@@ -2457,6 +2457,18 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
+             params.kv_mean_center_path = value;
+         }
+     ).set_env("LLAMA_ARG_KV_MEAN_CENTER"));
++    add_opt(common_arg(
++        {"--kv-vram-cells"}, "N",
++        "tiered KV cache: keep the first N cells of each layer's K/V in VRAM and the rest in pinned system RAM\n"
++        "mapped into the same device range (CUDA VMM), so the context can exceed VRAM. Positions past N are\n"
++        "read over PCIe once a sequence is that deep; output is identical to an all-VRAM cache. 0 = off (default)",
++        [](common_params & params, int value) {
++            if (value < 0) {
++                throw std::invalid_argument("invalid value");
++            }
++            params.n_kv_vram_cells = value;
++        }
++    ).set_env("LLAMA_ARG_KV_VRAM_CELLS"));
+     add_opt(common_arg(
+         {"--hellaswag"},
+         "compute HellaSwag score over random tasks from datafile supplied with -f",
+@@ -4128,6 +4140,17 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
+             params.speculative.draft.n_depth_max = value;
+         }
+     ).set_spec().set_examples({LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_SPEC_DRAFT_DEPTH_MAX"));
++    add_opt(common_arg(
++        {"--spec-draft-window"}, "N",
++        string_format("retain the last N rows in the MTP draft cache; the target keeps its full context\n"
++                      "0 = full draft history (default: %d)", params.speculative.draft.n_window),
++        [](common_params & params, int value) {
++            if (value < 0) {
++                throw std::invalid_argument("invalid value");
++            }
++            params.speculative.draft.n_window = value;
++        }
++    ).set_spec().set_examples({LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_SPEC_DRAFT_WINDOW"));
+ 
+     add_opt(common_arg(
+         {"--spec-draft-p-split", "--draft-p-split"}, "P",
+diff --git a/common/common.cpp b/common/common.cpp
+index 4045903..eb91804 100644
+--- a/common/common.cpp
++++ b/common/common.cpp
+@@ -1764,6 +1764,7 @@ struct llama_context_params common_context_params_to_llama(const common_params &
+     // note: params (and therefore params.kv_mean_center_path) is kept alive by the caller for
+     // at least as long as it takes to call llama_init_from_model() with the returned cparams
+     cparams.path_kv_mean_center = params.kv_mean_center_path.empty() ? nullptr : params.kv_mean_center_path.c_str();
++    cparams.n_kv_vram_cells     = (uint32_t) std::max(0, params.n_kv_vram_cells);
+ 
+     return cparams;
+ }
+diff --git a/common/common.h b/common/common.h
+index 0ab2a3f..cd1d6b9 100644
+--- a/common/common.h
++++ b/common/common.h
+@@ -335,6 +335,9 @@ struct common_params_speculative_draft {
+     // even near 24k tokens and costs 30% at 64k. Past the cutoff the slot decodes one token per step.
+     int32_t n_depth_max = 0;
+ 
++    // Retain the last n_window rows in the MTP draft cache. Zero retains the full history.
++    int32_t n_window = 0;
++
+     bool backend_sampling = true; // offload draft sampling to the backend (default: on)
+ 
+     common_params_model mparams;
+@@ -588,6 +591,9 @@ struct common_params {
+     // only takes effect when cache_type_k == GGML_TYPE_Q4_0; see docs/kv-mean-center.md
+     std::string kv_mean_center_path = "";
+ 
++    // tiered KV cache: cells past this many live in pinned host memory (0 = all in device memory)
++    int32_t n_kv_vram_cells = 0;
++
+     common_conversation_mode conversation_mode = COMMON_CONVERSATION_MODE_AUTO;
+ 
+     // multimodal models (see tools/mtmd)
+diff --git a/common/speculative.cpp b/common/speculative.cpp
+index ed48214..9cb3019 100644
+--- a/common/speculative.cpp
++++ b/common/speculative.cpp
+@@ -3811,8 +3811,19 @@ common_speculative_init_result::common_speculative_init_result(
+         cparams.ctx_type = LLAMA_CONTEXT_TYPE_MTP;
+     }
+ 
+-    // the draft context holds as many tokens per sequence as the target context
++    // Use the full target context unless an MTP draft window is set.
+     cparams.n_ctx = llama_n_ctx(ctx_tgt);
++    if (spec_mtp && params.speculative.draft.n_window > 0) {
++        const uint64_t n_seq = std::max<uint32_t>(1, cparams.n_seq_max);
++        const uint64_t need = (uint64_t) params.speculative.draft.n_window +
++                              2*std::max<uint32_t>(cparams.n_batch, cparams.n_ubatch) + 256;
++        const uint64_t capped = GGML_PAD(need, 256) * n_seq;
++        if (capped < cparams.n_ctx) {
++            LOG_INF("%s: draft context sized to %u tokens (spec-draft-window %d, target %u)\n",
++                    __func__, (uint32_t) capped, params.speculative.draft.n_window, cparams.n_ctx);
++            cparams.n_ctx = (uint32_t) capped;
++        }
++    }
+ 
+     // n_rs_seq stays as common_context_params_to_llama set it: the draft context needs the same rollback window as the target, with n_rs_seq == 0 its seq_rm fails silently on partial acceptance and keeps stale positions
+     cparams.ctx_other = ctx_tgt;
+diff --git a/ggml/include/ggml-cuda.h b/ggml/include/ggml-cuda.h
+index 1cd81ee..b243049 100644
+--- a/ggml/include/ggml-cuda.h
++++ b/ggml/include/ggml-cuda.h
+@@ -27,6 +27,10 @@ GGML_BACKEND_API bool ggml_backend_is_cuda(ggml_backend_t backend);
+ // device buffer
+ GGML_BACKEND_API ggml_backend_buffer_type_t ggml_backend_cuda_buffer_type(int device);
+ 
++// device buffer whose buffers keep vram_frac of each of n_parts equal parts in VRAM and the remainder in
++// pinned host memory mapped into the same device address range (CUDA VMM). nullptr without VMM.
++GGML_BACKEND_API ggml_backend_buffer_type_t ggml_backend_cuda_tier_buffer_type(int device, double vram_frac, int n_parts, const char * tag);
++
+ // conduct allreduce operation between devices
+ GGML_BACKEND_API bool ggml_backend_cuda_allreduce_tensor(ggml_backend_t * backends, struct ggml_tensor ** tensors, size_t n_backends);
+ 
+diff --git a/ggml/src/ggml-cuda/fattn.cu b/ggml/src/ggml-cuda/fattn.cu
+index 32f6440..a8d9409 100644
+--- a/ggml/src/ggml-cuda/fattn.cu
++++ b/ggml/src/ggml-cuda/fattn.cu
+@@ -485,6 +485,23 @@ static best_fattn_kernel ggml_cuda_get_best_fattn_kernel(const int device, const
+ 
+     // If Turing tensor cores are available, use them:
+     if (turing_mma_available(cc) && Q->ne[0] != 40 && Q->ne[0] != 72) {
++        // Quantized-KV decode with wide GQA (up to 8 queries: single-token decode and speculative verify):
++        // the vector kernel runs one block per Q head, so every K/V row is fetched gqa_ratio times (6x for
++        // Qwen3.5/Bonsai 2: 24 Q heads over 4 KV heads). The MMA kernel packs the GQA heads of one KV head
++        // into one tile and reads q4_0/q8_0 K/V in place once. Same rule the F16 path already uses.
++        // RTX 4070, Bonsai 2 27B, q8_0 K/V, MTP draft: 4k 78.1 -> 86.9 tok/s, 16k 77.7 -> 111.6, 32k 54.5 -> 103.6.
++        // GGML_CUDA_FA_MMA_DECODE_MIN_KV = shortest KV length that takes this route (default 256, 0 = never).
++        {
++            static const int min_kv = [] {
++                const char * e = getenv("GGML_CUDA_FA_MMA_DECODE_MIN_KV");
++                return e ? atoi(e) : 256;
++            }();
++            if (min_kv > 0 && ggml_is_quantized(K->type) && K->type == V->type &&
++                    ggml_cuda_fattn_mma_kv_native_supported(dst) &&
++                    gqa_opt_applies && gqa_ratio > 4 && Q->ne[1] <= 8 && Q->ne[3] == 1 && K->ne[1] >= min_kv) {
++                return BEST_FATTN_KERNEL_MMA_F16;
++            }
++        }
+         if (can_use_vector_kernel) {
+             // batch-invariant mode: the same (vector) kernel for 1 to 8 queries, so a token verified in a
+             // speculative batch attends with the same arithmetic as a token decoded alone
+@@ -607,8 +624,57 @@ size_t ggml_cuda_flash_attn_ext_get_alloc_size(int device, const ggml_tensor * d
+     return f16_extra.end - (uintptr_t) dst->data;
+ }
+ 
++// ggml-cuda.cu: host-tail staging of tiered buffers (ggml_backend_cuda_tier_buffer_type), and its prefetch
++void * ggml_cuda_tier_stage(const void * ptr, size_t nbytes, cudaStream_t stream);
++bool   ggml_cuda_tier_fa_begin(ggml_backend_cuda_context & ctx, const ggml_tensor * dst, void ** K_alias, void ** V_alias);
++void   ggml_cuda_tier_fa_end(ggml_backend_cuda_context & ctx);
++
++// GGML_CUDA_KV_TIER_STAGE_MIN_Q=q: attention ops with fewer than q queries (decode, small verify batches) that are not
++// in the prefill prefetch read the host tail in place and copy nothing. Unset: 0 (every op that reaches the tail stages).
++static int64_t ggml_cuda_tier_stage_min_q() {
++    static const int64_t q = [] {
++        const char * e = getenv("GGML_CUDA_KV_TIER_STAGE_MIN_Q");
++        return e ? (int64_t) atoll(e) : (int64_t) 0;
++    }();
++    return q;
++}
++
+ void ggml_cuda_flash_attn_ext(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
+     ggml_cuda_set_device(ctx.device);
++
++    // K/V in a tiered buffer whose host tail this op reaches: copy the used host rows into the VRAM staging
++    // buffer with the copy engine and point K/V at the all-VRAM alias of the same range for this op. Prefill
++    // kernels read each K/V row once per query tile, which for host rows would be PCIe traffic every time;
++    // decode reads each row once, but DMA moves it faster than SMs reading host memory from inside the
++    // kernel (RTX 4070, 180k context, 86k cells in host memory: +28% decode). Nothing is copied for ops
++    // that stay below the tier line. The staged bytes are the same bytes, so results are unchanged.
++    ggml_tensor * K = dst->src[1];
++    ggml_tensor * V = dst->src[2];
++    // With the prefetch (ggml_cuda_tier_graph_begin), the host rows are already in staging when this op starts.
++    void * K_data = K ? K->data : nullptr;
++    void * V_data = V ? V->data : nullptr;
++    bool tier_piped = false;
++    if (K && V && V != K) {
++        void * K_alias = nullptr;
++        void * V_alias = nullptr;
++        tier_piped = ggml_cuda_tier_fa_begin(ctx, dst, &K_alias, &V_alias);
++        if (tier_piped) {
++            if (K_alias) {
++                K->data = K_alias;
++            }
++            if (V_alias) {
++                V->data = V_alias;
++            }
++        } else if (dst->src[0]->ne[1] >= ggml_cuda_tier_stage_min_q()) {
++            if (void * a = ggml_cuda_tier_stage(K->data, ggml_nbytes(K), ctx.stream())) {
++                K->data = a;
++            }
++            if (void * a = ggml_cuda_tier_stage(V->data, ggml_nbytes(V), ctx.stream())) {
++                V->data = a;
++            }
++        }
++    }
++
+     switch (ggml_cuda_get_best_fattn_kernel(ggml_cuda_get_device(), dst)) {
+         case BEST_FATTN_KERNEL_NONE:
+             GGML_ABORT("fatal error");
+@@ -622,6 +688,17 @@ void ggml_cuda_flash_attn_ext(ggml_backend_cuda_context & ctx, ggml_tensor * dst
+             ggml_cuda_flash_attn_ext_mma_f16(ctx, dst);
+             break;
+     }
++
++    if (tier_piped) {
++        ggml_cuda_tier_fa_end(ctx);
++    }
++
++    if (K) {
++        K->data = K_data;
++    }
++    if (V) {
++        V->data = V_data;
++    }
+ }
+ 
+ bool ggml_cuda_flash_attn_ext_supported(int device, const ggml_tensor * dst) {
+diff --git a/ggml/src/ggml-cuda/ggml-cuda.cu b/ggml/src/ggml-cuda/ggml-cuda.cu
+index 616f1d7..b3cd864 100644
+--- a/ggml/src/ggml-cuda/ggml-cuda.cu
++++ b/ggml/src/ggml-cuda/ggml-cuda.cu
+@@ -83,6 +83,7 @@
+ #include <initializer_list>
+ #include <limits>
+ #include <map>
++#include <functional>
+ #include <memory>
+ #include <mutex>
+ #include <cstdarg>
+@@ -701,10 +702,51 @@ static std::mutex ggml_cuda_lock;
+ static std::condition_variable ggml_cuda_lock_cv;
+ static std::atomic<int> ggml_cuda_lock_counter;
+ 
++// tiered KV prefill state of a backend context (see ggml_cuda_tier_graph_begin)
++struct ggml_cuda_tier_redirect {
++    int          at;       // graph index of the set_rows node
++    ggml_tensor * node;
++    void *       data;     // the node's own address, restored after the write-back
++    const void * entry;    // ggml_cuda_tier_entry of the tiered buffer
++    size_t       base;     // offset of the node's data in the tiered buffer
++    size_t       h_lo;     // host run of the node's range, as offsets from base
++    size_t       h_hi;
++};
++struct ggml_cuda_tier_state {
++    std::vector<ggml_cuda_tier_redirect> rd; // set_rows nodes that write through the alias, in graph order
++    size_t      rd_next  = 0;             // rd[rd_next] is the next one to write back
++    std::vector<const ggml_tensor *> fa;  // attention ops of the graph whose K/V reach a host tail, in graph order
++    size_t      next     = 0;             // fa[next] is the next attention op of the prefetch pipeline
++    bool        inflight = false;         // a prefetch was queued and the main stream has not waited for it yet
++    cudaEvent_t read     = nullptr;       // main stream: the last attention op that read the staging buffers is done
++    cudaEvent_t copied   = nullptr;       // prefetch stream: the copy for fa[next] is done
++};
++static std::mutex g_tier_state_mutex;
++static std::unordered_map<const ggml_backend_cuda_context *, ggml_cuda_tier_state> g_tier_states;
++
++static ggml_cuda_tier_state & ggml_cuda_tier_state_of(const ggml_backend_cuda_context & ctx) {
++    std::lock_guard<std::mutex> lock(g_tier_state_mutex);
++    return g_tier_states[&ctx];
++}
++
+ ggml_backend_cuda_context::~ggml_backend_cuda_context() {
+     std::unique_lock<std::mutex> lock(ggml_cuda_lock);
+     ggml_cuda_lock_cv.wait(lock, []{ return ggml_cuda_lock_counter.load(std::memory_order_relaxed) == 0; });
+ 
++    {
++        std::lock_guard<std::mutex> tier_lock(g_tier_state_mutex);
++        auto it = g_tier_states.find(this);
++        if (it != g_tier_states.end()) {
++            if (it->second.read != nullptr) {
++                CUDA_CHECK(cudaEventDestroy(it->second.read));
++            }
++            if (it->second.copied != nullptr) {
++                CUDA_CHECK(cudaEventDestroy(it->second.copied));
++            }
++            g_tier_states.erase(it);
++        }
++    }
++
+     // pool blocks held across a graph go back to the pool before the pools are destroyed below
+     fwht_q8_context.reset();
+ 
+@@ -733,6 +775,7 @@ struct ggml_backend_cuda_buffer_context {
+     int device;
+     void * dev_ptr = nullptr;
+     std::string name;
++    std::function<void()> release; // set by the tiered (VRAM head + host tail) buffer; default cudaFree
+ 
+     ggml_backend_cuda_buffer_context(int device, void * dev_ptr) :
+         device(device), dev_ptr(dev_ptr),
+@@ -740,7 +783,11 @@ struct ggml_backend_cuda_buffer_context {
+     }
+ 
+     ~ggml_backend_cuda_buffer_context() {
+-        CUDA_CHECK(cudaFree(dev_ptr));
++        if (release) {
++            release();
++        } else {
++            CUDA_CHECK(cudaFree(dev_ptr));
++        }
+     }
+ };
+ 
+@@ -874,8 +921,15 @@ static const ggml_backend_buffer_i ggml_backend_cuda_buffer_interface = {
+ struct ggml_backend_cuda_buffer_type_context {
+     int device;
+     std::string name;
++    // tiered buffer (see ggml_backend_cuda_tier_buffer_type): the buffer is n_parts equal parts; the
++    // first vram_frac of every part is backed by VRAM, the rest by pinned host memory mapped into the
++    // same virtual range. vram_frac >= 1 is an ordinary device buffer.
++    double vram_frac = 1.0;
++    int    n_parts   = 1;
+ };
+ 
++static ggml_backend_buffer_t ggml_backend_cuda_tier_alloc(ggml_backend_buffer_type_t buft, size_t size);
++
+ static const char * ggml_backend_cuda_buffer_type_get_name(ggml_backend_buffer_type_t buft) {
+     ggml_backend_cuda_buffer_type_context * ctx = (ggml_backend_cuda_buffer_type_context *)buft->context;
+ 
+@@ -891,6 +945,10 @@ static ggml_backend_buffer_t ggml_backend_cuda_buffer_type_alloc_buffer(ggml_bac
+ 
+     ggml_cuda_set_device(buft_ctx->device);
+ 
++    if (buft_ctx->vram_frac < 1.0 && size > 0) {
++        return ggml_backend_cuda_tier_alloc(buft, size);
++    }
++
+     void * dev_ptr;
+     cudaError_t err = ggml_cuda_device_malloc(&dev_ptr, size, buft_ctx->device);
+     if (err != cudaSuccess) {
+@@ -964,6 +1022,606 @@ ggml_backend_buffer_type_t ggml_backend_cuda_buffer_type(int device) {
+     return &ggml_backend_cuda_buffer_types[device];
+ }
+ 
++// Tiered device buffer: one contiguous device virtual range whose pages are backed partly by VRAM and
++// partly by pinned host memory (cuMemCreate with a host location), so kernels address it like any
++// device buffer. Used for the KV cache (llama_context_params.n_kv_vram_cells): the first vram_frac of
++// every K/V tensor (the early positions) stays in VRAM, positions past that live in system RAM and are
++// read over PCIe only once a sequence is that deep. Nothing in the attention kernels changes.
++//
++// Staging: each tiered buffer also gets a second virtual range that maps the same VRAM head pages and, in
++// place of each host run, a VRAM staging buffer shared by all tiered buffers (one per part: K, V). An
++// attention op whose K/V range reaches the host tail copies the used host rows into staging with the copy
++// engine and reads the all-VRAM alias (ggml_cuda_tier_stage). GGML_CUDA_KV_TIER_STAGING=0 disables it.
++#if defined(GGML_USE_VMM) && !defined(GGML_USE_HIP) && !defined(GGML_USE_MUSA)
++struct ggml_cuda_tier_entry {
++    CUdeviceptr va, va2;
++    size_t      total;
++    std::vector<std::pair<size_t, size_t>> host_runs; // (offset, length) of the host-backed runs
++};
++static std::mutex                        g_tier_mutex;
++static std::vector<ggml_cuda_tier_entry> g_tier_entries;
++
++static void ggml_cuda_tier_register(CUdeviceptr va, CUdeviceptr va2, size_t total, const std::vector<std::pair<size_t, size_t>> & host_runs) {
++    std::lock_guard<std::mutex> lock(g_tier_mutex);
++    g_tier_entries.push_back({ va, va2, total, host_runs });
++}
++
++static void ggml_cuda_tier_unregister(CUdeviceptr va) {
++    std::lock_guard<std::mutex> lock(g_tier_mutex);
++    for (size_t i = 0; i < g_tier_entries.size(); ++i) {
++        if (g_tier_entries[i].va == va) {
++            g_tier_entries.erase(g_tier_entries.begin() + i);
++            return;
++        }
++    }
++}
++
++// VRAM staging buffers shared by the tiered buffers of one KV cache: slot i backs the i-th host run (K tail, V
++// tail). The layers of a cache run one after another on one stream, so they can share them; another cache (the MTP
++// draft context's) runs on its own stream and can overlap with this one's work, so it gets its own. The cache is
++// the "kv<ptr>" part of the buffer type tag ("kv%p_l%u", llama-kv-cache.cpp). Created at the first request and kept
++// for the life of the process; a later, longer run gets no alias.
++static std::string ggml_cuda_tier_staging_key(const std::string & name) {
++    const size_t a = name.find("_tier_");
++    if (a == std::string::npos) {
++        return name;
++    }
++    const size_t b = name.find("_l", a + 6);
++    return name.substr(a + 6, b == std::string::npos ? std::string::npos : b - (a + 6));
++}
++
++static bool ggml_cuda_tier_staging_handle(int physical, const std::string & key, int slot, size_t len, CUmemGenericAllocationHandle * out) {
++    static std::mutex m;
++    static std::map<std::pair<std::string, int>, std::pair<CUmemGenericAllocationHandle, size_t>> handles;
++    std::lock_guard<std::mutex> lock(m);
++    auto it = handles.find({ key, slot });
++    if (it == handles.end()) {
++        CUmemAllocationProp pd = {};
++        pd.type          = CU_MEM_ALLOCATION_TYPE_PINNED;
++        pd.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
++        pd.location.id   = physical;
++        CUmemGenericAllocationHandle h;
++        if (cuMemCreate(&h, len, &pd, 0) != CUDA_SUCCESS) {
++            return false;
++        }
++        GGML_LOG_INFO("%s: staging buffer %s/%d: %.2f MiB VRAM\n", __func__, key.c_str(), slot, len/1048576.0);
++        it = handles.emplace(std::make_pair(key, slot), std::make_pair(h, len)).first;
++    }
++    if (it->second.second < len) {
++        return false;
++    }
++    *out = it->second.first;
++    return true;
++}
++
++// For a tensor range [ptr, ptr + nbytes) inside a tiered buffer with a staging alias: copy its host-backed
++// bytes into the staging buffers (stream-ordered) and return the same range in the alias, whose pages are
++// all VRAM. nullptr when ptr is not in such a buffer or no byte of the range is host-backed.
++void * ggml_cuda_tier_stage(const void * ptr, size_t nbytes, cudaStream_t stream) {
++    const CUdeviceptr p = (CUdeviceptr) ptr;
++    const ggml_cuda_tier_entry * e = nullptr;
++    {
++        std::lock_guard<std::mutex> lock(g_tier_mutex);
++        for (auto & it : g_tier_entries) {
++            if (p >= it.va && p < it.va + it.total) {
++                e = &it;
++                break;
++            }
++        }
++    }
++    if (!e) {
++        return nullptr;
++    }
++    const size_t lo = p - e->va, hi = std::min(e->total, lo + nbytes);
++    bool any = false;
++    for (auto & hr : e->host_runs) {
++        const size_t a = std::max(lo, hr.first), b = std::min(hi, hr.first + hr.second);
++        if (a < b) {
++            CUDA_CHECK(cudaMemcpyAsync((void *) (e->va2 + a), (const void *) (e->va + a), b - a, cudaMemcpyDeviceToDevice, stream));
++            any = true;
++        }
++    }
++    return any ? (void *) (e->va2 + lo) : nullptr;
++}
++
++static ggml_backend_buffer_t ggml_backend_cuda_tier_alloc(ggml_backend_buffer_type_t buft, size_t size) {
++    ggml_backend_cuda_buffer_type_context * bctx = (ggml_backend_cuda_buffer_type_context *) buft->context;
++    const int device   = bctx->device;
++    const int physical = ggml_cuda_get_physical_device(device);
++
++    CUmemAllocationProp pd = {};
++    pd.type          = CU_MEM_ALLOCATION_TYPE_PINNED;
++    pd.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
++    pd.location.id   = physical;
++
++    CUmemAllocationProp ph = {};
++    ph.type          = CU_MEM_ALLOCATION_TYPE_PINNED;
++    ph.location.type = CU_MEM_LOCATION_TYPE_HOST;
++    ph.location.id   = 0;
++
++    size_t gd = 0, gh = 0;
++    CU_CHECK(cuMemGetAllocationGranularity(&gd, &pd, CU_MEM_ALLOC_GRANULARITY_MINIMUM));
++    if (cuMemGetAllocationGranularity(&gh, &ph, CU_MEM_ALLOC_GRANULARITY_MINIMUM) != CUDA_SUCCESS || gh == 0) {
++        gh = gd;
++    }
++    const size_t gran  = std::max(gd, gh);
++    const size_t total = GGML_PAD(size, gran);
++    const int    parts = std::max(1, bctx->n_parts);
++    const size_t part  = size / parts;
++
++    // page p is VRAM when its start lies in the head of its part
++    const size_t n_pages = total / gran;
++    // GGML_CUDA_KV_TIER_STAGING_FRAC=f: only the first f x part bytes of each host tail get a staging buffer (see the
++    // staging alias below); the rest of the tail is its own allocation, mapped in place in the alias. Unset: whole tail.
++    static const double stage_frac = [] {
++        const char * e = getenv("GGML_CUDA_KV_TIER_STAGING_FRAC");
++        return e ? std::max(0.0, atof(e)) : 2.0;
++    }();
++    std::vector<bool> in_vram(n_pages);
++    std::vector<bool> staged(n_pages);
++    size_t n_vram = 0;
++    for (size_t p = 0; p < n_pages; ++p) {
++        const size_t off  = p * gran;
++        const size_t ip   = std::min<size_t>(off / std::max<size_t>(part, 1), parts - 1);
++        const size_t head = (size_t) (bctx->vram_frac * part);
++        in_vram[p] = off - ip*part < head;
++        staged[p]  = !in_vram[p] && (double) (off - ip*part - head) < stage_frac * (double) part;
++        n_vram += in_vram[p];
++    }
++
++    CUdeviceptr va = 0;
++    CUresult r = cuMemAddressReserve(&va, total, gran, 0, 0);
++    if (r != CUDA_SUCCESS) {
++        GGML_LOG_ERROR("%s: cuMemAddressReserve(%.1f MiB) failed: %d\n", __func__, total/1048576.0, (int) r);
++        return nullptr;
++    }
++
++    struct run { CUdeviceptr ptr; size_t len; CUmemGenericAllocationHandle h; bool staged; };
++    std::vector<run> runs;
++    auto undo = [runs_p = &runs, va, total]() {
++        for (auto & rr : *runs_p) {
++            cuMemUnmap(rr.ptr, rr.len);
++            cuMemRelease(rr.h);
++        }
++        cuMemAddressFree(va, total);
++    };
++
++    for (size_t p = 0; p < n_pages; ) {
++        size_t q = p;
++        while (q < n_pages && in_vram[q] == in_vram[p] && staged[q] == staged[p]) {
++            ++q;
++        }
++        const size_t len = (q - p) * gran;
++        CUmemGenericAllocationHandle h;
++        r = cuMemCreate(&h, len, in_vram[p] ? &pd : &ph, 0);
++        if (r != CUDA_SUCCESS) {
++            const char * es = nullptr; cuGetErrorString(r, &es);
++            GGML_LOG_ERROR("%s: cuMemCreate(%s, %.1f MiB) failed: %s\n", __func__, in_vram[p] ? "vram" : "host", len/1048576.0, es ? es : "?");
++            undo();
++            return nullptr;
++        }
++        r = cuMemMap(va + p*gran, len, 0, h, 0);
++        if (r != CUDA_SUCCESS) {
++            cuMemRelease(h);
++            GGML_LOG_ERROR("%s: cuMemMap failed: %d\n", __func__, (int) r);
++            undo();
++            return nullptr;
++        }
++        runs.push_back({ va + p*gran, len, h, (bool) staged[p] });
++        p = q;
++    }
++
++    CUmemAccessDesc ad = {};
++    ad.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
++    ad.location.id   = physical;
++    ad.flags         = CU_MEM_ACCESS_FLAGS_PROT_READWRITE;
++    r = cuMemSetAccess(va, total, &ad, 1);
++    if (r != CUDA_SUCCESS) {
++        GGML_LOG_ERROR("%s: cuMemSetAccess failed: %d\n", __func__, (int) r);
++        undo();
++        return nullptr;
++    }
++
++    GGML_LOG_INFO("%s: %s %.2f MiB: %.2f MiB VRAM + %.2f MiB host (%zu runs, %d parts)\n", __func__, bctx->name.c_str(),
++        size/1048576.0, n_vram*gran/1048576.0, (n_pages - n_vram)*gran/1048576.0, runs.size(), parts);
++
++    // staging alias (see the comment above ggml_cuda_tier_entry)
++    CUdeviceptr va2 = 0;
++    std::vector<std::pair<size_t, size_t>> host_runs;
++    {
++        static const bool staging = [] { const char * e = getenv("GGML_CUDA_KV_TIER_STAGING"); return !e || atoi(e) != 0; }();
++        if (staging && cuMemAddressReserve(&va2, total, gran, 0, 0) == CUDA_SUCCESS) {
++            bool ok = true;
++            int  ih = 0;
++            std::vector<CUdeviceptr> mapped;
++            for (auto & rr : runs) {
++                const size_t off = rr.ptr - va;
++                CUmemGenericAllocationHandle h = rr.h;
++                if (rr.staged) {
++                    CUmemGenericAllocationHandle bh;
++                    if (!ggml_cuda_tier_staging_handle(physical, ggml_cuda_tier_staging_key(bctx->name), ih++, rr.len, &bh)) {
++                        ok = false;
++                        break;
++                    }
++                    h = bh;
++                    host_runs.push_back({ off, rr.len });
++                }
++                if (cuMemMap(va2 + off, rr.len, 0, h, 0) != CUDA_SUCCESS) {
++                    ok = false;
++                    break;
++                }
++                mapped.push_back(va2 + off);
++            }
++            ok = ok && cuMemSetAccess(va2, total, &ad, 1) == CUDA_SUCCESS;
++            if (!ok) {
++                for (size_t i = 0; i < mapped.size(); ++i) {
++                    cuMemUnmap(mapped[i], runs[i].len);
++                }
++                cuMemAddressFree(va2, total);
++                va2 = 0;
++                host_runs.clear();
++                GGML_LOG_WARN("%s: no staging alias for %s: its host tail is read over PCIe in place\n", __func__, bctx->name.c_str());
++            } else {
++                ggml_cuda_tier_register(va, va2, total, host_runs);
++            }
++        }
++    }
++
++    ggml_backend_cuda_buffer_context * ctx = new ggml_backend_cuda_buffer_context(device, (void *) va);
++    ctx->release = [runs, va, va2, total, device]() {
++        ggml_cuda_set_device(device);
++        cudaDeviceSynchronize();
++        if (va2) {
++            ggml_cuda_tier_unregister(va);
++            for (auto & rr : runs) {
++                cuMemUnmap(va2 + (rr.ptr - va), rr.len);
++            }
++            cuMemAddressFree(va2, total);
++        }
++        for (auto & rr : runs) {
++            cuMemUnmap(rr.ptr, rr.len);
++            cuMemRelease(rr.h);
++        }
++        cuMemAddressFree(va, total);
++    };
++    return ggml_backend_buffer_init(buft, ggml_backend_cuda_buffer_interface, ctx, size);
++}
++#else
++void * ggml_cuda_tier_stage(const void * ptr, size_t nbytes, cudaStream_t stream) {
++    GGML_UNUSED(ptr); GGML_UNUSED(nbytes); GGML_UNUSED(stream);
++    return nullptr;
++}
++
++static ggml_backend_buffer_t ggml_backend_cuda_tier_alloc(ggml_backend_buffer_type_t buft, size_t size) {
++    GGML_UNUSED(size);
++    GGML_LOG_ERROR("%s: tiered buffers need CUDA VMM (build without GGML_CUDA_NO_VMM)\n", __func__);
++    GGML_UNUSED(buft);
++    return nullptr;
++}
++#endif
++
++// Tiered KV, prefill side. Graphs that run without CUDA graphs (prefill micro-batches) get two changes:
++//  1. set_rows nodes that write into a tiered buffer write through its all-VRAM alias, so the new rows of the host
++//     part land in the VRAM staging buffer; a write-back kernel then copies them to their host pages as whole
++//     16-byte stores. The quantizing set_rows kernels write each row in small pieces, which over PCIe cost a fixed
++//     ~0.68 ms per prefill token once the micro-batch is past the VRAM line (RTX 4070, 512-token micro-batches).
++//  2. The host rows of attention op k are copied into staging on a second stream while the main stream computes the
++//     layers between op k-1 and op k (staging is shared by all layers, so the copy starts when op k-1 has read it).
++//     The main stream waits for that copy before the layer's set_rows writes staging, and op k reads the alias.
++// Both read and write the same bytes as the synchronous path. GGML_CUDA_KV_TIER_REDIRECT=0 and
++// GGML_CUDA_KV_TIER_PREFETCH=0 disable them. Anything unexpected (an attention op out of graph order) stops the
++// prefetch for the rest of the graph, and the remaining attention ops take the synchronous copy.
++#if defined(GGML_USE_VMM) && !defined(GGML_USE_HIP) && !defined(GGML_USE_MUSA)
++static const ggml_cuda_tier_entry * ggml_cuda_tier_find(const void * ptr) {
++    const CUdeviceptr p = (CUdeviceptr) ptr;
++    std::lock_guard<std::mutex> lock(g_tier_mutex);
++    for (auto & it : g_tier_entries) {
++        if (p >= it.va && p < it.va + it.total) {
++            return &it;
++        }
++    }
++    return nullptr;
++}
++
++// first host run of e that intersects [lo, hi) (offsets in the tiered buffer), as [a, b)
++static bool ggml_cuda_tier_host_part(const ggml_cuda_tier_entry * e, size_t lo, size_t hi, size_t * a, size_t * b) {
++    for (auto & hr : e->host_runs) {
++        const size_t x = std::max(lo, hr.first), y = std::min(hi, hr.first + hr.second);
++        if (x < y) {
++            *a = x;
++            *b = y;
++            return true;
++        }
++    }
++    return false;
++}
++
++static bool ggml_cuda_tier_reaches_host(const ggml_tensor * t) {
++    const ggml_cuda_tier_entry * e = ggml_cuda_tier_find(t->data);
++    if (!e) {
++        return false;
++    }
++    const size_t lo = (CUdeviceptr) t->data - e->va;
++    size_t a, b;
++    return ggml_cuda_tier_host_part(e, lo, std::min(e->total, lo + ggml_nbytes(t)), &a, &b);
++}
++
++// A graph whose attention reads the host tail of a tiered KV cache runs without a CUDA graph: the prefetch pipeline
++// (ggml_cuda_tier_graph_begin: the copy engine stages the next attention op's host rows while this one computes) runs
++// only on that path, and it beats the CUDA graph at depth (RTX 4070, 262k window, 192k deep, lookup off: decode
++// 19.8 -> 25.0 tok/s). Graphs below the tier line keep their CUDA graphs. GGML_CUDA_KV_TIER_GRAPHS=1: old behaviour.
++static bool ggml_cuda_tier_graph_wants_pipeline(const ggml_cgraph * cgraph) {
++    static const bool keep_graphs = [] {
++        const char * v = getenv("GGML_CUDA_KV_TIER_GRAPHS");
++        return v != nullptr && atoi(v) != 0;
++    }();
++    static const bool prefetch_on = [] {
++        const char * v = getenv("GGML_CUDA_KV_TIER_PREFETCH");
++        return v == nullptr || atoi(v) != 0;
++    }();
++    if (keep_graphs || !prefetch_on) {
++        return false;
++    }
++    {
++        std::lock_guard<std::mutex> lock(g_tier_mutex);
++        if (g_tier_entries.empty()) {
++            return false;
++        }
++    }
++    for (int i = 0; i < cgraph->n_nodes; ++i) {
++        const ggml_tensor * n = cgraph->nodes[i];
++        if (n->op == GGML_OP_FLASH_ATTN_EXT && n->src[1] && n->src[2] && n->src[1] != n->src[2] &&
++                (ggml_cuda_tier_reaches_host(n->src[1]) || ggml_cuda_tier_reaches_host(n->src[2]))) {
++            return true;
++        }
++    }
++    return false;
++}
++
++// one block per index: copy row idx[r] from the alias (VRAM staging) to the original range (host pages) when the
++// row touches the host run [h_lo, h_hi) (offsets from the tensor base); rows in VRAM are the same pages in both
++template <typename idx_t>
++static __global__ void k_tier_write_back(const char * __restrict__ alias, char * __restrict__ orig, const idx_t * __restrict__ idx,
++        const size_t row_stride, const size_t row_bytes, const size_t h_lo, const size_t h_hi, const int vec) {
++    const size_t off = (size_t) idx[blockIdx.x]*row_stride;
++    if (off + row_bytes <= h_lo || off >= h_hi) {
++        return;
++    }
++    if (vec == 16) {
++        const int4 * s = (const int4 *) (alias + off);
++        int4       * d = (int4       *) (orig  + off);
++        for (size_t k = threadIdx.x; k < row_bytes/16; k += blockDim.x) {
++            d[k] = s[k];
++        }
++    } else if (vec == 4) {
++        const int * s = (const int *) (alias + off);
++        int       * d = (int       *) (orig  + off);
++        for (size_t k = threadIdx.x; k < row_bytes/4; k += blockDim.x) {
++            d[k] = s[k];
++        }
++    } else {
++        for (size_t k = threadIdx.x; k < row_bytes; k += blockDim.x) {
++            orig[off + k] = alias[off + k];
++        }
++    }
++}
++
++// copy the host-backed bytes of [lo, hi) (offsets in the tiered buffer) into the staging alias
++static void ggml_cuda_tier_copy_range(const ggml_cuda_tier_entry * e, size_t lo, size_t hi, cudaStream_t stream) {
++    for (auto & hr : e->host_runs) {
++        const size_t a = std::max(lo, hr.first), b = std::min(hi, hr.first + hr.second);
++        if (a < b) {
++            CUDA_CHECK(cudaMemcpyAsync((void *) (e->va2 + a), (const void *) (e->va + a), b - a, cudaMemcpyDeviceToDevice, stream));
++        }
++    }
++}
++
++static void ggml_cuda_tier_wait(ggml_backend_cuda_context & ctx, ggml_cuda_tier_state & ts) {
++    if (ts.inflight) {
++        CUDA_CHECK(cudaStreamWaitEvent(ctx.stream(), ts.copied, 0));
++        ts.inflight = false;
++    }
++}
++
++static void ggml_cuda_tier_prefetch(ggml_backend_cuda_context & ctx, ggml_cuda_tier_state & ts, const ggml_tensor * fa) {
++    cudaStream_t side = ctx.stream(ctx.device, GGML_CUDA_MAX_STREAMS - 1);
++    CUDA_CHECK(cudaStreamWaitEvent(side, ts.read, 0));
++    for (int s = 1; s <= 2; ++s) {
++        const ggml_tensor * t = fa->src[s];
++        const ggml_cuda_tier_entry * e = ggml_cuda_tier_find(t->data);
++        if (e) {
++            const size_t lo = (CUdeviceptr) t->data - e->va;
++            ggml_cuda_tier_copy_range(e, lo, std::min(e->total, lo + ggml_nbytes(t)), side);
++        }
++    }
++    CUDA_CHECK(cudaEventRecord(ts.copied, side));
++    ts.inflight = true;
++}
++
++static void ggml_cuda_tier_graph_begin(ggml_backend_cuda_context & ctx, ggml_cuda_tier_state & ts, const ggml_cgraph * cgraph, bool enable) {
++    ts.rd.clear();
++    ts.rd_next = 0;
++    ts.fa.clear();
++    ts.next = 0;
++    static const bool redirect_on = [] {
++        const char * v = getenv("GGML_CUDA_KV_TIER_REDIRECT");
++        return v == nullptr || atoi(v) != 0;
++    }();
++    static const bool prefetch_on = [] {
++        const char * v = getenv("GGML_CUDA_KV_TIER_PREFETCH");
++        return v == nullptr || atoi(v) != 0;
++    }();
++    if (!enable || (!redirect_on && !prefetch_on)) {
++        return;
++    }
++    {
++        std::lock_guard<std::mutex> lock(g_tier_mutex);
++        if (g_tier_entries.empty()) {
++            return;
++        }
++    }
++    // every set_rows into a tiered buffer must go through the alias when the prefetch runs: a row written in place
++    // after the prefetch read its host page would be stale in staging
++    bool all_redirected = true;
++    for (int i = 0; i < cgraph->n_nodes; ++i) {
++        ggml_tensor * n = cgraph->nodes[i];
++        if (n->op == GGML_OP_SET_ROWS && n->data) {
++            const ggml_cuda_tier_entry * e = ggml_cuda_tier_find(n->data);
++            const size_t base = e ? (CUdeviceptr) n->data - e->va : 0;
++            size_t a, b;
++            if (e && ggml_cuda_tier_host_part(e, base, std::min(e->total, base + ggml_nbytes(n)), &a, &b)) {
++                const ggml_tensor * idx = n->src[1];
++                const bool flat = idx && (idx->type == GGML_TYPE_I64 || idx->type == GGML_TYPE_I32) && ggml_is_contiguous(idx) &&
++                    idx->ne[1] == 1 && idx->ne[2] == 1 && idx->ne[3] == 1 && n->ne[2] == 1 && n->ne[3] == 1;
++                if (redirect_on && flat) {
++                    ts.rd.push_back({ i, n, n->data, e, base, a - base, b - base });
++                } else {
++                    all_redirected = false;
++                }
++            }
++        }
++        if (prefetch_on && n->op == GGML_OP_FLASH_ATTN_EXT && n->src[1] && n->src[2] && n->src[1] != n->src[2] &&
++                (ggml_cuda_tier_reaches_host(n->src[1]) || ggml_cuda_tier_reaches_host(n->src[2]))) {
++            ts.fa.push_back(n);
++        }
++    }
++    if (!all_redirected) {
++        ts.fa.clear();
++    }
++    for (auto & r : ts.rd) {
++        const ggml_cuda_tier_entry * e = (const ggml_cuda_tier_entry *) r.entry;
++        r.node->data = (void *) (e->va2 + r.base);
++    }
++    if (!ts.fa.empty()) {
++        if (ts.read == nullptr) {
++            CUDA_CHECK(cudaEventCreateWithFlags(&ts.read,   cudaEventDisableTiming));
++            CUDA_CHECK(cudaEventCreateWithFlags(&ts.copied, cudaEventDisableTiming));
++        }
++        // work already queued on the main stream can still read the staging buffers
++        CUDA_CHECK(cudaEventRecord(ts.read, ctx.stream()));
++        ggml_cuda_tier_prefetch(ctx, ts, ts.fa[0]);
++    }
++}
++
++// before graph node i: write back the redirected set_rows nodes computed so far, and let the main stream wait for
++// the prefetch when a redirected set_rows (or the fused group that ends in it) comes within the next nodes
++static void ggml_cuda_tier_step(ggml_backend_cuda_context & ctx, ggml_cuda_tier_state & ts, int i) {
++    while (ts.rd_next < ts.rd.size() && ts.rd[ts.rd_next].at < i) {
++        ggml_cuda_tier_redirect & r = ts.rd[ts.rd_next++];
++        const ggml_cuda_tier_entry * e = (const ggml_cuda_tier_entry *) r.entry;
++        const ggml_tensor * n   = r.node;
++        const ggml_tensor * idx = n->src[1];
++        const char * alias = (const char *) (e->va2 + r.base);
++        char       * orig  = (char *) r.data;
++        const size_t row_bytes = ggml_row_size(n->type, n->ne[0]);
++        const size_t align = (size_t) r.base | (size_t) n->nb[1] | row_bytes;
++        const int    vec = align % 16 == 0 ? 16 : align % 4 == 0 ? 4 : 1;
++        if (idx->ne[0] == 0) {
++            // nothing written
++        } else if (idx->type == GGML_TYPE_I64) {
++            k_tier_write_back<<<(unsigned) idx->ne[0], 128, 0, ctx.stream()>>>(alias, orig, (const int64_t *) idx->data,
++                n->nb[1], row_bytes, r.h_lo, r.h_hi, vec);
++        } else {
++            k_tier_write_back<<<(unsigned) idx->ne[0], 128, 0, ctx.stream()>>>(alias, orig, (const int32_t *) idx->data,
++                n->nb[1], row_bytes, r.h_lo, r.h_hi, vec);
++        }
++        CUDA_CHECK(cudaGetLastError());
++        r.node->data = r.data;
++    }
++    if (ts.inflight && ts.rd_next < ts.rd.size() && ts.rd[ts.rd_next].at <= i + 4) {
++        ggml_cuda_tier_wait(ctx, ts);
++    }
++}
++
++static void ggml_cuda_tier_graph_end(ggml_backend_cuda_context & ctx, ggml_cuda_tier_state & ts, int n_nodes) {
++    ggml_cuda_tier_step(ctx, ts, n_nodes);
++    ggml_cuda_tier_wait(ctx, ts);
++    ts.rd.clear();
++    ts.rd_next = 0;
++    ts.fa.clear();
++    ts.next = 0;
++}
++
++// called by ggml_cuda_flash_attn_ext: true when this op is the next one of the prefetch pipeline (its K/V host rows
++// are in staging, the alias addresses are returned); false: the op takes the synchronous copy
++bool ggml_cuda_tier_fa_begin(ggml_backend_cuda_context & ctx, const ggml_tensor * dst, void ** K_alias, void ** V_alias) {
++    ggml_cuda_tier_state & ts = ggml_cuda_tier_state_of(ctx);
++    if (ts.next < ts.fa.size()) {
++        if (ts.fa[ts.next] == dst) {
++            ggml_cuda_tier_wait(ctx, ts);
++            for (int s = 1; s <= 2; ++s) {
++                const ggml_tensor * t = dst->src[s];
++                const ggml_cuda_tier_entry * e = ggml_cuda_tier_find(t->data);
++                *(s == 1 ? K_alias : V_alias) = e ? (void *) (e->va2 + ((CUdeviceptr) t->data - e->va)) : nullptr;
++            }
++            return true;
++        }
++        ts.next = ts.fa.size();
++    }
++    // a prefetch of a stopped pipeline must be done before the synchronous copy reuses the staging buffers
++    ggml_cuda_tier_wait(ctx, ts);
++    return false;
++}
++
++void ggml_cuda_tier_fa_end(ggml_backend_cuda_context & ctx) {
++    ggml_cuda_tier_state & ts = ggml_cuda_tier_state_of(ctx);
++    CUDA_CHECK(cudaEventRecord(ts.read, ctx.stream()));
++    if (++ts.next < ts.fa.size()) {
++        ggml_cuda_tier_prefetch(ctx, ts, ts.fa[ts.next]);
++    }
++}
++#else
++static bool ggml_cuda_tier_graph_wants_pipeline(const ggml_cgraph * cgraph) {
++    GGML_UNUSED(cgraph);
++    return false;
++}
++static void ggml_cuda_tier_graph_begin(ggml_backend_cuda_context & ctx, ggml_cuda_tier_state & ts, const ggml_cgraph * cgraph, bool enable) {
++    GGML_UNUSED(ctx); GGML_UNUSED(ts); GGML_UNUSED(cgraph); GGML_UNUSED(enable);
++}
++static void ggml_cuda_tier_step(ggml_backend_cuda_context & ctx, ggml_cuda_tier_state & ts, int i) {
++    GGML_UNUSED(ctx); GGML_UNUSED(ts); GGML_UNUSED(i);
++}
++static void ggml_cuda_tier_graph_end(ggml_backend_cuda_context & ctx, ggml_cuda_tier_state & ts, int n_nodes) {
++    GGML_UNUSED(ctx); GGML_UNUSED(ts); GGML_UNUSED(n_nodes);
++}
++bool ggml_cuda_tier_fa_begin(ggml_backend_cuda_context & ctx, const ggml_tensor * dst, void ** K_alias, void ** V_alias) {
++    GGML_UNUSED(ctx); GGML_UNUSED(dst); GGML_UNUSED(K_alias); GGML_UNUSED(V_alias);
++    return false;
++}
++void ggml_cuda_tier_fa_end(ggml_backend_cuda_context & ctx) {
++    GGML_UNUSED(ctx);
++}
++#endif
++
++// A device buffer type whose buffers keep vram_frac of each of n_parts equal parts in VRAM and the rest in
++// pinned host memory mapped into the same device range. `tag` makes the name unique so a caller can ask
++// for one buffer per tensor group. Returns nullptr when the device has no VMM.
++ggml_backend_buffer_type_t ggml_backend_cuda_tier_buffer_type(int device, double vram_frac, int n_parts, const char * tag) {
++    static std::mutex mutex;
++    std::lock_guard<std::mutex> lock(mutex);
++    static std::map<std::string, ggml_backend_buffer_type *> cache;
++
++    if (device < 0 || device >= ggml_backend_cuda_get_device_count() || !ggml_cuda_info().devices[device].vmm) {
++        return nullptr;
++    }
++    const std::string name = std::string(GGML_CUDA_NAME) + std::to_string(device) + "_tier_" + (tag ? tag : "") +
++        "_" + std::to_string((int) (vram_frac * 1e6)) + "_" + std::to_string(n_parts);
++    auto it = cache.find(name);
++    if (it != cache.end()) {
++        return it->second;
++    }
++    auto * ctx = new ggml_backend_cuda_buffer_type_context{device, name};
++    ctx->vram_frac = std::max(0.0, std::min(1.0, vram_frac));
++    ctx->n_parts   = std::max(1, n_parts);
++    auto * buft = new ggml_backend_buffer_type{
++        /* .iface    = */ ggml_backend_cuda_buffer_type_interface,
++        /* .device   = */ ggml_backend_reg_dev_get(ggml_backend_cuda_reg(), device),
++        /* .context  = */ ctx,
++    };
++    cache[name] = buft;
++    return buft;
++}
++
+ // Communication context for multi-GPU AllReduce during tensor parallelism.
+ //
+ // Created once per meta backend instance.  Resources for the selected mode
+@@ -2448,7 +3106,7 @@ static void ggml_backend_cuda_set_tensor_async(ggml_backend_t backend, ggml_tens
+     ggml_backend_cuda_context * cuda_ctx = (ggml_backend_cuda_context *) backend->context;
+     ggml_backend_buffer_t buf = tensor->view_src ? tensor->view_src->buffer : tensor->buffer;
+ 
+-    GGML_ASSERT(buf->buft == ggml_backend_cuda_buffer_type(cuda_ctx->device) && "unsupported buffer type");
++    GGML_ASSERT(ggml_backend_buft_is_cuda(buf->buft) && ((ggml_backend_cuda_buffer_type_context *) buf->buft->context)->device == cuda_ctx->device && "unsupported buffer type");
+ 
+     CUDA_CHECK(cudaMemcpyAsync((char *) tensor->data + offset, data, size, cudaMemcpyHostToDevice, cuda_ctx->stream()));
+ }
+@@ -2457,7 +3115,7 @@ static void ggml_backend_cuda_get_tensor_async(ggml_backend_t backend, const ggm
+     ggml_backend_cuda_context * cuda_ctx = (ggml_backend_cuda_context *) backend->context;
+     ggml_backend_buffer_t buf = tensor->view_src ? tensor->view_src->buffer : tensor->buffer;
+ 
+-    GGML_ASSERT(buf->buft == ggml_backend_cuda_buffer_type(cuda_ctx->device) && "unsupported buffer type");
++    GGML_ASSERT(ggml_backend_buft_is_cuda(buf->buft) && ((ggml_backend_cuda_buffer_type_context *) buf->buft->context)->device == cuda_ctx->device && "unsupported buffer type");
+ 
+     CUDA_CHECK(cudaMemcpyAsync(data, (const char *) tensor->data + offset, size, cudaMemcpyDeviceToHost, cuda_ctx->stream()));
+ }
+@@ -2467,7 +3125,7 @@ static void ggml_backend_cuda_set_tensor_2d_async(ggml_backend_t backend, struct
+     ggml_backend_cuda_context * cuda_ctx = (ggml_backend_cuda_context *) backend->context;
+     ggml_backend_buffer_t buf = tensor->view_src ? tensor->view_src->buffer : tensor->buffer;
+ 
+-    GGML_ASSERT(buf->buft == ggml_backend_cuda_buffer_type(cuda_ctx->device) && "unsupported buffer type");
++    GGML_ASSERT(ggml_backend_buft_is_cuda(buf->buft) && ((ggml_backend_cuda_buffer_type_context *) buf->buft->context)->device == cuda_ctx->device && "unsupported buffer type");
+ 
+     CUDA_CHECK(cudaMemcpy2DAsync(
+         (char *) tensor->data + offset, stride_tensor, data, stride_data, size, n_copies, cudaMemcpyHostToDevice, cuda_ctx->stream()));
+@@ -2478,7 +3136,7 @@ static void ggml_backend_cuda_get_tensor_2d_async(ggml_backend_t backend, const
+     ggml_backend_cuda_context * cuda_ctx = (ggml_backend_cuda_context *) backend->context;
+     ggml_backend_buffer_t buf = tensor->view_src ? tensor->view_src->buffer : tensor->buffer;
+ 
+-    GGML_ASSERT(buf->buft == ggml_backend_cuda_buffer_type(cuda_ctx->device) && "unsupported buffer type");
++    GGML_ASSERT(ggml_backend_buft_is_cuda(buf->buft) && ((ggml_backend_cuda_buffer_type_context *) buf->buft->context)->device == cuda_ctx->device && "unsupported buffer type");
+ 
+     CUDA_CHECK(cudaMemcpy2DAsync(
+         data, stride_data, (const char *) tensor->data + offset, stride_tensor, size, n_copies, cudaMemcpyDeviceToHost, cuda_ctx->stream()));
+@@ -2559,6 +3217,20 @@ static bool ggml_cuda_is_view_or_noop(const ggml_tensor * t) {
+ #ifdef USE_CUDA_GRAPH
+ static bool ggml_cuda_graph_check_compability(ggml_cgraph * cgraph) {
+ 
++    {
++        // the tier prefetch pipeline instead (see ggml_cuda_tier_graph_wants_pipeline); one log line per switch
++        static int last = -1;
++        const bool pipe = ggml_cuda_tier_graph_wants_pipeline(cgraph);
++        if ((int) pipe != last) {
++            last = (int) pipe;
++            GGML_LOG_WARN("%s: attention %s the host tail of the tiered KV cache: CUDA graphs %s\n", __func__,
++                pipe ? "reads" : "does not read", pipe ? "off, tier prefetch pipeline on" : "on");
++        }
++        if (pipe) {
++            return false;
++        }
++    }
++
+     bool use_cuda_graph = true;
+     // Loop over nodes in GGML graph to obtain info needed for CUDA graph
+ 
+@@ -4682,8 +5354,15 @@ static void ggml_cuda_graph_evaluate_and_capture(ggml_backend_cuda_context * cud
+             cuda_ctx->gdn_gathers().reset();
+             cuda_ctx->fwht_q8().reset();
+ 
++            ggml_cuda_tier_state & tier = ggml_cuda_tier_state_of(*cuda_ctx);
++            ggml_cuda_tier_graph_begin(*cuda_ctx, tier, cgraph, !use_cuda_graph && !should_launch_concurrent_events);
++            const bool tier_active = !tier.rd.empty() || !tier.fa.empty();
++
+             for (int i = 0; i < cgraph->n_nodes; i++) {
+                 ggml_tensor * node = cgraph->nodes[i];
++                if (tier_active) {
++                    ggml_cuda_tier_step(*cuda_ctx, tier, i);
++                }
+                 if (is_concurrent_event_active) {
+                     GGML_ASSERT(concurrent_event);
+ 
+@@ -4858,12 +5537,12 @@ static void ggml_cuda_graph_evaluate_and_capture(ggml_backend_cuda_context * cud
+                 // On integrated GPUs (APUs, e.g. RDNA3.5) the scheduler may place a
+                 // node's output on the host-visible buffer, which the compute path
+                 // handles. Allow that here, mirroring the src-tensor check below.
+-                assert(node->buffer->buft == ggml_backend_cuda_buffer_type(cuda_ctx->device) ||
++                assert(ggml_backend_buft_is_cuda(node->buffer->buft) ||
+                        (integrated && ggml_backend_buft_is_cuda_host(node->buffer->buft)));
+                 for (int j = 0; j < GGML_MAX_SRC; j++) {
+                     if (node->src[j] != nullptr) {
+                         assert(node->src[j]->buffer);
+-                        assert(node->src[j]->buffer->buft == ggml_backend_cuda_buffer_type(cuda_ctx->device) ||
++                        assert(ggml_backend_buft_is_cuda(node->src[j]->buffer->buft) ||
+                                (integrated && ggml_backend_buft_is_cuda_host(node->src[j]->buffer->buft)));
+                     }
+                 }
+@@ -4881,6 +5560,10 @@ static void ggml_cuda_graph_evaluate_and_capture(ggml_backend_cuda_context * cud
+                     try_launch_concurrent_event(node);
+                }
+             }
++
++            if (tier_active) {
++                ggml_cuda_tier_graph_end(*cuda_ctx, tier, cgraph->n_nodes);
++            }
+         }
+ 
+ #ifdef USE_CUDA_GRAPH
+@@ -6204,6 +6887,9 @@ static void * ggml_backend_cuda_reg_get_proc_address(ggml_backend_reg_t reg, con
+     if (strcmp(name, "ggml_backend_get_features") == 0) {
+         return (void *)ggml_backend_cuda_get_features;
+     }
++    if (strcmp(name, "ggml_backend_cuda_tier_buffer_type") == 0) {
++        return (void *)ggml_backend_cuda_tier_buffer_type;
++    }
+     return nullptr;
+ }
+ 
+diff --git a/include/llama.h b/include/llama.h
+index deb1e12..555ff32 100644
+--- a/include/llama.h
++++ b/include/llama.h
+@@ -396,6 +396,12 @@ extern "C" {
+         // see tools/kv-mean-center to generate this file and docs/kv-mean-center.md for details.
+         const char * path_kv_mean_center;
+ 
++        // tiered KV cache [EXPERIMENTAL]: keep only the first n_kv_vram_cells cells of each K/V tensor in
++        // device memory and the rest in pinned host memory mapped into the same device range (CUDA VMM), so
++        // the context can be larger than what fits in VRAM. Positions past the line are read over PCIe, only
++        // once a sequence is that deep. Output is identical to an all-device cache. 0 = all in device memory.
++        uint32_t n_kv_vram_cells;
++
+         // Abort callback
+         // if it returns true, execution of llama_decode() will be aborted
+         // currently works only with CPU execution
+diff --git a/src/llama-context.cpp b/src/llama-context.cpp
+index 3a37572..04fe39d 100644
+--- a/src/llama-context.cpp
++++ b/src/llama-context.cpp
+@@ -178,6 +178,7 @@ llama_context::llama_context(
+     const auto & hparams = model.hparams;
+ 
+     cparams.n_seq_max = std::max(1u, params.n_seq_max);
++    cparams.n_kv_vram_cells = params.n_kv_vram_cells;
+     if (cparams.n_seq_max > LLAMA_MAX_SEQ) {
+         throw std::runtime_error("n_seq_max must be <= " + std::to_string(LLAMA_MAX_SEQ));
+     }
+@@ -4074,6 +4075,7 @@ llama_context_params llama_context_default_params() {
+         /*.type_k                      =*/ GGML_TYPE_F16,
+         /*.type_v                      =*/ GGML_TYPE_F16,
+         /*.path_kv_mean_center         =*/ nullptr,
++        /*.n_kv_vram_cells             =*/ 0,
+         /*.abort_callback              =*/ nullptr,
+         /*.abort_callback_data         =*/ nullptr,
+         /*.embeddings                  =*/ false,
+diff --git a/src/llama-cparams.h b/src/llama-cparams.h
+index 2481496..1862dee 100644
+--- a/src/llama-cparams.h
++++ b/src/llama-cparams.h
+@@ -18,6 +18,7 @@ struct llama_cparams {
+     uint32_t n_rs_seq;        // number of recurrent-state snapshots per seq for rollback
+     uint32_t n_outputs_max;   // max outputs supported by the context
+     uint32_t n_outputs_max_per_seq;
++    uint32_t n_kv_vram_cells; // tiered KV: cells past this live in host memory (0 = all in device memory)
+     int32_t  n_threads;       // number of threads to use for generation
+     int32_t  n_threads_batch; // number of threads to use for batch processing
+ 
+diff --git a/src/llama-grammar.cpp b/src/llama-grammar.cpp
+index c685346..aa50647 100644
+--- a/src/llama-grammar.cpp
++++ b/src/llama-grammar.cpp
+@@ -1335,15 +1335,32 @@ struct llama_grammar * llama_grammar_clone_impl(const struct llama_grammar & gra
+     };
+ 
+     // redirect elements in stacks to point to new rules
++    // (each stack element is found by a binary search over the rules' start addresses: the search over every element
++    // of every rule cost O(stack elements x grammar size) per clone, and the server clones the sampler on every
++    // speculative step - with a grammar for 100 tool schemas that was about 10 ms per step)
++    std::vector<std::pair<const llama_grammar_element *, size_t>> starts;
++    starts.reserve(grammar.rules.size());
++    for (size_t ir0 = 0; ir0 < grammar.rules.size(); ir0++) {
++        if (!grammar.rules[ir0].empty()) {
++            starts.emplace_back(grammar.rules[ir0].data(), ir0);
++        }
++    }
++    std::sort(starts.begin(), starts.end(), [](const auto & a, const auto & b) { return std::less<const llama_grammar_element *>()(a.first, b.first); });
+     for (size_t is = 0; is < result->stacks.size(); is++) {
+         for (size_t ie = 0; ie < result->stacks[is].size(); ie++) {
+-            for (size_t ir0 = 0; ir0 < grammar.rules.size(); ir0++) {
+-                for (size_t ir1 = 0; ir1 < grammar.rules[ir0].size(); ir1++) {
+-                    if (grammar.stacks[is][ie] == &grammar.rules[ir0][ir1]) {
+-                        result->stacks[is][ie] =  &result->rules[ir0][ir1];
+-                    }
+-                }
++            const llama_grammar_element * pe = grammar.stacks[is][ie];
++            auto it = std::upper_bound(starts.begin(), starts.end(), pe,
++                [](const llama_grammar_element * v, const auto & e) { return std::less<const llama_grammar_element *>()(v, e.first); });
++            if (it == starts.begin()) {
++                continue;
++            }
++            --it;
++            const size_t ir0 = it->second;
++            const auto & rule = grammar.rules[ir0];
++            if (!std::less<const llama_grammar_element *>()(pe, rule.data() + rule.size())) {
++                continue;
+             }
++            result->stacks[is][ie] = &result->rules[ir0][(size_t) (pe - rule.data())];
+         }
+     }
+ 
+diff --git a/src/llama-kv-cache.cpp b/src/llama-kv-cache.cpp
+index 2ac1dc5..c1c9194 100644
+--- a/src/llama-kv-cache.cpp
++++ b/src/llama-kv-cache.cpp
+@@ -80,7 +80,8 @@ llama_kv_cache::llama_kv_cache(
+            llama_memory_t   mem_other,
+     const layer_filter_cb & filter,
+     const  layer_reuse_cb & reuse,
+-    const  layer_share_cb & share) :
++    const  layer_share_cb & share,
++                 uint32_t   n_kv_vram_cells) :
+     model(model), hparams(hparams), v_trans(v_trans),
+     n_seq_max(n_seq_max), n_stream(unified ? 1 : n_seq_max), n_pad(n_pad), n_swa(n_swa), swa_type(swa_type),
+     other(static_cast<llama_kv_cache *>(mem_other)),
+@@ -163,6 +164,12 @@ llama_kv_cache::llama_kv_cache(
+ 
+     const bool is_mla = hparams.is_mla();
+ 
++    const uint32_t tier_cells = GGML_PAD(n_kv_vram_cells, n_pad);
++    if (tier_cells > 0 && tier_cells < kv_size) {
++        LLAMA_LOG_INFO("%s: tiered KV: cells [0, %u) in VRAM, [%u, %u) in host memory\n",
++                __func__, tier_cells, tier_cells, kv_size);
++    }
++
+     for (uint32_t il = 0; il < n_layer; il++) {
+         if (!hparams.has_kv(il)) {
+             LLAMA_LOG_DEBUG("%s: layer %3d: does not have KV cache\n", __func__, il);
+@@ -219,6 +226,31 @@ llama_kv_cache::llama_kv_cache(
+             buft = ggml_backend_dev_buffer_type(dev);
+ 
+             dev_name = ggml_backend_dev_name(dev);
++
++            // n_kv_vram_cells = N: tiered KV. Cells [0, N) of this layer's K and V stay in VRAM, cells
++            // [N, kv_size) live in pinned system RAM mapped into the same device range (CUDA VMM), so the
++            // window can exceed VRAM and the extra positions cost PCIe reads only once a sequence reaches
++            // them. Kernels are unchanged and results are identical to an all-VRAM cache. Backends without
++            // ggml_backend_cuda_tier_buffer_type (or without VMM) keep the ordinary device buffer.
++            if (tier_cells > 0 && tier_cells < kv_size && n_stream == 1 && !is_mla &&
++                    n_embd_k_gqa == n_embd_v_gqa && type_k == type_v) {
++                using tier_fn_t = ggml_backend_buffer_type_t (*)(int, double, int, const char *);
++                ggml_backend_reg_t reg = ggml_backend_dev_backend_reg(dev);
++                auto * fn = reg ? (tier_fn_t) ggml_backend_reg_get_proc_address(reg, "ggml_backend_cuda_tier_buffer_type") : nullptr;
++                const char * dn = ggml_backend_dev_name(dev);
++                int dev_idx = -1;
++                if (dn && strncmp(dn, "CUDA", 4) == 0) {
++                    dev_idx = atoi(dn + 4);
++                }
++                if (fn && dev_idx >= 0) {
++                    char tag[32];
++                    snprintf(tag, sizeof(tag), "kv%p_l%u", (void *) this, il);
++                    ggml_backend_buffer_type_t tb = fn(dev_idx, (double) tier_cells / (double) kv_size, 2, tag);
++                    if (tb) {
++                        buft = tb;
++                    }
++                }
++            }
+         }
+ 
+         LLAMA_LOG_DEBUG("%s: layer %3d: dev = %s\n", __func__, il, dev_name);
+diff --git a/src/llama-kv-cache.h b/src/llama-kv-cache.h
+index 7f3d91b..f25a276 100644
+--- a/src/llama-kv-cache.h
++++ b/src/llama-kv-cache.h
+@@ -112,7 +112,8 @@ public:
+                llama_memory_t   mem_other,
+         const layer_filter_cb & filter,
+         const  layer_reuse_cb & reuse,
+-        const  layer_share_cb & share);
++        const  layer_share_cb & share,
++                     uint32_t   n_kv_vram_cells = 0); // tiered KV: cells past this live in host memory (0 = all VRAM)
+ 
+     ~llama_kv_cache() = default;
+ 
+diff --git a/src/llama-memory-hybrid.cpp b/src/llama-memory-hybrid.cpp
+index 42c7381..a0fe07e 100644
+--- a/src/llama-memory-hybrid.cpp
++++ b/src/llama-memory-hybrid.cpp
+@@ -29,7 +29,8 @@ llama_memory_hybrid::llama_memory_hybrid(
+                      bool   unified,
+                             /* layer filters */
+     const layer_filter_cb & filter_attn,
+-    const layer_filter_cb & filter_recr) :
++    const layer_filter_cb & filter_recr,
++                 uint32_t   n_kv_vram_cells) :
+     hparams(model.hparams),
+     mem_attn(new llama_kv_cache(
+         model,
+@@ -49,7 +50,8 @@ llama_memory_hybrid::llama_memory_hybrid(
+             [&](int32_t il) { return !hparams.is_recr(il); }
+             : filter_attn,
+         nullptr,
+-        nullptr
++        nullptr,
++        n_kv_vram_cells
+     )),
+     mem_recr(new llama_memory_recurrent(
+         model,
+diff --git a/src/llama-memory-hybrid.h b/src/llama-memory-hybrid.h
+index 484eafb..52ea297 100644
+--- a/src/llama-memory-hybrid.h
++++ b/src/llama-memory-hybrid.h
+@@ -39,7 +39,8 @@ public:
+                      bool   unified,
+                             /* layer filters */
+     const layer_filter_cb & filter_attn = nullptr,
+-    const layer_filter_cb & filter_recr = nullptr);
++    const layer_filter_cb & filter_recr = nullptr,
++                 uint32_t   n_kv_vram_cells = 0); // tiered KV for the attention layers (see llama_context_params)
+ 
+     ~llama_memory_hybrid() = default;
+ 
+diff --git a/src/llama-model.cpp b/src/llama-model.cpp
+index a31e031..f242150 100644
+--- a/src/llama-model.cpp
++++ b/src/llama-model.cpp
+@@ -2832,7 +2832,8 @@ llama_memory_i * llama_model::create_memory(const llama_memory_params & params,
+                             /* offload           */ cparams.offload_kqv,
+                             /* unified           */ cparams.kv_unified,
+                             /* filter_attn       */ std::move(filter_attn),
+-                            /* filter_recr       */ std::move(filter_recr));
++                            /* filter_recr       */ std::move(filter_recr),
++                            /* n_kv_vram_cells   */ cparams.n_kv_vram_cells);
+                     }
+                 } else {
+                     llama_kv_cache::layer_filter_cb filter = nullptr;
+@@ -2934,7 +2935,8 @@ llama_memory_i * llama_model::create_memory(const llama_memory_params & params,
+                                 nullptr,
+                                 filter,
+                                 nullptr,
+-                                nullptr);
++                                nullptr,
++                                cparams.n_kv_vram_cells);
+                     }
+                 }
+             }
+diff --git a/tools/server/server-context.cpp b/tools/server/server-context.cpp
+index d02038c..e40e313 100644
+--- a/tools/server/server-context.cpp
++++ b/tools/server/server-context.cpp
+@@ -3688,6 +3688,24 @@ private:
+             }
+         }
+ 
++        // Remove old MTP draft rows. Keep absolute positions and the target cache.
++        const bool spec_mtp = std::find(params_base.speculative.types.begin(),
++                                      params_base.speculative.types.end(),
++                                      COMMON_SPECULATIVE_TYPE_DRAFT_MTP) != params_base.speculative.types.end();
++        if (spec_process && spec_mtp && ctx_dft && batch_view.n_tokens > 0 &&
++                params_base.speculative.draft.n_window > 0) {
++            llama_pos pos_min = batch_view.pos[0];
++            for (int i = 1; i < batch_view.n_tokens; ++i) {
++                pos_min = std::min(pos_min, batch_view.pos[i]);
++            }
++            const llama_pos hi = pos_min - params_base.speculative.draft.n_window;
++            if (hi > 0) {
++                for (auto & slot : slots) {
++                    llama_memory_seq_rm(llama_get_memory(ctx_dft), slot.id, 0, hi);
++                }
++            }
++        }
++
+         if (spec_process) {
+             bool ok = true;
+             queue_tasks.yield_to_queue([&]() {

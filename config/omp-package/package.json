@@ -1,0 +1,8 @@
+{
+  "name": "localmodel-omp-runtime",
+  "private": true,
+  "dependencies": {
+    "@oh-my-pi/pi-coding-agent": "18.8.6",
+    "@oh-my-pi/pi-natives-linux-x64": "18.8.6"
+  }
+}

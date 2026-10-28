@@ -1,0 +1,11 @@
+{
+  "events": [
+    {
+      "start_utc": "2026-10-19T16:45:00+00:00",
+      "end_utc": null,
+      "kind": "non-GPU machine load",
+      "source": "Matti reported this at 19:21 CEST on 2026-10-19.",
+      "note": "The reported start time is approximate. The end time is not yet known. Explicit inspection of /run/user/1000/pueue_tritlo.socket at 2026-10-19T17:27:14.830497+00:00 found no running jobs. Seven CPU jobs ran between 19:02:59 and 19:19:42 CEST. The separate data-directory socket contains a stale queue. Queue records do not exclude other CPU or Windows activity. CPU and RAM load can affect prefill, tools, compaction, and workflow wall time. Retain GPU decode measurements with this qualification. See results/native-long-context-20261019/pueue-load-snapshot.json."
+    }
+  ]
+}
