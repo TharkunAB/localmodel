@@ -46,7 +46,7 @@ import urllib.request
 import uuid
 from typing import Any
 
-VERSION = '2026-10-29-deepseek-official-strata-3'
+VERSION = '2026-10-29-deepseek-official-strata-4'
 GIB, MIB = 1024**3, 1024**2
 SOURCE = 'https://github.com/ggml-org/llama.cpp.git'
 STABLE = '620d2225cc436ab0b001e3200e590e3b286ef9ab'  # released v0.7.0
@@ -3129,7 +3129,7 @@ def gsq_config(args, mode: str, chosen: list[GPU]) -> dict[str, Any]:
 
 
 # Official Strata pins and bootstrap. Serving never updates these artifacts.
-STRATA_PINS = {'source_revision': '46c152a1310f77cd2f0ce2c7cd213962df14fe83', 'source_archive_url': 'https://api.github.com/repos/Niko1221/Strata/tarball/46c152a1310f77cd2f0ce2c7cd213962df14fe83', 'source_archive_sha256': 'fae7217a8c4239c3dc7e1cae5a6e813b2b87d556840d55579e5663371d566d2f', 'source_receipt_sha256': '2b517964fba0c633ba61dcfde1d8f12730fd83b072bcb18408b5d2c9da9feb73', 'control_version': '0.1.53', 'runtime': {'release_tag': 'v0.2.7', 'version': '0.1.52', 'archive_url': 'https://github.com/Niko1221/Strata/releases/download/v0.2.7/strata-dsv41-0.1.52-linux-x86_64-cuda-cuda13.tar.gz', 'archive_sha256': 'c1b3d0ca2a575655a395ab4a2d0afc5cd731d0e5d26fbcdb955f2359dbbc1a57', 'archive_size': 444709965, 'feed_url': 'https://github.com/Niko1221/Strata/releases/download/v0.2.7/strata-feed.json', 'manifest_sha256': 'dda8e2470c8cb96bd93b2f19fd0d23d24f7e328fea820c692e5ab7829a55db1a', 'binary_sha256': '5792fd39d3ea5ad2fd82fe4e88b5a4afd2edb15c051e87d05e1a01f17679692c', 'python_packages': ['jinja2==3.1.6', 'markupsafe==3.0.3', 'regex==2026.9.10']}}
+STRATA_PINS = {'source_revision': '46c152a1310f77cd2f0ce2c7cd213962df14fe83', 'source_archive_url': 'https://api.github.com/repos/Niko1221/Strata/tarball/46c152a1310f77cd2f0ce2c7cd213962df14fe83', 'source_archive_sha256': 'fae7217a8c4239c3dc7e1cae5a6e813b2b87d556840d55579e5663371d566d2f', 'source_receipt_sha256': '2b517964fba0c633ba61dcfde1d8f12730fd83b072bcb18408b5d2c9da9feb73', 'control_version': '0.1.53', 'runtime': {'release_tag': 'v0.2.7', 'version': '0.1.52', 'archive_url': 'https://github.com/Niko1221/Strata/releases/download/v0.2.7/strata-dsv41-0.1.52-linux-x86_64-cuda-cuda13.tar.gz', 'archive_sha256': 'c1b3d0ca2a575655a395ab4a2d0afc5cd731d0e5d26fbcdb955f2359dbbc1a57', 'archive_size': 444709965, 'feed_url': 'https://github.com/Niko1221/Strata/releases/download/v0.2.7/strata-feed.json', 'manifest_sha256': 'dda8e2470c8cb96bd93b2f19fd0d23d24f7e328fea820c692e5ab7829a55db1a', 'binary_sha256': '5792fd39d3ea5ad2fd82fe4e88b5a4afd2edb15c051e87d05e1a01f17679692c', 'python_packages': ['jinja2==3.1.6', 'markupsafe==3.0.3', 'regex==2026.9.10', 'psutil==7.2.2']}}
 STRATA_INSTALL_CODE = r'''
 import argparse
 import hashlib

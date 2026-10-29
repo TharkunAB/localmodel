@@ -13,7 +13,7 @@ Qwen, Flint, Ornith, and MiniMax keep their existing llama.cpp paths.
 
 The original `start-qwen.sh` attachment has SHA-256
 `955915e9fc13bc9ba44a580285cd21a70a0c183c2fafb514e3e1c274326b8d3a`.
-The current embedded version is `2026-10-29-deepseek-official-strata-3`.
+The current embedded version is `2026-10-29-deepseek-official-strata-4`.
 Packaging checks do not establish remote GPU inference or throughput.
 
 ## Migrate an existing DeepSeek Pod
@@ -105,6 +105,12 @@ The policy permits local Unix sequenced-packet sockets for Linux CUDA's UVM
 listener. It still blocks outgoing connections and addressed sends.
 Older guards can cause `no CUDA device` even when `nvidia-smi` lists the GPUs.
 Copy the current script and repeat `--prepare-only` to update the guard.
+
+The serving environment includes upstream's pinned `psutil` for disk and
+process statistics. If the disk card says `needs psutil`, stop the server,
+copy the current script, repeat `--prepare-only`, and start the server again.
+Refresh the browser after startup. The disk rate covers all reads visible
+to the operating system or container; it is not a per-process measurement.
 
 ## Choose the Pod
 

@@ -49,6 +49,12 @@ runtime installation is separate. Use the root installer's `--bonsai` or
 `--strata` option when the selected model requires that backend. See the
 root README for model-specific dependencies and downloads.
 
+Strata's disk monitor requires `psutil`. The local Strata environment includes
+the version pinned by upstream. For an older installation, run
+`bin/setup-localmodel --run --strata`, then restart the model server.
+Refresh the browser after the restart. Disk activity includes all reads
+visible to the operating system or container. It is not limited to Strata.
+
 ## Start the components
 
 Run search in one terminal:
