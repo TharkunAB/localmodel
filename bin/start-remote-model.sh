@@ -34,6 +34,7 @@ import shlex
 import shutil
 import signal
 import socket
+import stat
 import struct
 import subprocess
 import sys
@@ -46,7 +47,7 @@ import urllib.request
 import uuid
 from typing import Any
 
-VERSION = '2026-10-29-deepseek-official-strata-4'
+VERSION = '2026-10-29-deepseek-strata-dspark-1'
 GIB, MIB = 1024**3, 1024**2
 SOURCE = 'https://github.com/ggml-org/llama.cpp.git'
 STABLE = '620d2225cc436ab0b001e3200e590e3b286ef9ab'  # released v0.7.0
@@ -200,7 +201,7 @@ GSQ_RUNTIME = '0062e5930edf2f50c50254ba5080a6d37b024c6c'
 GSQ_RUNTIME_SOURCE = 'https://github.com/smalinin/llama.cpp.git'
 GSQ_PATCH_SHA256 = 'd7fd6f1a0240effc0962702b1e8cca9f12d21c5269b96eb146d3751b72d7afec'
 GSQ_LOADER_SHA256 = '20e6aa0b8bd8926112cfe0a0f2cfe3f774ed9eb89138096fa498f80c5869bd8d'
-GSQ_PROFILES = {'deepseek-gsq-a40-dual': {'kind': 'a40', 'count': 2, 'quant': 'IQ1_M', 'context': 16384, 'engram': 'cpu'}, 'deepseek-gsq-a40-triple': {'kind': 'a40', 'count': 3, 'quant': 'IQ2_XXS', 'context': 16384, 'engram': 'cpu'}, 'deepseek-gsq-a40-quad': {'kind': 'a40', 'count': 4, 'quant': 'IQ2_XXS', 'context': 131072, 'engram': 'cpu'}, 'deepseek-gsq-pro6000-single': {'kind': 'pro6000', 'count': 1, 'quant': 'IQ1_M', 'context': 16384, 'engram': 'cpu'}, 'deepseek-gsq-pro6000-dual': {'kind': 'pro6000', 'count': 2, 'quant': 'IQ2_XS', 'context': 262144, 'engram': 'cpu'}, 'deepseek-gsq-pro6000-quad': {'kind': 'pro6000', 'count': 4, 'quant': 'IQ2_XS', 'context': 524288, 'engram': 'gpu'}, 'deepseek-gsq-h200': {'kind': 'h200', 'count': 1, 'quant': 'IQ2_XXS', 'context': 32768, 'engram': 'cpu'}, 'deepseek-gsq-h200-dual': {'kind': 'h200', 'count': 2, 'quant': 'IQ2_XS', 'context': 262144, 'engram': 'gpu'}, 'deepseek-gsq-b200': {'kind': 'b200', 'count': 1, 'quant': 'IQ2_XS', 'context': 262144, 'engram': 'cpu'}, 'deepseek-gsq-b300': {'kind': 'b300', 'count': 1, 'quant': 'IQ2_XS', 'context': 524288, 'engram': 'gpu'}, 'deepseek-gsq-ampere-multi': {'kind': 'ampere48', 'count': 0, 'quant': 'IQ2_XS', 'context': 524288, 'engram': 'cpu'}}
+GSQ_PROFILES = {'deepseek-gsq-a40-dual': {'kind': 'a40', 'count': 2, 'quant': 'IQ1_M', 'context': 16384, 'engram': 'cpu'}, 'deepseek-gsq-a40-triple': {'kind': 'a40', 'count': 3, 'quant': 'IQ2_XXS', 'context': 16384, 'engram': 'cpu'}, 'deepseek-gsq-a40-quad': {'kind': 'a40', 'count': 4, 'quant': 'IQ2_XS', 'context': 1048576, 'engram': 'cpu'}, 'deepseek-gsq-pro6000-single': {'kind': 'pro6000', 'count': 1, 'quant': 'IQ1_M', 'context': 16384, 'engram': 'cpu'}, 'deepseek-gsq-pro6000-dual': {'kind': 'pro6000', 'count': 2, 'quant': 'IQ2_XS', 'context': 262144, 'engram': 'cpu'}, 'deepseek-gsq-pro6000-quad': {'kind': 'pro6000', 'count': 4, 'quant': 'IQ2_XS', 'context': 524288, 'engram': 'gpu'}, 'deepseek-gsq-h200': {'kind': 'h200', 'count': 1, 'quant': 'IQ2_XXS', 'context': 32768, 'engram': 'cpu'}, 'deepseek-gsq-h200-dual': {'kind': 'h200', 'count': 2, 'quant': 'IQ2_XS', 'context': 262144, 'engram': 'gpu'}, 'deepseek-gsq-b200': {'kind': 'b200', 'count': 1, 'quant': 'IQ2_XS', 'context': 262144, 'engram': 'cpu'}, 'deepseek-gsq-b300': {'kind': 'b300', 'count': 1, 'quant': 'IQ2_XS', 'context': 524288, 'engram': 'gpu'}, 'deepseek-gsq-ampere-multi': {'kind': 'ampere48', 'count': 0, 'quant': 'IQ2_XS', 'context': 524288, 'engram': 'cpu'}}
 GSQ_LAYOUT = {'IQ1_M': {'expert_layer_bytes': [2654208000, 2654208000, 2654208000, 2654208000, 2654208000, 2654208000, 2654208000, 3220439040, 2654208000, 3220439040, 3220439040, 2937323520, 2760376320, 2760376320, 2654208000, 2654208000, 2760376320, 2654208000, 3220439040, 2760376320, 2760376320, 2760376320, 2760376320, 3220439040, 2654208000, 3326607360, 3220439040, 2654208000, 2866544640, 3220439040, 3326607360, 2654208000, 3220439040, 2866544640, 2654208000, 2654208000, 2866544640, 2654208000, 3220439040, 2937323520], 'layer_bytes': [2776941528, 2885157848, 2798374360, 2776941528, 2776941528, 2776941528, 2776941528, 3343172568, 2798374360, 3343172568, 3343172568, 3060057048, 2883109848, 2883109848, 2906590680, 2776941528, 2883109848, 2776941528, 3343172568, 2883109848, 2899299800, 2883109848, 2883109848, 3343172568, 2787754968, 3449340888, 3343172568, 2776941528, 3000091608, 3343172568, 3449340888, 2776941528, 3353986008, 2989278168, 2776941528, 2776941528, 3000091608, 2776941528, 3343172568, 3060057048], 'input_bytes': 455065600, 'output_bytes': 455086080, 'metadata_bytes': 5833728}, 'IQ2_XXS': {'expert_layer_bytes': [2972712960, 2972712960, 2972712960, 2972712960, 2972712960, 2972712960, 2972712960, 3149660160, 3149660160, 2972712960, 3503554560, 3326607360, 3326607360, 2972712960, 2972712960, 3326607360, 2972712960, 3609722880, 3503554560, 3609722880, 2972712960, 2972712960, 3503554560, 3645112320, 3326607360, 3503554560, 3645112320, 3609722880, 3503554560, 3326607360, 2972712960, 3326607360, 3326607360, 3645112320, 3609722880, 3609722880, 3326607360, 3326607360, 3786670080, 3928227840], 'layer_bytes': [3095446488, 3203662808, 3116879320, 3095446488, 3095446488, 3095446488, 3095446488, 3272393688, 3293826520, 3095446488, 3626288088, 3449340888, 3449340888, 3095446488, 3225095640, 3449340888, 3095446488, 3732456408, 3626288088, 3732456408, 3111636440, 3095446488, 3626288088, 3767845848, 3460154328, 3626288088, 3767845848, 3732456408, 3637101528, 3449340888, 3095446488, 3449340888, 3460154328, 3767845848, 3732456408, 3732456408, 3460154328, 3449340888, 3909403608, 4050961368], 'input_bytes': 455065600, 'output_bytes': 455086080, 'metadata_bytes': 5833728}, 'IQ2_XS': {'expert_layer_bytes': [3503554560, 3503554560, 3503554560, 3503554560, 3503554560, 3503554560, 3503554560, 3503554560, 3786670080, 3928227840, 3786670080, 3645112320, 3928227840, 3503554560, 3645112320, 3503554560, 3786670080, 4211343360, 3645112320, 3503554560, 3503554560, 3786670080, 3786670080, 4352901120, 4069785600, 4352901120, 3928227840, 3928227840, 3645112320, 3645112320, 4069785600, 3786670080, 3786670080, 3503554560, 3645112320, 3503554560, 3503554560, 3503554560, 4069785600, 3786670080], 'layer_bytes': [3626288088, 3734504408, 3647720920, 3626288088, 3626288088, 3626288088, 3626288088, 3626288088, 3930836440, 4050961368, 3909403608, 3767845848, 4050961368, 3626288088, 3897495000, 3626288088, 3909403608, 4334076888, 3767845848, 3626288088, 3642478040, 3909403608, 3909403608, 4475634648, 4203332568, 4475634648, 4050961368, 4050961368, 3778659288, 3767845848, 4192519128, 3909403608, 3920217048, 3626288088, 3767845848, 3626288088, 3637101528, 3626288088, 4192519128, 3909403608], 'input_bytes': 455065600, 'output_bytes': 455086080, 'metadata_bytes': 5833728}}
 GSQ_HEADERS = {'DeepSeek-V4.1-Flash-1017-GSQ-RCO-IQ1_M-00001-of-00004.gguf': {'size': 5255232, 'sha256': 'e03fbfcb8a24381b04f0913f7cadbe11b0d267bf2a0f08503835878e6f260aa0'}, 'DeepSeek-V4.1-Flash-1017-GSQ-RCO-IQ1_M-00002-of-00004.gguf': {'size': 3168, 'sha256': 'ab13ca9e4c10728806eba3001dba8da0ca755bf78c25726d2b9c798428733e6e'}, 'DeepSeek-V4.1-Flash-1017-GSQ-RCO-IQ1_M-00003-of-00004.gguf': {'size': 40384, 'sha256': '384d9ac952738c36b4bb9409cde56030be3a25078a5234257ea2e97444bfb5af'}, 'DeepSeek-V4.1-Flash-1017-GSQ-RCO-IQ1_M-00004-of-00004.gguf': {'size': 16992, 'sha256': '45c7df98c75c8bb31e065eca4c4603bca576604d41a7d59665324b4cce779127'}, 'DeepSeek-V4.1-Flash-1017-GSQ-RCO-IQ2_XXS-00001-of-00004.gguf': {'size': 5254912, 'sha256': '254ffb6539f7e0db2d27b288c1b6918f0025819f3b2154d7ba46d56f3a4860d0'}, 'DeepSeek-V4.1-Flash-1017-GSQ-RCO-IQ2_XXS-00002-of-00004.gguf': {'size': 2784, 'sha256': 'deffd09184bf1f7dbab95d63da485fc3c29416b5afd008e241d6b8fda379bc61'}, 'DeepSeek-V4.1-Flash-1017-GSQ-RCO-IQ2_XXS-00003-of-00004.gguf': {'size': 2656, 'sha256': '689a1ee72d725ed9786c66a4666f1dc5f0aac18c988a22729eca30e309c82fa1'}, 'DeepSeek-V4.1-Flash-1017-GSQ-RCO-IQ2_XXS-00004-of-00004.gguf': {'size': 55424, 'sha256': 'ef8fa95238e80650840e71553ed84df6c37e7aba580ebf4efa8778c0bd4a6636'}, 'DeepSeek-V4.1-Flash-1017-GSQ-RCO-IQ2_XS-00001-of-00004.gguf': {'size': 5254560, 'sha256': 'abffcae4bc3a4251322de6ab116fa69fb1ec6104ed785f188859189d3a0ec6b9'}, 'DeepSeek-V4.1-Flash-1017-GSQ-RCO-IQ2_XS-00002-of-00004.gguf': {'size': 2496, 'sha256': '8c10cb4b21d85abe1db3dcbfcf18088495e60f13547ca1851fb1626fc7444472'}, 'DeepSeek-V4.1-Flash-1017-GSQ-RCO-IQ2_XS-00003-of-00004.gguf': {'size': 2336, 'sha256': 'a7e03e5773092bffd98f0d507f54d6845150aa0276911f7b28341d70a6323262'}, 'DeepSeek-V4.1-Flash-1017-GSQ-RCO-IQ2_XS-00004-of-00004.gguf': {'size': 56384, 'sha256': 'c6be1958e3aeea37f500596fbb10417a7fbe0369ee4fb8051f59719bc25d77f3'}, 'DeepSeek-V4.1-Flash-Engram-IQ4_NL.gguf': {'size': 416, 'sha256': '97a55e86b495fdc4ae2aea6d52a337578d2e514dc099676164cda48c635f40d1'}}
 GSQ_ENGRAM_TABLE_BYTES = (55_296_888_192, 55_298_402_208)
@@ -690,6 +691,8 @@ class Plan:
             out.update(experimental_runtime=False, memory_estimates_not_gpu_validation=True,
                        runtime_version='0.1.52', control_version='0.1.53',
                        native_template_and_parser='deepseek41', hard_ram_limit=None)
+            if self.spec == 'dspark':
+                out.update(draft_source=STRATA_DSPARK, dspark_block_limit=self.depth)
             return out
         if self.profile.startswith('minimax-'):
             out.update(runtime_patch_sha256=MINIMAX_PATCH_SHA256,
@@ -2972,7 +2975,9 @@ def parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter, allow_abbrev=False,
         epilog='''DeepSeek profiles now use official Strata 0.2.7.1 / signed CUDA engine 0.1.52.
 All existing DeepSeek hardware profiles and exact quant selections remain available.
-Use --profile deepseek-gsq-a40-quad for four A40s with the pinned GSQ IQ2_XXS files.
+Quad A40 defaults: pinned GSQ IQ2_XS, 1M context, DSpark on, 9,11,10,10 layers.
+--reuse prefers complete existing IQ2_XXS files, with SHA checks at preparation/serving.
+Explicit --quant wins. Other profiles retain their previous defaults.
 Use --prepare-only to install the pinned runtime, verify/download GGUFs and create the
 stock native pack. Normal serving requires prepared local files and never downloads.
 No CUDA compiler is needed for Strata; the host driver must support its CUDA 13 engine.
@@ -2982,14 +2987,19 @@ Strata uses automatic GPU expert placement across all selected GPUs.
 --expert-ram-gb is a soft RAM cache in GiB; --gpu-expert-fraction is a 0..1 fraction.
 These do not create a hard process limit. Leave host RAM for the OS and other weights.
 --cpu-moe-layers, --tensor-split, --gsq-engram, --engram-ram, llama.cpp KV/cache/batch
-controls and build-archive flags are rejected for DeepSeek. DSpark is not configured.
+controls and build-archive flags are rejected for DeepSeek. Use --spec dspark/none.
+--layer-split takes per-GPU layer COUNTS summing to 40, or auto. It sets DS4_SPLIT.
+--dspark N enables native DSpark with a block limit; 0 disables it. --dspark-conf defaults to 0.65.
+--prepare-assets-only --prepare-only verifies the prepared runtime and stages a separate
+model/draft pack without changing active server configuration, runtime packages or guard.
 Native chat templates and tool parsing remain unmodified. Outgoing network operations
 are blocked for the stock server and its children. Missing libseccomp prevents startup.
 
 Example for existing /opt/qwen/gsq-models files on four A40 GPUs:
-  bash start-remote-model.sh --profile deepseek-gsq-a40-quad --ctxt 256K --dry-run
-  bash start-remote-model.sh --profile deepseek-gsq-a40-quad --ctxt 256K --prepare-only --install-deps --no-ssh
-  bash start-remote-model.sh --profile deepseek-gsq-a40-quad --ctxt 256K --no-ssh
+  bash start-remote-model.sh --profile deepseek-gsq-a40-quad --prepare-only --dry-run
+  bash start-remote-model.sh --profile deepseek-gsq-a40-quad --prepare-only --prepare-assets-only --no-ssh
+  bash start-remote-model.sh --profile deepseek-gsq-a40-quad --no-ssh
+  # Ordinary rollback: --spec none --layer-split auto --quant IQ2_XXS --ctxt 1M
 
 Qwen/Flint/Ornith/MiniMax retain their prior llama.cpp runtime and controls.
 Auto selection: one supported 48GB card or 5090 -> Flint; two A40/A6000 -> Ornith;
@@ -3013,6 +3023,7 @@ The Qwen profile is Qwen3.8-27B. All API endpoints bind to 127.0.0.1, default 88
     p.add_argument('--port',type=int,default=envint('QWEN_PORT',8897))
     p.add_argument('--ctx','--context','--ctx-size','--ctxt','-c',dest='context',type=parse_context,
                    help='Token count or binary shorthand: 256K, 512K, 768K, 1M')
+    p.add_argument('--reuse',action='store_true',help='Native GSQ: prefer existing complete IQ2_XXS; otherwise IQ2_XS. Verify SHA at prepare/serve. Explicit --quant wins.')
     p.add_argument('--quant',help='Exact GGUF quant name (legacy; --variant iq3_s is easier for B300/dual H200)')
     p.add_argument('--variant',type=str.lower,choices=('iq3_xxs','iq3_s'),
                    help='B300 or dual H200: iq3_xxs (default) or iq3_s (higher fidelity)')
@@ -3024,7 +3035,9 @@ The Qwen profile is Qwen3.8-27B. All API endpoints bind to 127.0.0.1, default 88
     p.add_argument('--dflash',dest='spec',action='store_const',const='dflash',default=argparse.SUPPRESS,
                    help='Enable target-specific DFlash: existing Qwen path or pinned MiniMax DFlash2 conversion')
     p.add_argument('--dspark',type=int,metavar='N',
-                   help='DeepSeek 1017 DSpark draft depth 1-5 (3 recommended); 0 to disable')
+                   help='Strata DSpark block limit 1..64; 0 disables. Omit to use the native block limit.')
+    p.add_argument('--dspark-conf',type=float,help='Strata DSpark confidence threshold, 0..1 (default 0.65 when enabled)')
+    p.add_argument('--layer-split',help='Strata layer counts per GPU, summing to 40, or auto; quad A40 defaults to 9,11,10,10')
     p.add_argument('--no-mtp','--no-dflash',dest='no_spec',action='store_true')
     p.add_argument('--draft-depth','--mtp-depth',type=int)
     p.add_argument('--draft-sampling',choices=('greedy','probabilistic'),default='greedy')
@@ -3048,6 +3061,7 @@ The Qwen profile is Qwen3.8-27B. All API endpoints bind to 127.0.0.1, default 88
     p.add_argument('--ubatch',type=int,default=128)
     p.add_argument('--show-config','--dry-run','--ornith-dry-run','--deepseek-dry-run',dest='show_config',action='store_true')
     p.add_argument('--prepare-only','--ornith-prepare-only','--deepseek-prepare-only',dest='prepare_only',action='store_true')
+    p.add_argument('--prepare-assets-only',action='store_true',help='With --prepare-only, verify the prepared Strata runtime and stage model/draft packs without changing active server files')
     p.add_argument('--smoke-test','--ornith-smoke-test','--deepseek-smoke-test',dest='smoke_test',action='store_true')
     p.add_argument('--smoke-tokens',type=int,default=8192)
     p.add_argument('--smoke-full-context','--smoke-long',dest='smoke_full_context',action='store_true',
@@ -3420,6 +3434,75 @@ if __name__ == "__main__":
 '''
 
 
+STRATA_DSPARK = {
+    'repo': 'unsloth/DeepSeek-V4.1-Flash-1017-GGUF',
+    'revision': 'f924b94f19c1fea02c06a65c8475b0a45e2b88b1',
+    'name': 'dspark-DeepSeek-V4.1-Flash-1017-Q8_0.gguf',
+    'size': 7976914240,
+    'sha256': '6ba6ac1b331c540691a209e7fc97dec2a24e295acb1e755c84c7d24a4373927a',
+}
+
+
+def strata_reusable_gsq(args, quant: str) -> bool:
+    """Find a complete candidate by size. Preparation verifies its SHA-256."""
+    folder = Path(args.model_dir).expanduser().absolute() if args.model_dir else Path(args.root).expanduser().absolute()/'gsq-models'/GSQ_REV
+    complete = all((folder/name).is_file() and not (folder/name).is_symlink()
+                   and (folder/name).stat().st_size == item['size'] for name,item in gsq_files(quant).items())
+    if complete:
+        say('--reuse selected existing '+quant+' by file sizes; SHA-256 verification is required at preparation/serving.')
+    return complete
+
+
+def strata_pack_path(plan: Plan) -> Path:
+    """Keep the DSpark pack separate from the ordinary decoding pack."""
+    return model_folder(plan)/('strata-pack-'+plan.quant.lower()+('-dspark' if plan.spec == 'dspark' else ''))
+
+
+def strata_draft_path(args) -> Path:
+    """Use a separate directory so ordinary packers cannot discover the draft."""
+    return Path(args.root).expanduser().absolute()/'strata-drafts'/STRATA_DSPARK['revision']/STRATA_DSPARK['name']
+
+
+def strata_draft(args) -> None:
+    """Download the exact draft only during preparation, then verify its bytes."""
+    path = strata_draft_path(args)
+    if path.is_symlink():
+        raise Error('The Strata draft must be a regular file, not a link')
+    if not path.is_file() and not args.prepare_only:
+        raise Error('The pinned DSpark draft is missing. Run --prepare-only first.')
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with (path.parent/'.download.lock').open('a') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        if not path.exists():
+            if shutil.disk_usage(path.parent).free < STRATA_DSPARK['size'] + GIB:
+                raise Error('DSpark preparation requires 8 GB for the draft plus 1 GiB free disk reserve')
+            partial = path.with_name(path.name+'.part')
+            if partial.is_symlink():
+                raise Error('The draft partial file must not be a link')
+            url = 'https://huggingface.co/'+STRATA_DSPARK['repo']+'/resolve/'+STRATA_DSPARK['revision']+'/'+STRATA_DSPARK['name']
+            say('Downloading the pinned DSpark draft: '+STRATA_DSPARK['name'])
+            with urllib.request.urlopen(url, timeout=120) as response, partial.open('wb') as output:
+                if not response.geturl().startswith('https://'):
+                    raise Error('The draft download redirected outside HTTPS')
+                received = 0
+                while chunk := response.read(8*MIB):
+                    received += len(chunk)
+                    if received > STRATA_DSPARK['size']:
+                        raise Error('The draft download exceeds its pinned size; partial file retained')
+                    output.write(chunk)
+            verify_file(partial, STRATA_DSPARK)
+            partial.replace(path)
+        metadata = path.stat()
+        identity = [STRATA_DSPARK['sha256'], metadata.st_size, metadata.st_mtime_ns,
+                    metadata.st_ctime_ns, metadata.st_ino, metadata.st_dev]
+        receipt = path.parent/'verified-draft.json'
+        cached = json.loads(receipt.read_text()) if receipt.is_file() else None
+        if args.reverify or cached != identity:
+            verify_file(path, STRATA_DSPARK)
+            atomic_json(receipt, identity)
+            say('Verified pinned DSpark draft SHA-256')
+
+
 def strata_paths(args) -> tuple[Path, Path, Path]:
     """Keep the official runtime separate from all llama.cpp builds."""
     base = Path(args.root).expanduser().absolute() / 'runtimes' / ('strata-' + STRATA_PINS['source_revision'])
@@ -3435,8 +3518,14 @@ def strata_options(args) -> None:
     if used:
         raise Error('Strata does not implement these llama.cpp controls: ' + ', '.join(used)
                     + '. Use --expert-ram-gb, --gpu-expert-fraction, --prefill-chunk and --vram-reserve-mib.')
-    if args.spec not in (None, 'none') or args.dspark not in (None, 0):
-        raise Error('Remote Strata uses ordinary decoding. DSpark/MTP/DFlash are not configured; no draft is downloaded.')
+    if args.spec not in (None, 'none', 'dspark'):
+        raise Error('Native Strata supports --spec none/dspark; MTP and DFlash are not configured')
+    if args.dspark is not None and not 0 <= args.dspark <= 64:
+        raise Error('--dspark must be 0..64; a positive value limits native drafts per round')
+    if args.dspark_conf is not None and (not math.isfinite(args.dspark_conf) or not 0 <= args.dspark_conf <= 1):
+        raise Error('--dspark-conf must be 0..1')
+    if args.prepare_assets_only and (not args.prepare_only or args.install_deps or args.setup_ssh or args.ssh_only):
+        raise Error('--prepare-assets-only requires --prepare-only and cannot install dependencies or set up SSH')
     if args.ds_source == 'gsq-rco' and args.profile not in GSQ_PROFILES:
         raise Error('Select an explicit deepseek-gsq-* profile for GSQ-RCO. The selected Unsloth quant is not substituted.')
     if not math.isfinite(args.expert_ram_gb) or not 0 <= args.expert_ram_gb <= 1024:
@@ -3454,9 +3543,33 @@ def strata_options(args) -> None:
 def strata_plan(args, mode: str, gpus: list[GPU]) -> Plan:
     """Preserve checkpoint selection without llama.cpp placement estimates."""
     strata_options(args)
+    if args.reuse and mode not in GSQ_PROFILES:
+        raise Error('--reuse applies only to native GSQ IQ2_XXS/IQ2_XS selection')
+    spec = args.spec or ('dspark' if mode == 'deepseek-gsq-a40-quad' else 'none')
+    if args.dspark is not None:
+        requested = 'dspark' if args.dspark else 'none'
+        if args.spec is not None and args.spec != requested:
+            raise Error('--spec and --dspark disagree')
+        spec = requested
+    if args.no_spec:
+        if args.spec == 'dspark' or (args.dspark is not None and args.dspark > 0):
+            raise Error('--no-mtp/--no-dflash conflicts with explicit DSpark')
+        spec = 'none'
+    if spec == 'none' and args.dspark_conf is not None:
+        raise Error('--dspark-conf requires DSpark')
+    split = args.layer_split if args.layer_split is not None else ('9,11,10,10' if mode == 'deepseek-gsq-a40-quad' else 'auto')
+    if split != 'auto':
+        try:
+            counts = [int(value.strip()) for value in split.split(',')]
+        except ValueError as exc:
+            raise Error('--layer-split must be auto or positive integer layer counts') from exc
+        if len(counts) != len(gpus) or any(value <= 0 for value in counts) or sum(counts) != 40:
+            raise Error('--layer-split needs one positive count per selected GPU, summing to 40')
+        split = ','.join(map(str, counts))
+    args.layer_split = split
     if mode in GSQ_PROFILES:
         defaults = GSQ_PROFILES[mode]
-        quant = args.quant or defaults['quant']
+        quant = args.quant or (('IQ2_XXS' if strata_reusable_gsq(args, 'IQ2_XXS') else 'IQ2_XS') if args.reuse else defaults['quant'])
         if quant not in GSQ_LAYOUT or args.variant is not None or args.reuse_engram:
             raise Error('GSQ uses IQ1_M/IQ2_XXS/IQ2_XS and the existing shared Engram; Unsloth variant/reuse flags do not apply')
         context = args.context if args.context is not None else defaults['context']
@@ -3474,6 +3587,7 @@ def strata_plan(args, mode: str, gpus: list[GPU]) -> Plan:
         # This function retains the original profile's exact quant, revision and directory.
         legacy = argparse.Namespace(**vars(args))
         legacy.reasoning_effort = 'high'  # Validate the native setting below.
+        legacy.spec, legacy.dspark = 'none', None
         plan = make_plan(legacy, mode, gpus)
         if plan.spec != 'none':
             raise Error('Strata speculation must be disabled; clear the profile SPEC/DRAFT environment overrides')
@@ -3485,6 +3599,8 @@ def strata_plan(args, mode: str, gpus: list[GPU]) -> Plan:
     if effort not in ('none', 'low', 'medium', 'high'):
         raise Error('Strata configuration effort must be none/low/medium/high. API requests may send xhigh/max; no numeric llama.cpp default is retained.')
     plan.effort, plan.engine = effort, 'strata'
+    plan.spec, plan.depth = spec, (args.dspark or 0) if spec == 'dspark' else 0
+    plan.draft_bytes = STRATA_DSPARK['size'] if spec == 'dspark' else 0
     return plan
 
 
@@ -3492,11 +3608,13 @@ def strata_preflight(plan: Plan, args) -> None:
     """Check headroom without claiming a hard cap or precomputed GPU fit."""
     if platform.system() != 'Linux' or platform.machine() not in ('x86_64', 'AMD64'):
         raise Error('The pinned Strata engine requires Linux x86_64')
-    minimum = int(args.expert_ram_gb * GIB) + args.engram_cache_mib * MIB + 24 * GIB
+    minimum = (4 * GIB if args.prepare_assets_only else
+               int(args.expert_ram_gb * GIB) + args.engram_cache_mib * MIB + 24 * GIB)
     available = available_ram()
     if available < minimum:
-        raise Error(f'Strata needs {minimum/GIB:.1f} GiB available for the requested cache plus 24 GiB headroom; '
-                    f'only {available/GIB:.1f} GiB is available. Reduce --expert-ram-gb.')
+        mode = 'asset preparation' if args.prepare_assets_only else 'the cache plus 24 GiB headroom'
+        raise Error(f'Strata needs {minimum/GIB:.1f} GiB available for {mode}; '
+                    f'only {available/GIB:.1f} GiB is available.')
     if any(g.free < args.vram_reserve_mib + 4096 for g in plan.gpus) and not args.prepare_only:
         raise Error('A selected GPU lacks 4 GiB plus the requested reserve. Stop the old server before serving.')
     check_storage(model_folder(plan), args.allow_network_storage)
@@ -3510,17 +3628,23 @@ def strata_settings(plan: Plan, args) -> dict[str, Any]:
     """Use the stock DeepSeek template, parser and native device ordinals."""
     base, python, source = strata_paths(args)
     binary = base / 'engine-dsv41' / '0.1.52-linux-x86_64-cuda-cuda13/strata-dsv41'
-    pack = model_folder(plan) / ('strata-pack-' + plan.quant.lower())
+    pack = strata_pack_path(plan)
     ordinals = list(range(len(plan.gpus)))
     selected = ','.join('GPU-' + g.uuid[4:] for g in plan.gpus)
     native = ['--pack', str(pack), '--gpus', ','.join(map(str, ordinals)), '--max-context', str(plan.context),
               '--ssd-cache', str(args.expert_ram_gb * GIB / 10**9), '--cpu-threads', str(args.cpu_threads),
               '--vram-experts', str(args.gpu_expert_fraction), '--reserve-mib', str(args.vram_reserve_mib),
-              '--prefill-chunk', str(args.prefill_chunk), '--dspark', 'none', '--experts', '6', '--vision', 'off']
+              '--prefill-chunk', str(args.prefill_chunk), '--dspark', 'on' if plan.spec == 'dspark' else 'none',
+              '--experts', '6', '--vision', 'off']
+    if plan.spec == 'dspark':
+        native += ['--dspark-conf', str(args.dspark_conf if args.dspark_conf is not None else 0.65)]
+        if plan.depth:
+            native += ['--dspark-block', str(plan.depth)]
     return {'exe': str(binary), 'arch': 'deepseek41', 'args': native, 'cwd': str(source),
             'tokenizer': str(pack / 'tokenizer'), 'model_name': plan.model_id,
             'gpu': ordinals, 'gpu_order': 'as_given', 'log': str(plan.root / 'strata-engine.log'),
-            'env': {'CUDA_VISIBLE_DEVICES': selected, 'DS4_ENGRAM_CACHE_MB': str(args.engram_cache_mib),
+            'env': {**({'DS4_SPLIT': args.layer_split} if args.layer_split != 'auto' else {}),
+                    'CUDA_VISIBLE_DEVICES': selected, 'DS4_ENGRAM_CACHE_MB': str(args.engram_cache_mib),
                     'DS4_ENGRAM_THREADS': str(args.engram_threads), 'STRATA_DS4_DISK_SKIP_W': '0',
                     'STRATA_DS4_SLOT_KEEP': '0'}, 'lib_dirs': [str(binary.parent)],
             'sampling': {'temperature': 1.0, 'top_p': 1.0}, 'reasoning_effort': plan.effort,
@@ -3532,12 +3656,17 @@ def strata_settings(plan: Plan, args) -> dict[str, Any]:
 def strata_pack(plan: Plan, args, data: dict, python: Path, source: Path, env: dict) -> None:
     """Build a small index over verified GGUF files. Do not requantize weights."""
     folder = model_folder(plan)
-    pack = folder / ('strata-pack-' + plan.quant.lower())
+    pack = strata_pack_path(plan)
+    if pack.is_symlink() or (pack.exists() and not pack.is_dir()):
+        raise Error('The Strata pack must be a regular directory')
     assets = {'ds4.txt', 'tensors.txt', 'engram.bin', 'tokenizer/chat_template.jinja',
               'tokenizer/token_type.json', 'tokenizer/merges.txt', 'tokenizer/vocab.json', 'tokenizer/tokenizer.json'}
     receipt = pack / 'remote-pack.json'
     identity = {'source_revision': STRATA_PINS['source_revision'], 'model_revision': plan.revision,
                 'quant': plan.quant, 'model_directory': str(folder)}
+    if plan.spec == 'dspark':
+        identity['draft'] = STRATA_DSPARK
+        identity['draft_path'] = str(strata_draft_path(args))
     if not receipt.is_file():
         if not args.prepare_only:
             raise Error('Strata pack is not prepared. Run the same profile with --prepare-only first.')
@@ -3555,10 +3684,29 @@ def strata_pack(plan: Plan, args, data: dict, python: Path, source: Path, env: d
                    '--model', str(model_base), '--out', str(pack), '--shards', *[path.name for path in inputs]]
         if plan.profile in GSQ_PROFILES:
             command += ['--engram', str(folder/GSQ_ENGRAM_NAME), '--engram-meta', str(folder/shards[0])]
+        if plan.spec == 'dspark':
+            command += ['--dspark-gguf', str(strata_draft_path(args)), '--dspark-noise-token', '128799',
+                        '--dspark-markov-rank', '256']
         run(command, env=env)
         if not all((pack/name).is_file() and not (pack/name).is_symlink() for name in assets):
             raise Error('Stock Strata pack is incomplete; no server was started')
         atomic_json(receipt, {**identity, 'files': {name: file_sha256(pack/name) for name in sorted(assets)}})
+    profile_sizes = {40 * 384 * 4, (43 if plan.spec == 'dspark' else 40) * 384 * 4}
+    expected_entries = assets | {'remote-pack.json', 'expert-profile.bin', 'expert-profile.bin.tmp'}
+    for entry in pack.rglob('*'):
+        name = str(entry.relative_to(pack))
+        if name == 'expert-profile.bin.tmp':
+            try:
+                pending = entry.lstat()
+            except FileNotFoundError:
+                continue  # The native writer completed its atomic rename.
+            if not stat.S_ISREG(pending.st_mode) or pending.st_size > max(profile_sizes):
+                raise Error('Unexpected Strata temporary expert profile')
+            continue
+        if entry.is_symlink() or (entry.is_dir() and name != 'tokenizer') or (not entry.is_dir() and (not entry.is_file() or name not in expected_entries)):
+            raise Error('Unexpected Strata pack entry: ' + name)
+        if name == 'expert-profile.bin' and entry.stat().st_size not in profile_sizes:
+            raise Error('Unexpected Strata expert profile size')
     record = json.loads(receipt.read_text())
     if any(record.get(key) != value for key, value in identity.items()) or set(record.get('files', {})) != assets:
         raise Error('Strata pack receipt does not match this source, quant or model directory')
@@ -3596,42 +3744,50 @@ def strata_main(plan: Plan, args) -> int:
     ctypes.CDLL('libseccomp.so.2')  # Missing enforcement prevents preparation/serving.
     plan.root.mkdir(parents=True, exist_ok=True)
     base.mkdir(parents=True, exist_ok=True)
-    with (base/'.runtime.lock').open('a') as runtime_lock, (plan.root/'.strata-launcher.lock').open('a') as lock:
+    with (base/('.assets-check.lock' if args.prepare_assets_only else '.runtime.lock')).open('a') as runtime_lock, (plan.root/('.strata-assets.lock' if args.prepare_assets_only else '.strata-launcher.lock')).open('a') as lock:
         try:
             fcntl.flock(runtime_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError as exc:
             raise Error('Another Strata preparation or server owns this runtime/profile') from exc
         run([sys.executable, '-I', '-B', '-c', STRATA_INSTALL_CODE, json.dumps(STRATA_PINS), str(base),
-             'prepare' if args.prepare_only else 'check'], env=env, quiet=True)
+             'prepare' if args.prepare_only and not args.prepare_assets_only else 'check'], env=env, quiet=True)
         guard = base/'network_guard.py'
-        if args.prepare_only:
+        if args.prepare_only and not args.prepare_assets_only:
             guard.write_text(STRATA_NETWORK_GUARD)
         elif not guard.is_file() or guard.read_text() != STRATA_NETWORK_GUARD:
             raise Error('Strata network guard is missing or changed; run --prepare-only')
-        path = plan.root / f'manifest-{plan.quant}-{plan.spec}-{plan.revision[:12]}.json'
+        weights_plan = dataclasses.replace(plan, spec='none', depth=0, draft_bytes=0)
+        path = plan.root / f'manifest-{plan.quant}-{weights_plan.spec}-{plan.revision[:12]}.json'
         if plan.profile in GSQ_PROFILES:
             data = dict(repo=plan.repo, revision=plan.revision, quant=plan.quant, spec='none', official_files=[],
                         files=[dict(path=n, size=f['size'], sha256=f['sha256'], kind='model')
                                for n,f in sorted(gsq_files(plan.quant).items())])
-            validate_manifest(plan, data)
-            if args.prepare_only:
+            validate_manifest(weights_plan, data)
+            if args.prepare_only and not args.prepare_assets_only:
                 atomic_json(path, data)
         elif path.is_file():
             data = json.loads(path.read_text())
-            validate_manifest(plan, data)
+            validate_manifest(weights_plan, data)
         elif args.prepare_only:
             hub = hub_python(args, env)
-            path, data = manifest(hub, plan, env)
+            path, data = manifest(hub, weights_plan, env)
         else:
             raise Error('Pinned GGUF manifest is missing. Run --prepare-only first.')
         missing = any(not (model_folder(plan)/f['path']).is_file()
                       or (model_folder(plan)/f['path']).stat().st_size != f['size'] for f in data['files'])
         if missing and not args.prepare_only:
             raise Error('Pinned GGUF files are missing. Run --prepare-only; serving does not download.')
+        if missing and not path.is_file():
+            atomic_json(path, data)
         hub = hub_python(args, env) if missing else python
-        download(hub, plan, path, data, args, env)
+        download(hub, weights_plan, path, data, args, env)
+        if plan.spec == 'dspark':
+            strata_draft(args)
         strata_pack(plan, args, data, python, source, env)
+        if args.prepare_assets_only:
+            say('Strata assets prepared. Runtime, guard, active server configuration and launch record were not changed.')
+            return 0
         atomic_json(plan.root/'strata-server.json', settings)
         atomic_json(plan.root/'last-launch.json', {'launcher':VERSION, **plan.public(), 'command':command,
                     'server':settings, 'hard_ram_limit':None, 'qualification':'Remote GPU inference not validated'})
@@ -3650,6 +3806,10 @@ def main(argv=None) -> int:
         raise Error('Python 3.10+ is required')
     args=parser().parse_args(argv)
     args.explicit_flags = {value.split('=', 1)[0] for value in (sys.argv[1:] if argv is None else argv) if value.startswith('--')}
+    if args.prepare_assets_only and not args.prepare_only:
+        raise Error('--prepare-assets-only requires --prepare-only')
+    if args.prepare_assets_only and (args.smoke_test or args.smoke_full_context or args.ssh_only or args.setup_ssh):
+        raise Error('--prepare-assets-only cannot be combined with smoke tests or SSH setup')
     minimax_accepted = ('--accept-experimental' in (sys.argv[1:] if argv is None else argv)
                         or enabled('MINIMAX_ACCEPT_EXPERIMENTAL'))
     if not 1024<=args.port<=65535 or not 1<=args.ssh_port<=65535:
@@ -3703,7 +3863,7 @@ def main(argv=None) -> int:
         raise Error(FP4_BLOCK)
     if mode.startswith('deepseek'):
         return strata_main(strata_plan(args, mode, chosen), args)
-    native_flags = {'--expert-ram-gb', '--gpu-expert-fraction', '--vram-reserve-mib', '--prefill-chunk',
+    native_flags = {'--reuse', '--layer-split', '--dspark-conf', '--prepare-assets-only', '--expert-ram-gb', '--gpu-expert-fraction', '--vram-reserve-mib', '--prefill-chunk',
                     '--engram-cache-mib', '--engram-threads', '--thinking-budget'}
     if native_flags.intersection(args.explicit_flags):
         raise Error('Strata cache, prefill and thinking-budget controls require a DeepSeek profile')

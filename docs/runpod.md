@@ -13,34 +13,74 @@ Qwen, Flint, Ornith, and MiniMax keep their existing llama.cpp paths.
 
 The original `start-qwen.sh` attachment has SHA-256
 `955915e9fc13bc9ba44a580285cd21a70a0c183c2fafb514e3e1c274326b8d3a`.
-The current embedded version is `2026-10-29-deepseek-official-strata-4`.
+The current embedded version is `2026-10-29-deepseek-strata-dspark-1`.
 Packaging checks do not establish remote GPU inference or throughput.
 
 ## Migrate an existing DeepSeek Pod
 
-Copy the updated script onto the Pod. Keep the existing model root and quant.
-For four A40 cards with the existing GSQ IQ2_XXS files under `/opt/qwen`, use:
+Copy the updated script onto the Pod. The quad-A40 profile now defaults to
+**IQ2_XS, 1M context, DSpark on, and layer counts 9,11,10,10**. It still selects
+six experts per token. The larger quant and draft use additional disk and
+memory. These defaults are not a benchmark or a successful 1M inference claim.
+Other profile defaults stay unchanged.
+
+For an existing prepared runtime under `/opt/qwen`, stage the new assets while
+the current server continues to run:
 
 ```sh
 bash /workspace/start-remote-model.sh --profile deepseek-gsq-a40-quad \
-  --ctxt 256K --root /opt/qwen --no-ssh --prepare-only --dry-run
+  --root /opt/qwen --no-ssh --prepare-only --prepare-assets-only --dry-run
 bash /workspace/start-remote-model.sh --profile deepseek-gsq-a40-quad \
-  --ctxt 256K --root /opt/qwen --no-ssh --prepare-only --install-deps
+  --root /opt/qwen --no-ssh --prepare-only --prepare-assets-only
 ```
 
-Preparation reuses the four pinned IQ2_XXS GGUF shards and shared IQ4_NL Engram
-in `/opt/qwen/gsq-models/cb02422c900df489cea5833e8a92171224059b3c` after size and
-SHA-256 checks. It downloads missing runtime files and missing model files only.
-It runs the stock `tools/dsv41/pack_gguf.py` with the plain recipe. This creates
-a small index and tokenizer files; it does not copy or requantize the weights,
-load a GPU model, or start a server. No llama.cpp fork runs for DeepSeek.
-Preparation does not require a free API port or unused GPUs.
+`--prepare-assets-only` requires `--prepare-only`. It verifies the prepared
+runtime offline, downloads missing selected weights and the pinned draft,
+and creates the separate DSpark pack. It does not update runtime packages,
+rewrite the network guard, change the active API configuration or launch
+record, load a GPU model, or stop a server. It uses separate preparation locks
+and does not require a free API port or idle GPUs. Missing runtime dependencies
+cause an error; this mode cannot combine with `--install-deps`.
 
-After you stop the previous server, start the same prepared profile:
+For a fresh Pod, first prepare with `--prepare-only --install-deps`, without
+`--prepare-assets-only`. That mode can install the pinned runtime and packages.
+
+The selected GSQ shards and shared Engram remain under
+`/opt/qwen/gsq-models/cb02422c900df489cea5833e8a92171224059b3c`. Existing IQ2_XXS
+files stay there when IQ2_XS is added. The draft is separate:
+`/opt/qwen/strata-drafts/f924b94f19c1fea02c06a65c8475b0a45e2b88b1/dspark-DeepSeek-V4.1-Flash-1017-Q8_0.gguf`.
+It is pinned to 7,976,914,240 bytes and SHA-256
+`6ba6ac1b331c540691a209e7fc97dec2a24e295acb1e755c84c7d24a4373927a`.
+
+The stock `tools/dsv41/pack_gguf.py` creates
+`strata-pack-iq2_xs-dspark` with `--dspark-gguf`, noise token 128799, and Markov
+rank 256. The pack receipt includes every generated index/tokenizer asset and
+the draft identity. Unknown pack entries are rejected. The pack references
+verified GGUF files; it does not copy or requantize weights. The existing
+ordinary pack remains available for rollback.
+
+After you stop the previous server, start the prepared profile:
 
 ```sh
 bash /workspace/start-remote-model.sh --profile deepseek-gsq-a40-quad \
-  --ctxt 256K --root /opt/qwen --no-ssh
+  --root /opt/qwen --no-ssh
+```
+
+To keep existing compatible IQ2_XXS weights, add `--reuse` to preparation and
+launch. On native GSQ profiles, this selects IQ2_XXS when all four shards and
+the shared Engram exist at their exact sizes. Otherwise it selects IQ2_XS.
+Preview labels this as a size-based candidate selection. Preparation and
+serving require matching SHA-verification receipts or compute the hashes.
+A selected file with an invalid checksum causes an error. The file is retained.
+Explicit `--quant` takes precedence over `--reuse`. Other model families reject
+`--reuse`.
+
+For the previous ordinary IQ2_XXS configuration, use:
+
+```sh
+bash /workspace/start-remote-model.sh --profile deepseek-gsq-a40-quad \
+  --root /opt/qwen --no-ssh --quant IQ2_XXS --ctxt 1M \
+  --spec none --layer-split auto
 ```
 
 Serving verifies the prepared source, signed native engine, dependencies,
@@ -61,6 +101,10 @@ indices `0,1,2,3`. The following controls replace llama.cpp placement controls:
 
 | Flag | Default | Meaning |
 | --- | --- | --- |
+| `--layer-split` | `9,11,10,10` on quad A40; `auto` otherwise | Layer counts per GPU; sum must be 40 |
+| `--spec` | `dspark` on quad A40; `none` otherwise | Native DSpark or ordinary decoding |
+| `--dspark N` | No block override | Positive N enables DSpark and limits drafts per round; 0 disables |
+| `--dspark-conf` | `0.65` when DSpark is enabled | Draft confidence threshold, 0–1 |
 | `--expert-ram-gb` | `36` | Soft expert RAM cache in GiB |
 | `--gpu-expert-fraction` | `1` | Fraction of the available native GPU expert budget |
 | `--vram-reserve-mib` | `2048` | VRAM reserve per GPU in MiB |
@@ -89,7 +133,18 @@ DeepSeek rejects `--cpu-moe-layers`, `--tensor-split`, `--gsq-engram`,
 Use a dedicated `deepseek-gsq-*` profile for GSQ; `--ds-source gsq-rco` does not
 substitute a different quant into an Unsloth profile. Existing Unsloth quant
 choices and GSQ IQ1_M/IQ2_XXS/IQ2_XS choices remain explicit. Remote Strata uses
-six experts per token and ordinary decoding. DSpark/MTP/DFlash are rejected.
+six experts per token. `--spec dspark` enables the pinned native draft;
+`--spec none` does not load it. MTP and DFlash remain unsupported.
+`--dspark N` accepts 1–64 as a native block limit; omitting it leaves the
+native limit unchanged. It conflicts with an incompatible explicit `--spec`.
+
+`--layer-split` takes one positive layer count per selected GPU, summing to 40.
+The launcher sets `DS4_SPLIT`; the native engine ignores the generic
+`--layer-split` argument. Use `--layer-split auto` to leave native placement
+automatic. The draft stays on the first selected GPU. The quad-A40 default gives that
+GPU nine trunk layers to leave space for the draft. The counts come from
+weight-size estimates; they do not prove that 1M runtime buffers fit.
+`--layer-split 10,10,10,10` remains an explicit override.
 The native packer can reject an unsupported tensor layout; it does not change
 the quant or download another model. Remove unrelated drafter/vision assets
 from the packer's automatic-discovery locations before preparing a plain pack.
