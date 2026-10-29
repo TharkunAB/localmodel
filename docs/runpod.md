@@ -2,27 +2,30 @@
 
 `bin/start-remote-model.sh` is the supplied standalone rental-GPU launcher.
 It embeds Python and does not require the local harness, systemd, or
-`heavy-management`. Its `qwen` profile serves **Qwen3.8-27B**. The local
-harness uses a separate **Qwen3.8-Flash-Next** profile.
+`heavy-management`. Automatic selection serves **DeepSeek V4.1 Flash 1017**.
+Other models require an explicit profile. The legacy `qwen` profile serves
+Qwen3.8-27B; the local harness uses a separate Qwen3.8-Flash-Next profile.
 
 All remote DeepSeek profiles now use the unmodified official Strata source
 `46c152a1310f77cd2f0ce2c7cd213962df14fe83` (0.2.7.1), Control 0.1.53, and signed
 CUDA 13 engine 0.1.52. The standalone file embeds the artifact pins, signature
 verification, and the same outgoing-network restriction as the local harness.
-Qwen, Flint, Ornith, and MiniMax keep their existing llama.cpp paths.
+Qwen, Flint, Ornith, and MiniMax keep their explicit llama.cpp paths.
 
 The original `start-qwen.sh` attachment has SHA-256
 `955915e9fc13bc9ba44a580285cd21a70a0c183c2fafb514e3e1c274326b8d3a`.
-The current embedded version is `2026-10-29-deepseek-strata-dspark-1`.
+The current embedded version is `2026-10-29-deepseek-strata-auto-1`.
 Packaging checks do not establish remote GPU inference or throughput.
 
 ## Migrate an existing DeepSeek Pod
 
 Copy the updated script onto the Pod. The quad-A40 profile now defaults to
 **IQ2_XS, 1M context, DSpark on, and layer counts 9,11,10,10**. It still selects
-six experts per token. The larger quant and draft use additional disk and
-memory. These defaults are not a benchmark or a successful 1M inference claim.
-Other profile defaults stay unchanged.
+six experts per token. After restart, the first 13 normal requests generated
+5,302 tokens in 95.468 decode seconds: 55.5 tokens/s. The previous ordinary
+IQ2_XXS run averaged 37.1 tokens/s. These requests used different prompts and
+context lengths, so this is an observation, not a controlled comparison.
+The new requests used 11K–38K tokens. They did not fill the 1M capacity.
 
 For an existing prepared runtime under `/opt/qwen`, stage the new assets while
 the current server continues to run:
@@ -101,11 +104,11 @@ indices `0,1,2,3`. The following controls replace llama.cpp placement controls:
 
 | Flag | Default | Meaning |
 | --- | --- | --- |
-| `--layer-split` | `9,11,10,10` on quad A40; `auto` otherwise | Layer counts per GPU; sum must be 40 |
-| `--spec` | `dspark` on quad A40; `none` otherwise | Native DSpark or ordinary decoding |
+| `--layer-split` | Planned contiguous counts; `9,11,10,10` on quad A40 | Layer counts per GPU; sum must be 40; `auto` delegates placement to Strata |
+| `--spec` | `dspark` when it fits; `none` otherwise | Native DSpark or ordinary decoding |
 | `--dspark N` | No block override | Positive N enables DSpark and limits drafts per round; 0 disables |
 | `--dspark-conf` | `0.65` when DSpark is enabled | Draft confidence threshold, 0–1 |
-| `--expert-ram-gb` | `36` | Soft expert RAM cache in GiB |
+| `--expert-ram-gb` | Up to `36`, after host headroom | Soft expert RAM cache in GiB; an explicit value overrides automatic sizing |
 | `--gpu-expert-fraction` | `1` | Fraction of the available native GPU expert budget |
 | `--vram-reserve-mib` | `2048` | VRAM reserve per GPU in MiB |
 | `--prefill-chunk` | `4096` | Prompt chunk size in tokens |
@@ -125,8 +128,10 @@ template or parser patch is applied.
 unit. It is **not a hard process RAM cap**. The launcher checks available RAM,
 including cgroup v1/v2 limits, and requires the cache plus the Engram row cache
 plus 24 GiB headroom. It does not create a systemd scope or a new cgroup inside
-the Pod. A 200 GB RAM allocation has about 186 GiB before other use. Start with
-the default cache and inspect memory use before increasing it.
+the Pod. Without an explicit cache size, the launcher chooses up to 36 GiB
+after reserving 24 GiB and the Engram row cache. Low-memory hosts can therefore
+use a smaller expert cache. A 200 GB RAM allocation has about 186 GiB before
+other use. Inspect memory use before increasing the cache.
 
 DeepSeek rejects `--cpu-moe-layers`, `--tensor-split`, `--gsq-engram`,
 `--engram-ram`, llama.cpp KV/prompt-cache/batch flags, and build-archive flags.
@@ -175,7 +180,14 @@ prebuilt CUDA 13 engine and needs a compatible NVIDIA host driver plus
 Its `--install-deps --prepare-only` installs Python venv support, certificates,
 libseccomp, and filesystem utilities on Debian/Ubuntu.
 
-For Qwen, Flint, Ornith, and MiniMax, select a **CUDA development** image.
+The pinned native executable contains SM86, SM89, and SM120 kernels, plus
+SM120 PTX. The launcher accepts those three architectures. A newer driver
+does not supply missing engine kernels. H200 (SM90), B200 (SM100), and B300
+(SM103) therefore fail before preparation or serving. This restriction also
+applies to their legacy explicit DeepSeek profile names. No source build or
+alternate engine is selected automatically.
+
+For explicit Qwen, Flint, Ornith, and MiniMax profiles, select a **CUDA development** image.
 Their launcher path compiles llama.cpp on the Pod. It requires `nvcc`; a CUDA runtime
 image is insufficient. `--install-deps` installs Debian/Ubuntu build tools but
 does not install CUDA or change the NVIDIA driver. For Blackwell, the launcher
@@ -188,33 +200,63 @@ VRAM. The launcher rejects MIG/vGPU allocations. Use RunPod's CUDA compatibility
 filter for the selected image. See [Choose a Pod](https://docs.runpod.io/pods/choose-a-pod)
 and [Manage Pods](https://docs.runpod.io/pods/manage-pods).
 
-Use `--profile` explicitly. These are the supplied auto-selection defaults for
-homogeneous allocations; capacities are card labels, not measured free VRAM.
+`--profile auto` selects DeepSeek on every supported allocation. It uses the
+detected total VRAM to make the choice stable while another server runs.
+Startup checks current free memory separately. Restrict `CUDA_VISIBLE_DEVICES`
+or use `--gpu-count` to select fewer GPUs deliberately.
 
-| Visible GPUs | Default profile | Default context | Approximate model files |
+The planner checks exact packed layer sizes from the pinned GGUF headers.
+It assigns contiguous layers to each GPU, the output head to the last GPU,
+and the DSpark draft to the first GPU. Input embedding rows come from host
+memory. Native serving uses `--tp 1` so the placement matches this calculation.
+It allows 3.5 GiB per GPU for native allocations at 1M context, plus the
+configured reserve, which defaults to 2 GiB. The 3.5 GiB allowance comes from
+the quad-A40 observations. It is not a measured bound for every GPU or flag.
+
+It selects the highest precision in this pinned catalog that fits those
+per-GPU budgets: Unsloth Q8_K_XL, Q4_K_XL, Q3_K_XL, IQ3_S, IQ3_XXS, Q2_K_XL, then
+GSQ IQ2_XS, IQ2_XXS, and IQ1_M. It adds DSpark only if the selected weights
+and draft fit together. It does not reduce precision just to add a draft.
+If no candidate fits, it selects GSQ IQ1_M with CPU/RAM/SSD expert streaming.
+That choice minimizes weight traffic; it is not a speed benchmark.
+Explicit `--quant` and `--spec` can override the choice.
+
+These examples use 46,068 MiB per A40 and 97,887 MiB per PRO 6000. Actual
+reported capacity can change a selection. Context defaults to **1M** throughout.
+
+| Visible GPUs | Automatic weights | DSpark | Capacity status |
 | --- | --- | --- | --- |
-| 1 RTX 4090, 24 GB | `qwen`, Q4_K_M + MTP | 128K | 19 GB + 1.7 GB draft |
-| 1 RTX 5090, 32 GB | `flint`, NVFP4 | 192K | 23 GB |
-| 1 supported 48 GB card, including A40/A6000 | `flint`, NVFP4 | 256K | 23 GB |
-| 2 A40/RTX A6000, 48 GB each | `ornith`, UD-Q4_K_XL | 256K | 80 GB |
-| 3–7 A40/RTX A6000 | `flint` on one selected GPU | 256K | 23 GB |
-| 8 or more A40/RTX A6000 | `deepseek`, UD-Q8_K_XL | 256K | 508 GB |
-| 4 RTX PRO 6000 Blackwell, 96 GB each | `deepseek-pro6000-quad-q8` | 256K | 508 GB |
-| 1 B300, 288 GB | `deepseek-b300-iq3` | 1M | 395 GB |
-| 1 B200, 180 GB | `deepseek-b200-iq2` | 256K | 301 GB |
-| 1 H200, 141 GB | `deepseek-h200-iq2` | 256K | 301 GB |
-| 2 H200, 141 GB each | `deepseek-h200-dual-iq3` | 256K | 395 GB |
+| 1 RTX 4090 or RTX 5090 | GSQ IQ1_M | Off | CPU/SSD experts required |
+| 1 supported 48 GB card | GSQ IQ1_M | Off | CPU/SSD experts required |
+| 2 A40 | GSQ IQ1_M | Off | CPU/SSD experts required |
+| 3 A40 | GSQ IQ1_M | Off | Estimated GPU fit |
+| 4 A40 | GSQ IQ2_XS | On | Measured working preset, split 9,11,10,10 |
+| 5 A40 | Unsloth UD-Q2_K_XL | Off | Estimated GPU fit |
+| 6 A40 | Unsloth UD-IQ3_XXS | On | Estimated GPU fit |
+| 7 A40 | Unsloth UD-IQ3_S | On | Estimated GPU fit |
+| 8 A40 | Unsloth UD-Q8_K_XL | Off | Estimated GPU fit; draft exceeds a stage budget |
+| 1 RTX PRO 6000 Blackwell | GSQ IQ1_M | Off | CPU/SSD experts required |
+| 2 RTX PRO 6000 Blackwell | GSQ IQ2_XS | On | Estimated GPU fit |
+| 3 RTX PRO 6000 Blackwell | Unsloth UD-Q3_K_XL | Off | Estimated GPU fit; draft exceeds a stage budget |
+| 4 RTX PRO 6000 Blackwell | Unsloth UD-Q8_K_XL | On | Estimated GPU fit |
+| H200, B200, or B300 | None | None | Missing kernels in the pinned engine |
 
-Here K and M use powers of 1024. Model-file sizes use decimal GB. They exclude
-builds, caches, temporary files, and optional drafts. These are planning values.
-The launcher checks free VRAM, available host RAM, and storage before launch.
+These are capacity candidates, not a performance ranking. Quants from different
+publishers do not form a measured quality ranking merely from their names.
+The [GSQ model card](https://huggingface.co/ISTA-DASLab/DeepSeek-V4.1-Flash-1017-GSQ-RCO-GGUF)
+reports its benchmark results. The [Unsloth analysis](https://unsloth.ai/docs/models/deepseek-v4.1-flash#quantization-analysis)
+reports probability agreement with the base checkpoint. Its Q8 label retains
+native MXFP4 experts and uses BF16 for other weights; it is not uniformly 8-bit.
 
-One to three RTX PRO 6000 Blackwell cards select a blocked FP4-Local path in
-`auto` mode. Select `--profile qwen` or another supported profile deliberately.
-More than four PRO cards require explicit `--gpu-count 4` or restricted CUDA
-visibility. The Qwen profile uses one GPU: Q4_K_M with q4_0 KV on 4090/5090,
-and Q8_0 with q8_0 KV on supported 48/96 GB cards. Its default context is 128K
-on 4090 and 256K otherwise. It enables MTP at depth 3.
+Here K and M use powers of 1024. The smallest GSQ download is about 231 GB,
+including the shared Engram. The largest listed Unsloth download is about
+508 GB. DSpark adds about 8 GB. Allow at least 20 GiB of free disk reserve,
+plus space for the runtime and temporary downloads.
+
+Other model families remain explicit choices. For example, `--profile qwen`
+selects Qwen3.8-27B and its original context and MTP defaults. Automatic
+selection never changes to another model family after a compatibility or
+capacity failure.
 
 Host RAM is separate from VRAM. Qwen/Flint require 16 GiB available host RAM
 and Ornith requires 32 GiB with their default prompt cache. MiniMax calculates
@@ -237,7 +279,7 @@ stops. See RunPod's [storage options](https://docs.runpod.io/pods/storage/types)
 
 Pass `--root /workspace/remote-models`. The unchanged script default is
 `/opt/qwen`, which is usually on the disposable container disk. For an initial
-Qwen or Flint run, budget at least 80 GB of persistent working storage. Larger
+DeepSeek run, budget at least 300 GB of working storage. Higher precision
 profiles need their model-file total plus build space, drafts, and at least the
 launcher's 20 GiB free-space reserve. Quantization variants occupy separate
 files and can require hundreds of additional GB. Also allocate container disk
@@ -268,20 +310,20 @@ scp -P PORT bin/start-remote-model.sh root@IP:/workspace/start-remote-model.sh
 ssh -p PORT root@IP
 ```
 
-On the Pod, inspect the help and the selected plan. This example deliberately
-selects Qwen3.8-27B on a supported single GPU:
+On the Pod, inspect the help and the selected DeepSeek plan:
 
 ```sh
 bash /workspace/start-remote-model.sh --help
 bash /workspace/start-remote-model.sh \
-  --profile qwen --root /workspace/remote-models --no-ssh --show-config
+  --profile auto --root /workspace/remote-models --no-ssh --show-config
 ```
 
-`--dry-run` is an alias for `--show-config`. A plain preview reads GPU
-inventory and checks memory, filesystem type, and the API port. It does not
-download, build, or start services. It can fail if another server already uses
-8897. Inspect the printed profile, model revision, GPU selection, context,
-cache settings, root, and endpoint before continuing.
+`--dry-run` is an alias for `--show-config`. A native DeepSeek preview reads GPU
+inventory, checks storage, and reports the required and available host RAM.
+It can inspect a plan while the GPU or API port is busy. A low-RAM preview
+reports `ready: false`; preparation and serving enforce their RAM requirements.
+Preview does not download, build, or start services. Inspect the printed profile,
+model revision, GPU placement, context, cache settings, root, and endpoint.
 
 Do not combine preview flags with `--archive-build-only`, `--smoke-test`, or
 `--smoke-full-context`. Those actions take precedence in the supplied script:
@@ -296,18 +338,18 @@ Use `tmux` so SSH disconnects do not interrupt preparation or inference. Install
 ```sh
 tmux new -s remote-model
 bash /workspace/start-remote-model.sh \
-  --profile qwen --root /workspace/remote-models --no-ssh \
+  --profile auto --root /workspace/remote-models --no-ssh \
   --install-deps --prepare-only
 bash /workspace/start-remote-model.sh \
-  --profile qwen --root /workspace/remote-models --no-ssh
+  --profile auto --root /workspace/remote-models --no-ssh
 ```
 
-For the Qwen example, preparation installs build tools when requested, builds or restores the pinned
-runtime, creates a download venv, downloads and verifies the model files, and
-writes the planned launch. `--prepare-only` then exits without starting the
-server. `--install-deps` alone continues through preparation into serving.
+Preparation installs the requested system dependencies, verifies the signed
+Strata engine, downloads and verifies the selected weights, and creates the
+native pack. `--prepare-only` exits without starting the server. DeepSeek
+requires `--prepare-only` with `--install-deps`; serving never installs updates.
 Use the same profile and settings for preview, preparation, and launch. Add
-`--accept-experimental` for MiniMax. Use the separate DeepSeek preparation flow above.
+`--accept-experimental` only for explicit MiniMax profiles.
 Detach with Ctrl-b then d. Reconnect with `tmux attach -t remote-model`.
 
 The API binds to `127.0.0.1:8897`. `--port` changes the port; there is no host

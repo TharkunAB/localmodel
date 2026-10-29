@@ -47,7 +47,7 @@ import urllib.request
 import uuid
 from typing import Any
 
-VERSION = '2026-10-29-deepseek-strata-dspark-1'
+VERSION = '2026-10-29-deepseek-strata-auto-1'
 GIB, MIB = 1024**3, 1024**2
 SOURCE = 'https://github.com/ggml-org/llama.cpp.git'
 STABLE = '620d2225cc436ab0b001e3200e590e3b286ef9ab'  # released v0.7.0
@@ -536,31 +536,15 @@ def select(gpus: list[GPU], mode: str, gpu_count: int | None) -> tuple[str, list
         raise Error('No CUDA-visible GPUs')
     ampere48 = [g for g in gpus if is_ampere_48(g)]
     pro_blackwell = [g for g in gpus if pro6000(g)]
-    if mode == 'auto':
-        if len(ampere48) >= 8:
-            mode = 'deepseek'
-        elif len(ampere48) == 2:
-            mode = 'ornith'
-        elif len(pro_blackwell) >= 4:
-            mode = 'deepseek-pro6000-quad-q8'
-        elif len(gpus) == 1 and is_b300(gpus[0]):
-            mode = 'deepseek-b300-iq3'
-        elif len(gpus) == 1 and is_b200(gpus[0]):
-            mode = 'deepseek-b200-iq2'
-        elif len(gpus) == 2 and all(is_h200(g) for g in gpus):
-            mode = 'deepseek-h200-dual-iq3'
-        elif len(gpus) == 1 and is_h200(gpus[0]):
-            mode = 'deepseek-h200-iq2'
-        elif any(pro6000(g) for g in gpus):
-            mode = 'flash-next-fp4'
-        elif (len(gpus) == 1 and flint_eligible(gpus[0])
-              and qwen_tier(gpus[0]) in ('5090', '48gb')):
-            mode = 'flint'
-        elif 3 <= len(ampere48) <= 7 and len(gpus) == len(ampere48):
-            # Smaller A40/A6000 pods previously selected Qwen on just one GPU.
-            mode = 'flint'
-        else:
-            mode = 'qwen'
+    if mode in ('auto', 'deepseek-auto'):
+        count = len(gpus) if gpu_count is None else gpu_count
+        if not 1 <= count <= min(40, len(gpus)):
+            raise Error('Native DeepSeek requires 1..40 selected physical GPUs; --gpu-count selects the first CUDA-visible devices')
+        chosen = gpus[:count]
+        strata_gpu_compatibility(chosen)
+        if len(chosen) == 4 and all(is_a40(g) for g in chosen):
+            return 'deepseek-gsq-a40-quad', chosen
+        return 'deepseek-auto', chosen
     if mode in GSQ_PROFILES:
         info=GSQ_PROFILES[mode];need=info['count']
         valid={'a40':lambda g:is_a40(g) and g.cc==86,'ampere48':lambda g:is_ampere_48(g) and g.cc==86,
@@ -596,7 +580,7 @@ def select(gpus: list[GPU], mode: str, gpu_count: int | None) -> tuple[str, list
         if len(pro_blackwell) > 4 and gpu_count is None:
             raise Error('More than four RTX PRO 6000 cards visible. Pass --gpu-count 4 '
                         'or restrict CUDA_VISIBLE_DEVICES to select four deliberately.')
-        return mode, sorted(pro_blackwell, key=lambda g: g.index)[:4]
+        return mode, pro_blackwell[:4]
     if mode == 'deepseek-b200-iq2':
         if gpu_count not in (None, 1) or len(gpus) != 1 or not is_b200(gpus[0]):
             raise Error('The B200 IQ2 profile requires exactly one CUDA-visible, full-memory '
@@ -636,6 +620,8 @@ def select(gpus: list[GPU], mode: str, gpu_count: int | None) -> tuple[str, list
         if (mode == 'ornith' and use != 2) or use < need or use > len(ampere48):
             raise Error(f'{mode} requires {need if mode == "ornith" else "at least 8"} local A40/RTX A6000 cards; '
                         f'visible supported cards={len(ampere48)}, requested={use}. Separate pods cannot be pooled.')
+        if mode == 'deepseek':
+            return mode, ampere48[:use]
         picked = sorted(ampere48, key=lambda g: (-g.free, g.index))[:use]
         return mode, sorted(picked, key=lambda g: g.index)
     if mode != 'qwen':
@@ -1800,11 +1786,16 @@ def validate_manifest(plan: Plan, data: dict[str, Any]) -> None:
         if observed != pinned or len(main) != 4:
             raise Error('MiniMax must use the exact four pinned all-sparse Q2_K shards with published SHA-256')
         shard_sequence([f['path'] for f in main])
-    elif plan.profile in GSQ_PROFILES:
+    elif plan.repo == GSQ_REPO:
         expected_files={n:(f['size'],f['sha256']) for n,f in gsq_files(plan.quant).items()}
         if {f['path']:(f['size'],f.get('sha256')) for f in main}!=expected_files or len(main)!=5:
             raise Error('GSQ requires exactly four pinned backbone shards and the shared IQ4_NL Engram with exact SHA-256')
         shard_sequence([f['path'] for f in main if f['path']!=GSQ_ENGRAM_NAME])
+    elif plan.engine == 'strata' and plan.repo == DS_REPO and plan.quant in DS_NATIVE:
+        expected_files = {name: (f['size'], f['sha256']) for name, f in DS_NATIVE[plan.quant]['files'].items()}
+        if {f['path']: (f['size'], f.get('sha256')) for f in main} != expected_files:
+            raise Error('DeepSeek requires the exact pinned Unsloth shards and published SHA-256')
+        shard_sequence([f['path'] for f in main])
     elif plan.profile.startswith('deepseek') and plan.quant == 'UD-Q2_K_XL':
         expected_files = {name: (f['size'], f['sha256']) for name, f in DS_Q2_FILES.items()}
         if {f['path']: (f['size'], f.get('sha256')) for f in main} != expected_files or len(main) != 7:
@@ -1866,7 +1857,7 @@ for f in a.siblings:
     target=(n=='Qwen3.8-27B-'+quant+'.gguf') if profile=='qwen' else ((n=='flint-nvfp4.gguf') if profile=='flint' else (n.startswith(quant+'/') and n.endswith('.gguf')))
     if profile.startswith('minimax-'):
         target=n.startswith('Sakura-MiniMax-M3.1-Flash-Q2_K-') and n.endswith('.gguf')
-    if profile.startswith('deepseek-gsq-'):
+    if repo=='ISTA-DASLab/DeepSeek-V4.1-Flash-1017-GSQ-RCO-GGUF':
         target=(n=='DeepSeek-V4.1-Flash-Engram-IQ4_NL.gguf' or
                 (n.startswith('DeepSeek-V4.1-Flash-1017-GSQ-RCO-'+quant+'-') and n.endswith('.gguf')))
     if target: files.append(item(f,'model'))
@@ -2111,7 +2102,7 @@ def download(python: Path, plan: Plan, path: Path, data: dict, args, env: dict) 
                 header = stream.read(pinned['header_size'])
             if hashlib.sha256(header).hexdigest() != pinned['header_sha256']:
                 raise Error('MiniMax GGUF header differs from verified all-60-layer layout: ' + name)
-    if plan.profile in GSQ_PROFILES:
+    if plan.repo == GSQ_REPO:
         for name in gsq_files(plan.quant):
             expected=GSQ_HEADERS[name]
             with (folder/name).open('rb') as stream:header=stream.read(expected['size'])
@@ -2971,24 +2962,33 @@ def smoke_full_context(args) -> int:
 
 
 def parser() -> argparse.ArgumentParser:
-    p=argparse.ArgumentParser(prog='start-remote-model.sh', description='Recursive Flint, Qwen, Ornith, DeepSeek and MiniMax rental-GPU launcher.',
+    p=argparse.ArgumentParser(prog='start-remote-model.sh', description='DeepSeek/Strata rental-GPU launcher with explicit Flint, Qwen, Ornith and MiniMax profiles.',
         formatter_class=argparse.RawDescriptionHelpFormatter, allow_abbrev=False,
         epilog='''DeepSeek profiles now use official Strata 0.2.7.1 / signed CUDA engine 0.1.52.
-All existing DeepSeek hardware profiles and exact quant selections remain available.
+Auto selects DeepSeek on 1..40 physical sm_86/sm_89/sm_120 GPUs with >=11000 MiB each.
+The pinned engine does not cover H200/sm_90, B200/sm_100 or B300/sm_103.
+DeepSeek defaults to 1M context. Quant selection uses total VRAM, never current GPU load.
+The ordered catalog is Q8, Q4, Q3_K, IQ3_S, IQ3_XXS, Q2_K, GSQ IQ2_XS, IQ2_XXS, IQ1_M.
+If no target fits, auto uses GSQ IQ1_M with RAM/SSD expert offload. DSpark is automatic
+only when its additional first-GPU weights fit; explicit --spec dspark/none wins.
 Quad A40 defaults: pinned GSQ IQ2_XS, 1M context, DSpark on, 9,11,10,10 layers.
 --reuse prefers complete existing IQ2_XXS files, with SHA checks at preparation/serving.
-Explicit --quant wins. Other profiles retain their previous defaults.
+Explicit --quant wins. Qwen/Flint/Ornith/MiniMax retain their previous defaults.
 Use --prepare-only to install the pinned runtime, verify/download GGUFs and create the
 stock native pack. Normal serving requires prepared local files and never downloads.
 No CUDA compiler is needed for Strata; the host driver must support its CUDA 13 engine.
 --show-config/--dry-run is read-only. --prepare-only does not require a free API port.
 
-Strata uses automatic GPU expert placement across all selected GPUs.
+Strata uses contiguous layer placement and --tp 1 across all selected GPUs.
+Planning reserves 3.5 GiB plus --vram-reserve-mib per GPU. It is not a benchmark.
 --expert-ram-gb is a soft RAM cache in GiB; --gpu-expert-fraction is a 0..1 fraction.
+The default RAM cache is min(36 GiB, available RAM minus 24.25 GiB), rounded down.
 These do not create a hard process limit. Leave host RAM for the OS and other weights.
 --cpu-moe-layers, --tensor-split, --gsq-engram, --engram-ram, llama.cpp KV/cache/batch
 controls and build-archive flags are rejected for DeepSeek. Use --spec dspark/none.
---layer-split takes per-GPU layer COUNTS summing to 40, or auto. It sets DS4_SPLIT.
+--layer-split takes per-GPU layer COUNTS summing to 40, or auto for native placement.
+Default planning sets DS4_SPLIT. Explicit auto leaves it unset; displayed counts are
+then estimates. There is no fallback to another quant or context after startup fails.
 --dspark N enables native DSpark with a block limit; 0 disables it. --dspark-conf defaults to 0.65.
 --prepare-assets-only --prepare-only verifies the prepared runtime and stages a separate
 model/draft pack without changing active server configuration, runtime packages or guard.
@@ -3002,31 +3002,29 @@ Example for existing /opt/qwen/gsq-models files on four A40 GPUs:
   # Ordinary rollback: --spec none --layer-split auto --quant IQ2_XXS --ctxt 1M
 
 Qwen/Flint/Ornith/MiniMax retain their prior llama.cpp runtime and controls.
-Auto selection: one supported 48GB card or 5090 -> Flint; two A40/A6000 -> Ornith;
-3..7 A40/A6000 -> one Flint; >=8 A40/A6000 -> DeepSeek; four PRO6000 -> DeepSeek.
-One B300/B200 or one/two H200 -> their DeepSeek profile. One to three PRO6000
-select the blocked FP4-Local path unless an explicit supported profile is supplied.
+Other model families require --profile. Auto preserves CUDA-visible order and uses
+all visible GPUs; --gpu-count selects the first N. Unsupported selected GPUs fail.
 The Qwen profile is Qwen3.8-27B. All API endpoints bind to 127.0.0.1, default 8897.
 ''')
     p.add_argument('--version',action='version',version=VERSION)
-    p.add_argument('--profile',choices=('auto','flint','qwen','ornith','deepseek',
+    p.add_argument('--profile',choices=('auto','deepseek-auto','flint','qwen','ornith','deepseek',
                    'deepseek-h200-iq2','deepseek-h200-dual-iq3','deepseek-b300-iq3',
                    'deepseek-b200-iq2','deepseek-pro6000-quad-q8',
                    *MINIMAX_PROFILES,*GSQ_PROFILES,
                    'flash-next-fp4'),default=os.environ.get('QWEN_PROFILE','auto'))
     p.add_argument('--root',default=os.environ.get('QWEN_ROOT','/opt/qwen'))
     p.add_argument('--model-dir',default=os.environ.get('QWEN_MODEL_DIR'))
-    p.add_argument('--ds-source',choices=('unsloth','gsq-rco'),default=os.environ.get('DS_SOURCE','unsloth'),
-                   help='1017 source: existing Unsloth profiles, or pinned GSQ-RCO configs (launch blocked until external Engram support is verified)')
+    p.add_argument('--ds-source',choices=('unsloth','gsq-rco'),default=os.environ.get('DS_SOURCE'),
+                   help='Constrain the DeepSeek source; auto considers both pinned catalogs by default')
     p.add_argument('--gsq-engram',choices=('cpu','gpu'),
                    help='Dedicated GSQ profiles: SSD/host Engram or GPU-resident tables; full-RAM CPU mode uses --engram-ram')
     p.add_argument('--port',type=int,default=envint('QWEN_PORT',8897))
     p.add_argument('--ctx','--context','--ctx-size','--ctxt','-c',dest='context',type=parse_context,
                    help='Token count or binary shorthand: 256K, 512K, 768K, 1M')
     p.add_argument('--reuse',action='store_true',help='Native GSQ: prefer existing complete IQ2_XXS; otherwise IQ2_XS. Verify SHA at prepare/serve. Explicit --quant wins.')
-    p.add_argument('--quant',help='Exact GGUF quant name (legacy; --variant iq3_s is easier for B300/dual H200)')
+    p.add_argument('--quant',help='Exact pinned quant name; overrides automatic quality/VRAM selection')
     p.add_argument('--variant',type=str.lower,choices=('iq3_xxs','iq3_s'),
-                   help='B300 or dual H200: iq3_xxs (default) or iq3_s (higher fidelity)')
+                   help='Native auto or explicit B300/dual H200: select Unsloth iq3_xxs or iq3_s')
     p.add_argument('--reuse-engram',action='store_true',
                    help='B300 / dual-H200 IQ3: reuse verified Q6_K Engram from other variant '
                         'using CoW reflink and GGUF header restamp; requires CoW filesystem')
@@ -3042,10 +3040,10 @@ The Qwen profile is Qwen3.8-27B. All API endpoints bind to 127.0.0.1, default 88
     p.add_argument('--draft-depth','--mtp-depth',type=int)
     p.add_argument('--draft-sampling',choices=('greedy','probabilistic'),default='greedy')
     p.add_argument('--reasoning-effort')
-    p.add_argument('--gpu-count',type=int,help='Local A40/A6000 count; 4 for RTX PRO 6000 Blackwell; 1/2 for H200; 1 for B200/B300')
+    p.add_argument('--gpu-count',type=int,help='Auto: select the first N CUDA-visible GPUs, 1..40; explicit profiles retain their count requirements')
     p.add_argument('--cpu-moe-layers',type=int,
                    help='H200 IQ2: existing early-layer setting (default 18); MiniMax: explicitly offload 0..57 routed-expert layers (default 0)')
-    p.add_argument('--expert-ram-gb',type=float,default=36,help='Strata expert RAM cache in GiB; soft budget, not a process cap (default 36)')
+    p.add_argument('--expert-ram-gb',type=float,help='Strata expert RAM cache in GiB; defaults to at most 36 after host headroom; not a process cap')
     p.add_argument('--gpu-expert-fraction',type=float,default=1.0,help='Strata fraction of automatically available GPU expert capacity, 0..1')
     p.add_argument('--vram-reserve-mib',type=int,default=2048,help='Strata free VRAM reserve per GPU in MiB (default 2048)')
     p.add_argument('--prefill-chunk',type=int,default=4096,help='Strata prompt chunk size in tokens (default 4096)')
@@ -3537,8 +3535,9 @@ def strata_options(args) -> None:
         raise Error('--dspark-conf must be 0..1')
     if args.prepare_assets_only and (not args.prepare_only or args.install_deps or args.setup_ssh or args.ssh_only):
         raise Error('--prepare-assets-only requires --prepare-only and cannot install dependencies or set up SSH')
-    if args.ds_source == 'gsq-rco' and args.profile not in GSQ_PROFILES:
-        raise Error('Select an explicit deepseek-gsq-* profile for GSQ-RCO. The selected Unsloth quant is not substituted.')
+    if args.expert_ram_gb is None:
+        headroom = 24 * GIB + args.engram_cache_mib * MIB
+        args.expert_ram_gb = max(0, min(36, (available_ram() - headroom) // GIB))
     if not math.isfinite(args.expert_ram_gb) or not 0 <= args.expert_ram_gb <= 1024:
         raise Error('--expert-ram-gb must be 0..1024 GiB; it is a soft cache budget, not a process RAM cap')
     if not math.isfinite(args.gpu_expert_fraction) or not 0 <= args.gpu_expert_fraction <= 1:
@@ -3551,12 +3550,144 @@ def strata_options(args) -> None:
         raise Error('Strata uses --cpu-threads 1..64 and --thinking-budget 0..1048576')
 
 
+STRATA_AUTO_QUANTS = ('UD-Q8_K_XL', 'UD-Q4_K_XL', 'UD-Q3_K_XL', 'UD-IQ3_S', 'UD-IQ3_XXS',
+                      'UD-Q2_K_XL', 'IQ2_XS', 'IQ2_XXS', 'IQ1_M')
+# Keep explicit profile identities, quant choices and directory overrides.
+STRATA_PROFILES = {
+    'deepseek': ('DS', 'deepseek-v4.1-flash-1017', 'UD-Q8_K_XL', ('UD-Q8_K_XL', 'UD-Q4_K_XL', 'UD-Q2_K_XL')),
+    'deepseek-pro6000-quad-q8': ('DS_PRO6000_QUAD', 'deepseek-v4.1-1017-quad-pro6000-q8', 'UD-Q8_K_XL', ('UD-Q8_K_XL', 'UD-Q4_K_XL', 'UD-Q2_K_XL')),
+    'deepseek-b300-iq3': ('DS_B300', 'deepseek-v4.1-flash-1017-b300-iq3', 'UD-IQ3_XXS', ('UD-IQ3_XXS', 'UD-IQ3_S', 'UD-Q2_K_XL')),
+    'deepseek-h200-dual-iq3': ('DS_H200_DUAL', 'deepseek-v4.1-1017-dual-h200-iq3', 'UD-IQ3_XXS', ('UD-IQ3_XXS', 'UD-IQ3_S', 'UD-Q2_K_XL')),
+    'deepseek-b200-iq2': ('DS_B200', 'deepseek-v4.1-1017-b200-iq2', 'UD-IQ2_XXS', ('UD-IQ2_XXS', 'UD-IQ1_M')),
+    'deepseek-h200-iq2': ('DS_H200', 'deepseek-v4.1-1017-h200-iq2', 'UD-IQ2_XXS', ('UD-IQ2_XXS',)),
+}
+
+
+def strata_gpu_compatibility(gpus: list[GPU]) -> None:
+    """Require the architectures verified in the pinned CUDA binary."""
+    if not 1 <= len(gpus) <= 40:
+        raise Error('Native DeepSeek requires 1..40 selected physical GPUs')
+    unsupported = [f'{g.name} (sm_{g.cc}, {g.total} MiB)' for g in gpus
+                   if g.cc not in (86, 89, 120) or g.total < 11000]
+    if unsupported:
+        raise Error('Pinned Strata engine 0.1.52 supports verified sm_86/sm_89/sm_120 GPUs with at least '
+                    '11000 MiB. Unsupported selected hardware: ' + ', '.join(unsupported) +
+                    '. H200/sm_90, B200/sm_100 and B300/sm_103 are blocked before preparation. '
+                    'No source build or automatic model fallback is enabled.')
+
+
+def strata_placement(quant: str, gpus: list[GPU], args, draft: int = 0,
+                     counts: list[int] | None = None) -> dict[str, Any]:
+    """Minimize the largest contiguous stage load against total GPU capacity."""
+    layout = GSQ_LAYOUT[quant] if quant in GSQ_LAYOUT else DS_NATIVE[quant]
+    layers = layout['layer_bytes']
+    experts = layout['expert_layer_bytes']
+    prefix = [0]
+    for value in layers:
+        prefix.append(prefix[-1] + value)
+    allowance = int(3.5 * GIB) + args.vram_reserve_mib * MIB
+    capacity = [g.total * MIB - allowance for g in gpus]
+    if any(value <= 0 for value in capacity):
+        raise Error('The requested VRAM reserve plus 3.5 GiB native allowance exceeds a selected GPU capacity')
+    extra = [0] * len(gpus)
+    extra[0] += draft
+    extra[-1] += layout['output_bytes']
+    if counts is None:
+        best = {0: (0.0, [])}
+        for gpu in range(len(gpus)):
+            next_best = {}
+            for end in range(gpu + 1, 41 - (len(gpus) - gpu - 1)):
+                choices = [(max(previous[0], (prefix[end] - prefix[start] + extra[gpu]) / capacity[gpu]),
+                            previous[1] + [end - start])
+                           for start, previous in best.items() if start < end]
+                if choices:
+                    next_best[end] = min(choices)
+            best = next_best
+        counts = best[40][1]
+    stages, dense, offload = [], [], []
+    start = 0
+    for gpu, count in enumerate(counts):
+        end = start + count
+        stage = prefix[end] - prefix[start] + extra[gpu]
+        routed = sum(experts[start:end])
+        stages.append(stage)
+        dense.append(stage - routed)
+        resident = max(0, capacity[gpu] - dense[-1]) * args.gpu_expert_fraction
+        offload.append(max(0, math.ceil(routed - resident)))
+        start = end
+    return {'layer_counts': counts, 'gpu_total_bytes': [g.total * MIB for g in gpus],
+            'weight_budget_bytes': capacity, 'native_allowance_bytes_per_gpu': int(3.5 * GIB),
+            'reserve_bytes_per_gpu': args.vram_reserve_mib * MIB,
+            'stage_weight_bytes': stages, 'dense_and_draft_bytes': dense,
+            'expected_expert_offload_bytes': offload,
+            'all_target_weights_fit': not any(offload) and all(stage <= cap for stage, cap in zip(stages, capacity)),
+            'draft_bytes_on_first_gpu': draft, 'input_embeddings': 'host', 'output_head': 'last GPU',
+            'policy': 'contiguous minimax stages from total VRAM; unbenchmarked; no context or quant fallback',
+            'verified_kernel_architectures': [86, 89, 120], 'tensor_parallel_size': 1}
+
+
 def strata_plan(args, mode: str, gpus: list[GPU]) -> Plan:
-    """Preserve checkpoint selection without llama.cpp placement estimates."""
+    """Select pinned native weights without the llama.cpp planning path."""
+    strata_gpu_compatibility(gpus)
     strata_options(args)
-    if args.reuse and mode not in GSQ_PROFILES:
-        raise Error('--reuse applies only to native GSQ IQ2_XXS/IQ2_XS selection')
-    spec = args.spec or ('dspark' if mode == 'deepseek-gsq-a40-quad' else 'none')
+    if (mode == 'deepseek-gsq-a40-quad' and args.profile in ('auto', 'deepseek-auto')
+            and (args.ds_source == 'unsloth' or args.variant is not None
+                 or (args.quant is not None and args.quant.startswith('UD-')))):
+        mode = 'deepseek-auto'
+    base = Path(args.root).expanduser().absolute()
+    generic = mode == 'deepseek-auto'
+    quad = mode == 'deepseek-gsq-a40-quad'
+    split = args.layer_split if args.layer_split is not None else ('9,11,10,10' if quad else 'auto')
+    counts = None
+    if split != 'auto':
+        try:
+            counts = [int(value.strip()) for value in split.split(',')]
+        except ValueError as exc:
+            raise Error('--layer-split must be auto or positive integer layer counts') from exc
+        if len(counts) != len(gpus) or any(value <= 0 for value in counts) or sum(counts) != 40:
+            raise Error('--layer-split needs one positive count per selected GPU, summing to 40')
+    prefix = 'GSQ' if mode in GSQ_PROFILES else STRATA_PROFILES[mode][0] if not generic else None
+    quant = args.quant or (os.environ.get(prefix + '_QUANT') if prefix and prefix != 'GSQ' else None)
+    if args.variant is not None:
+        if not generic and mode not in ('deepseek-b300-iq3', 'deepseek-h200-dual-iq3'):
+            raise Error('--variant applies to native auto, B300 or dual-H200 Unsloth IQ3 selection')
+        variant = {'iq3_s': 'UD-IQ3_S', 'iq3_xxs': 'UD-IQ3_XXS'}[args.variant]
+        if quant is not None and quant != variant:
+            raise Error('--variant and --quant disagree')
+        quant = variant
+    if args.reuse:
+        if (not generic and mode not in GSQ_PROFILES) or (quant is not None and quant not in GSQ_LAYOUT) or args.ds_source == 'unsloth':
+            raise Error('--reuse applies only to native GSQ IQ2_XXS/IQ2_XS selection')
+        quant = quant or ('IQ2_XXS' if strata_reusable_gsq(args, 'IQ2_XXS') else 'IQ2_XS')
+    if generic and quant is None:
+        candidates = [q for q in STRATA_AUTO_QUANTS
+                      if args.ds_source is None or (q in GSQ_LAYOUT) == (args.ds_source == 'gsq-rco')]
+        quant = next((q for q in candidates if strata_placement(q, gpus, args, counts=counts)['all_target_weights_fit']), None)
+        if quant is None:
+            if args.ds_source == 'unsloth':
+                raise Error('No automatic Unsloth candidate fits the total-VRAM budget. Select an explicit --quant for CPU/SSD offload, or use GSQ IQ1_M.')
+            quant = 'IQ1_M'
+    elif quant is None:
+        quant = GSQ_PROFILES[mode]['quant'] if mode in GSQ_PROFILES else STRATA_PROFILES[mode][2]
+    allowed = STRATA_AUTO_QUANTS if generic else tuple(GSQ_LAYOUT) if mode in GSQ_PROFILES else STRATA_PROFILES[mode][3]
+    if quant not in allowed:
+        raise Error(f'Unsupported quant for {mode}: {quant}; allowed: {allowed}')
+    gsq = quant in GSQ_LAYOUT
+    if args.ds_source is not None and gsq != (args.ds_source == 'gsq-rco'):
+        raise Error('--ds-source and the selected quant/profile disagree; no checkpoint is substituted')
+    if args.reuse_engram and (mode not in ('deepseek-b300-iq3', 'deepseek-h200-dual-iq3') or quant not in Q6_ENGRAM_SHARDS):
+        raise Error('--reuse-engram applies only to the explicit B300/dual-H200 IQ3 profiles')
+    if quant not in GSQ_LAYOUT and quant not in DS_NATIVE:
+        raise Error('This quant has no native placement catalog for the supported GPU architectures')
+    context = args.context if args.context is not None else parse_context(os.environ.get(prefix + '_CONTEXT', '1048576') if prefix and prefix != 'GSQ' else '1048576')
+    if not 4096 <= context <= 1048576:
+        raise Error('DeepSeek context must be 4096..1048576')
+    ordinary = strata_placement(quant, gpus, args, counts=counts)
+    drafted = strata_placement(quant, gpus, args, STRATA_DSPARK['size'], counts)
+    calibrated_quad = (quad and quant == 'IQ2_XS' and args.layer_split is None
+                       and all(g.total >= 46068 for g in gpus) and args.gpu_expert_fraction == 1
+                       and args.vram_reserve_mib == 2048 and args.prefill_chunk == 4096)
+    spec = args.spec or ('dspark' if calibrated_quad or drafted['all_target_weights_fit'] else 'none')
     if args.dspark is not None:
         requested = 'dspark' if args.dspark else 'none'
         if args.spec is not None and args.spec != requested:
@@ -3568,50 +3699,49 @@ def strata_plan(args, mode: str, gpus: list[GPU]) -> Plan:
         spec = 'none'
     if spec == 'none' and args.dspark_conf is not None:
         raise Error('--dspark-conf requires DSpark')
-    split = args.layer_split if args.layer_split is not None else ('9,11,10,10' if mode == 'deepseek-gsq-a40-quad' else 'auto')
-    if split != 'auto':
-        try:
-            counts = [int(value.strip()) for value in split.split(',')]
-        except ValueError as exc:
-            raise Error('--layer-split must be auto or positive integer layer counts') from exc
-        if len(counts) != len(gpus) or any(value <= 0 for value in counts) or sum(counts) != 40:
-            raise Error('--layer-split needs one positive count per selected GPU, summing to 40')
-        split = ','.join(map(str, counts))
-    args.layer_split = split
-    if mode in GSQ_PROFILES:
-        defaults = GSQ_PROFILES[mode]
-        quant = args.quant or (('IQ2_XXS' if strata_reusable_gsq(args, 'IQ2_XXS') else 'IQ2_XS') if args.reuse else defaults['quant'])
-        if quant not in GSQ_LAYOUT or args.variant is not None or args.reuse_engram:
-            raise Error('GSQ uses IQ1_M/IQ2_XXS/IQ2_XS and the existing shared Engram; Unsloth variant/reuse flags do not apply')
-        context = args.context if args.context is not None else defaults['context']
-        if not 4096 <= context <= 1048576:
-            raise Error('DeepSeek context must be 4096..1048576')
-        ident = mode + '-' + quant.lower()
-        root = Path(os.environ.get('GSQ_ROOT', str(Path(args.root).expanduser().absolute() / ident))).expanduser().absolute()
-        plan = Plan(mode, ident, GSQ_REPO, GSQ_REV, quant, context, 'native', 'none', 0,
-                    STRATA_PINS['source_revision'], 'official-Strata-v0.2.7.1',
-                    sum(f['size'] for f in gsq_files(quant).values()), GSQ_FILES[GSQ_ENGRAM_NAME]['size'],
-                    0, 0, root, gpus, args.reasoning_effort or 'high', 0, args.port, 0, 0,
-                    Path(args.model_dir).expanduser().absolute() if args.model_dir else
-                    Path(args.root).expanduser().absolute() / 'gsq-models' / GSQ_REV)
+    args.strata_budget = drafted if spec == 'dspark' else ordinary
+    if calibrated_quad and spec == 'dspark' and not drafted['all_target_weights_fit']:
+        args.strata_budget['policy_exception'] = 'retained quad-A40 IQ2_XS/DSpark configuration; the conservative estimate includes expert offload'
+    args.strata_budget['placement_control'] = ('native auto; displayed counts are estimates'
+                                               if args.layer_split == 'auto' else 'explicit contiguous layer counts')
+    if args.layer_split != 'auto':
+        args.layer_split = ','.join(map(str, args.strata_budget['layer_counts']))
+    # Retain existing Q8 cache roots for the established large allocations.
+    if generic and quant == 'UD-Q8_K_XL':
+        if len(gpus) == 4 and all(pro6000(g) for g in gpus):
+            mode = 'deepseek-pro6000-quad-q8'
+        elif len(gpus) >= 8 and all(is_ampere_48(g) for g in gpus):
+            mode = 'deepseek'
+    if gsq:
+        ident = ('deepseek-v4.1-1017-auto-gsq-' if generic else mode + '-') + quant.lower()
+        directory = 'deepseek-auto-' + quant.lower() if generic else ident
+        root = Path(os.environ.get('GSQ_ROOT', str(base / directory))).expanduser().absolute()
+        repo, revision = GSQ_REPO, GSQ_REV
+        weights, table = sum(f['size'] for f in gsq_files(quant).values()), GSQ_FILES[GSQ_ENGRAM_NAME]['size']
+        model_dir = base / 'gsq-models' / GSQ_REV
     else:
-        # This function retains the original profile's exact quant, revision and directory.
-        legacy = argparse.Namespace(**vars(args))
-        legacy.reasoning_effort = 'high'  # Validate the native setting below.
-        legacy.spec, legacy.dspark = 'none', None
-        plan = make_plan(legacy, mode, gpus)
-        if plan.spec != 'none':
-            raise Error('Strata speculation must be disabled; clear the profile SPEC/DRAFT environment overrides')
-        plan.cpu_moe_layers = 0
-        plan.kv = 'native'
-        plan.cache_ram = plan.batch = plan.ubatch = 0
-        plan.runtime, plan.runtime_ref = STRATA_PINS['source_revision'], 'official-Strata-v0.2.7.1'
+        ident = 'deepseek-v4.1-1017-auto-' + quant.lower()
+        root = base / ('deepseek-auto-' + quant.lower())
+        if mode in STRATA_PROFILES:
+            prefix, ident, _, _ = STRATA_PROFILES[mode]
+            if quant == 'UD-Q2_K_XL':
+                ident += '-q2k'
+            root = Path(os.environ.get(prefix + '_ROOT', str(base / ident))).expanduser().absolute()
+        repo, revision = DS_REPO, DS_REV
+        weights, table = DS_NATIVE[quant]['weight_bytes'], DS_NATIVE[quant]['table_bytes']
+        model_dir = None
     effort = args.reasoning_effort or 'high'
     if effort not in ('none', 'low', 'medium', 'high'):
         raise Error('Strata configuration effort must be none/low/medium/high. API requests may send xhigh/max; no numeric llama.cpp default is retained.')
-    plan.effort, plan.engine = effort, 'strata'
-    plan.spec, plan.depth = spec, (args.dspark or 0) if spec == 'dspark' else 0
-    plan.draft_bytes = STRATA_DSPARK['size'] if spec == 'dspark' else 0
+    plan = Plan(mode, ident, repo, revision, quant, context, 'native', spec,
+                (args.dspark or 0) if spec == 'dspark' else 0, STRATA_PINS['source_revision'],
+                'official-Strata-v0.2.7.1', weights, table, STRATA_DSPARK['size'] if spec == 'dspark' else 0,
+                0, root, gpus, effort, 0, args.port, 0, 0,
+                Path(args.model_dir).expanduser().absolute() if args.model_dir else model_dir, engine='strata')
+    if 'policy_exception' in args.strata_budget:
+        say('Using the measured quad-A40 placement with a small expected CPU expert spill.')
+    elif not args.strata_budget['all_target_weights_fit']:
+        say('Target weights exceed the GPU budget. Native expert offload uses the bounded RAM cache and SSD; throughput is unbenchmarked.')
     return plan
 
 
@@ -3622,14 +3752,17 @@ def strata_preflight(plan: Plan, args) -> None:
     minimum = (4 * GIB if args.prepare_assets_only else
                int(args.expert_ram_gb * GIB) + args.engram_cache_mib * MIB + 24 * GIB)
     available = available_ram()
-    if available < minimum:
+    args.strata_host_ram = {'required_bytes': minimum, 'available_bytes': available,
+                           'ready': available >= minimum,
+                           'operation': 'asset preparation' if args.prepare_assets_only else 'cache plus 24 GiB headroom'}
+    if available < minimum and not args.show_config:
         mode = 'asset preparation' if args.prepare_assets_only else 'the cache plus 24 GiB headroom'
         raise Error(f'Strata needs {minimum/GIB:.1f} GiB available for {mode}; '
                     f'only {available/GIB:.1f} GiB is available.')
-    if any(g.free < args.vram_reserve_mib + 4096 for g in plan.gpus) and not args.prepare_only:
+    if any(g.free < args.vram_reserve_mib + 4096 for g in plan.gpus) and not (args.prepare_only or args.show_config):
         raise Error('A selected GPU lacks 4 GiB plus the requested reserve. Stop the old server before serving.')
     check_storage(model_folder(plan), args.allow_network_storage)
-    if not args.prepare_only:
+    if not (args.prepare_only or args.show_config):
         check_port(plan.port)
     say(f'Strata expert RAM cache: {args.expert_ram_gb:g} GiB; available host RAM: {available/GIB:.1f} GiB. '
         'This is not a hard process limit. Native GPU expert placement is automatic; GPU fit remains unverified.')
@@ -3646,7 +3779,7 @@ def strata_settings(plan: Plan, args) -> dict[str, Any]:
               '--ssd-cache', str(args.expert_ram_gb * GIB / 10**9), '--cpu-threads', str(args.cpu_threads),
               '--vram-experts', str(args.gpu_expert_fraction), '--reserve-mib', str(args.vram_reserve_mib),
               '--prefill-chunk', str(args.prefill_chunk), '--dspark', 'on' if plan.spec == 'dspark' else 'none',
-              '--experts', '6', '--vision', 'off']
+              '--experts', '6', '--vision', 'off', '--tp', '1']
     if plan.spec == 'dspark':
         native += ['--dspark-conf', str(args.dspark_conf if args.dspark_conf is not None else 0.65)]
         if plan.depth:
@@ -3693,7 +3826,7 @@ def strata_pack(plan: Plan, args, data: dict, python: Path, source: Path, env: d
                         'Use a model directory without those neighboring artifacts.')
         command = [str(python), '-I', '-B', str(source/'tools/dsv41/pack_gguf.py'),
                    '--model', str(model_base), '--out', str(pack), '--shards', *[path.name for path in inputs]]
-        if plan.profile in GSQ_PROFILES:
+        if plan.repo == GSQ_REPO:
             command += ['--engram', str(folder/GSQ_ENGRAM_NAME), '--engram-meta', str(folder/shards[0])]
         if plan.spec == 'dspark':
             command += ['--dspark-gguf', str(strata_draft_path(args)), '--dspark-noise-token', '128799',
@@ -3735,7 +3868,8 @@ def strata_main(plan: Plan, args) -> int:
     command = [str(python), '-I', '-B', str(base/'network_guard.py'), str(python), '-I', '-B',
                str(source/'serve/server.py'), '--engine', 'strata', '--config', str(plan.root/'strata-server.json'),
                '--host', '127.0.0.1', '--port', str(plan.port), '--offline']
-    print(json.dumps({'plan': plan.public(), 'server': settings, 'command': command,
+    print(json.dumps({'plan': plan.public(), 'placement': args.strata_budget, 'host_ram': args.strata_host_ram,
+                      'server': settings, 'command': command,
                       'runtime_pins': STRATA_PINS, 'outgoing_network': 'blocked by inherited seccomp policy',
                       'hard_ram_limit': None, 'expert_ram_gib': args.expert_ram_gb}, indent=2), flush=True)
     if args.show_config:
@@ -3770,10 +3904,11 @@ def strata_main(plan: Plan, args) -> int:
             raise Error('Strata network guard is missing or changed; run --prepare-only')
         weights_plan = dataclasses.replace(plan, spec='none', depth=0, draft_bytes=0)
         path = plan.root / f'manifest-{plan.quant}-{weights_plan.spec}-{plan.revision[:12]}.json'
-        if plan.profile in GSQ_PROFILES:
+        if plan.repo == GSQ_REPO or plan.quant in DS_NATIVE:
+            pinned = gsq_files(plan.quant) if plan.repo == GSQ_REPO else DS_NATIVE[plan.quant]['files']
             data = dict(repo=plan.repo, revision=plan.revision, quant=plan.quant, spec='none', official_files=[],
                         files=[dict(path=n, size=f['size'], sha256=f['sha256'], kind='model')
-                               for n,f in sorted(gsq_files(plan.quant).items())])
+                               for n,f in sorted(pinned.items())])
             validate_manifest(weights_plan, data)
             if args.prepare_only and not args.prepare_assets_only:
                 atomic_json(path, data)
@@ -3801,7 +3936,7 @@ def strata_main(plan: Plan, args) -> int:
             return 0
         atomic_json(plan.root/'strata-server.json', settings)
         atomic_json(plan.root/'last-launch.json', {'launcher':VERSION, **plan.public(), 'command':command,
-                    'server':settings, 'hard_ram_limit':None, 'qualification':'Remote GPU inference not validated'})
+                    'server':settings, 'placement':args.strata_budget, 'hard_ram_limit':None, 'qualification':'Remote GPU inference not validated'})
         if args.prepare_only:
             say('Strata runtime, GGUF checks and stock pack complete. No model loaded or server started.\n' + shlex.join(command))
             return 0

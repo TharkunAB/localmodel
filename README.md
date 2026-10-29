@@ -245,18 +245,19 @@ Stop SearXNG with `Ctrl-C`. The wrappers do not start models in the background.
 ## Use a RunPod model
 
 The supplied `start-qwen.sh` is tracked as
-[`bin/start-remote-model.sh`](bin/start-remote-model.sh). It can select Qwen,
-Flint, Ornith, DeepSeek, and MiniMax profiles from the GPU allocation.
-Prefer an explicit profile. DeepSeek uses pinned official Strata with outgoing
-connections blocked. The other profiles build their pinned llama.cpp runtimes.
+[`bin/start-remote-model.sh`](bin/start-remote-model.sh). Automatic selection uses
+DeepSeek V4.1 Flash 1017 on pinned official Strata, with outgoing connections
+blocked. It selects weights and DSpark from the GPU capacity and defaults to
+1M context. Qwen, Flint, Ornith, and MiniMax require explicit profile selection.
 All profiles serve on Pod loopback port **8897**.
 
 Choose a template with direct SSH over TCP. DeepSeek needs Python and a driver
 compatible with CUDA 13; its prebuilt engine does not need a compiler.
 The other profiles need a CUDA **development** image. The basic
 `ssh.runpod.io` gateway is unsuitable for this SCP/forwarding workflow.
-For Qwen3.8-27B, the script supports a single 4090 with its smaller quantization.
-For DeepSeek, inspect the four-A40, B300, or dual-H200 profiles and their RAM/disk needs.
+The pinned Strata engine supports SM86, SM89, and SM120. These include A40,
+RTX A6000, RTX 4090, RTX 5090, and RTX PRO 6000 Blackwell. H200, B200, and B300
+are rejected because this engine has no compatible kernels for those cards.
 GPU VRAM alone is insufficient: see the [RunPod selection guide](docs/runpod.md).
 For an existing DeepSeek Pod, follow its [Strata migration steps](docs/runpod.md#migrate-an-existing-deepseek-pod).
 
@@ -270,11 +271,11 @@ ssh -p PORT -i ~/.ssh/id_ed25519 root@IP
 
 # On the Pod:
 tmux new -s model
-bash /workspace/start-remote-model.sh --profile qwen \
+bash /workspace/start-remote-model.sh --profile auto \
   --root /workspace/remote-models --no-ssh --show-config
-bash /workspace/start-remote-model.sh --profile qwen \
+bash /workspace/start-remote-model.sh --profile auto \
   --root /workspace/remote-models --no-ssh --install-deps --prepare-only
-bash /workspace/start-remote-model.sh --profile qwen \
+bash /workspace/start-remote-model.sh --profile auto \
   --root /workspace/remote-models --no-ssh
 ```
 
@@ -353,6 +354,6 @@ their separate historical installations; the fresh-install path above covers
 the current Bonsai 2 27B, Qwen Flash-Next, and DeepSeek configurations.
 
 Docker is not required. The local wrappers rely on host systemd scopes to cap
-agent children. RunPod already supplies the remote container; use a CUDA
-development template with SSH. A single Dockerfile would not reproduce both
+agent children. RunPod already supplies the remote container; use a CUDA 13
+compatible template with SSH for Strata. A single Dockerfile would not reproduce both
 the local process limits and the remote SSH workflow.
