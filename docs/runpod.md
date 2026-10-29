@@ -13,7 +13,7 @@ Qwen, Flint, Ornith, and MiniMax keep their existing llama.cpp paths.
 
 The original `start-qwen.sh` attachment has SHA-256
 `955915e9fc13bc9ba44a580285cd21a70a0c183c2fafb514e3e1c274326b8d3a`.
-The current embedded version is `2026-10-29-deepseek-official-strata-1`.
+The current embedded version is `2026-10-29-deepseek-official-strata-2`.
 Packaging checks do not establish remote GPU inference or throughput.
 
 ## Migrate an existing DeepSeek Pod
@@ -46,6 +46,12 @@ bash /workspace/start-remote-model.sh --profile deepseek-gsq-a40-quad \
 Serving verifies the prepared source, signed native engine, dependencies,
 GGUFs, and pack. It does not install or download updates. Missing preparation
 causes an error. An existing server on port 8897 is never stopped automatically.
+The upstream release catalog can change. Preparation verifies its publisher
+signature and requires the pinned engine version, archive, size, and manifest.
+Serving verifies the cached catalog offline. A catalog update cannot select a
+different engine. If an older script reports that `strata-feed.json` differs
+from its pin, copy the current script and repeat preparation. No data removal
+is required.
 The existing `/opt/qwen` data is usually on the container disk. Preserve it
 before a Pod operation that clears that disk, or prepare a persistent root.
 

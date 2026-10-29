@@ -46,7 +46,7 @@ import urllib.request
 import uuid
 from typing import Any
 
-VERSION = '2026-10-29-deepseek-official-strata-1'
+VERSION = '2026-10-29-deepseek-official-strata-2'
 GIB, MIB = 1024**3, 1024**2
 SOURCE = 'https://github.com/ggml-org/llama.cpp.git'
 STABLE = '620d2225cc436ab0b001e3200e590e3b286ef9ab'  # released v0.7.0
@@ -3129,7 +3129,7 @@ def gsq_config(args, mode: str, chosen: list[GPU]) -> dict[str, Any]:
 
 
 # Official Strata pins and bootstrap. Serving never updates these artifacts.
-STRATA_PINS = {'source_revision': '46c152a1310f77cd2f0ce2c7cd213962df14fe83', 'source_archive_url': 'https://api.github.com/repos/Niko1221/Strata/tarball/46c152a1310f77cd2f0ce2c7cd213962df14fe83', 'source_archive_sha256': 'fae7217a8c4239c3dc7e1cae5a6e813b2b87d556840d55579e5663371d566d2f', 'source_receipt_sha256': '2b517964fba0c633ba61dcfde1d8f12730fd83b072bcb18408b5d2c9da9feb73', 'control_version': '0.1.53', 'runtime': {'release_tag': 'v0.2.7', 'version': '0.1.52', 'archive_url': 'https://github.com/Niko1221/Strata/releases/download/v0.2.7/strata-dsv41-0.1.52-linux-x86_64-cuda-cuda13.tar.gz', 'archive_sha256': 'c1b3d0ca2a575655a395ab4a2d0afc5cd731d0e5d26fbcdb955f2359dbbc1a57', 'archive_size': 444709965, 'feed_url': 'https://github.com/Niko1221/Strata/releases/download/v0.2.7/strata-feed.json', 'feed_sha256': '148dc76b786f65371691b6fd73884c6150f269f0c4e379aa6c472dbe29c6f355', 'feed_signature_sha256': '2999e0efd205a7b99eb3f2c6457b5022426c9104342f1c9cd86ba5692289f4f1', 'manifest_sha256': 'dda8e2470c8cb96bd93b2f19fd0d23d24f7e328fea820c692e5ab7829a55db1a', 'binary_sha256': '5792fd39d3ea5ad2fd82fe4e88b5a4afd2edb15c051e87d05e1a01f17679692c', 'python_packages': ['jinja2==3.1.6', 'markupsafe==3.0.3', 'regex==2026.9.10']}}
+STRATA_PINS = {'source_revision': '46c152a1310f77cd2f0ce2c7cd213962df14fe83', 'source_archive_url': 'https://api.github.com/repos/Niko1221/Strata/tarball/46c152a1310f77cd2f0ce2c7cd213962df14fe83', 'source_archive_sha256': 'fae7217a8c4239c3dc7e1cae5a6e813b2b87d556840d55579e5663371d566d2f', 'source_receipt_sha256': '2b517964fba0c633ba61dcfde1d8f12730fd83b072bcb18408b5d2c9da9feb73', 'control_version': '0.1.53', 'runtime': {'release_tag': 'v0.2.7', 'version': '0.1.52', 'archive_url': 'https://github.com/Niko1221/Strata/releases/download/v0.2.7/strata-dsv41-0.1.52-linux-x86_64-cuda-cuda13.tar.gz', 'archive_sha256': 'c1b3d0ca2a575655a395ab4a2d0afc5cd731d0e5d26fbcdb955f2359dbbc1a57', 'archive_size': 444709965, 'feed_url': 'https://github.com/Niko1221/Strata/releases/download/v0.2.7/strata-feed.json', 'manifest_sha256': 'dda8e2470c8cb96bd93b2f19fd0d23d24f7e328fea820c692e5ab7829a55db1a', 'binary_sha256': '5792fd39d3ea5ad2fd82fe4e88b5a4afd2edb15c051e87d05e1a01f17679692c', 'python_packages': ['jinja2==3.1.6', 'markupsafe==3.0.3', 'regex==2026.9.10']}}
 STRATA_INSTALL_CODE = r'''
 import argparse
 import hashlib
@@ -3235,26 +3235,45 @@ def verify_native(source: Path, runtime: Path, settings: dict[str, Any], install
     feed_path = runtime / "strata-feed.json"
     signature_path = runtime / "strata-feed.json.sig"
     url = str(settings["feed_url"])
-    if install:
-        checked_download(url, feed_path, str(settings["feed_sha256"]))
-        checked_download(url + ".sig", signature_path, str(settings["feed_signature_sha256"]))
-    for path, key in ((feed_path, "feed_sha256"), (signature_path, "feed_signature_sha256")):
-        if not path.is_file() or digest(path) != settings[key]:
-            raise RuntimeError(f"The pinned Strata feed is missing or changed: {path}.")
+    cached = feed_path.is_file() and signature_path.is_file()
+    if not cached and not install:
+        raise RuntimeError("The prepared Strata feed is missing. Run --prepare-only first.")
+    parts: list[bytes] = []
+    for path, suffix in ((feed_path, ""), (signature_path, ".sig")):
+        if cached:
+            parts.append(path.read_bytes())
+        else:
+            if not url.startswith("https://"):
+                raise RuntimeError("The feed URL must use HTTPS.")
+            with urllib.request.urlopen(url + suffix, timeout=120) as response:
+                if not response.geturl().startswith("https://"):
+                    raise RuntimeError("The feed redirected outside HTTPS.")
+                payload = response.read(4 * 1024**2 + 1)
+            if len(payload) > 4 * 1024**2:
+                raise RuntimeError("The Strata feed or signature exceeds 4 MiB.")
+            parts.append(payload)
     sys.path.insert(0, str(source))
     signing = importlib.import_module("strata_control.signing")
     feed = importlib.import_module("strata_control.feed")
     component = importlib.import_module("strata_control.engine_component")
-    # The manifest pins this historical feed. Verify its signature and exact bytes,
-    # without using its expiry date to force an unrequested runtime update.
-    keys = signing.load_trusted_keys({})
-    key_id = signing.verify_bytes(keys, feed_path.read_bytes(), json.loads(signature_path.read_text()))
-    index = feed.parse(feed_path.read_bytes(), source=url, key_id=key_id)
+    # The release catalog can change. Authenticate it, then require the pinned engine.
+    # Catalog expiry must not force a change to this fixed runtime.
+    keys = signing.load_trusted_keys(environ={})
+    key_id = signing.verify_bytes(keys, parts[0], json.loads(parts[1]))
+    index = feed.parse(parts[0], source=url, key_id=key_id)
     package = next((entry for entry in index.dsv41
                     if entry.version == settings["version"] and entry.platform == "linux-x86_64"
                     and entry.backend == "cuda" and entry.variant == "cuda13"), None)
-    if package is None or package.sha256 != settings["archive_sha256"]:
+    if (package is None or package.sha256 != settings["archive_sha256"]
+            or package.manifest_sha256 != settings["manifest_sha256"]
+            or package.size != int(settings["archive_size"])
+            or index.url(package.url) != settings["archive_url"]):
         raise RuntimeError("The signed feed does not contain the pinned CUDA engine.")
+    if not cached:
+        for path, payload in zip((feed_path, signature_path), parts):
+            partial = path.with_name(path.name + ".part")
+            partial.write_bytes(payload)
+            partial.replace(path)
     binary = runtime / "engine-dsv41" / f"{package.version}-linux-x86_64-cuda-cuda13" / "strata-dsv41"
     if install and not binary.exists():
         archive = runtime / Path(str(settings["archive_url"])).name
