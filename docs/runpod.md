@@ -5,19 +5,107 @@ It embeds Python and does not require the local harness, systemd, or
 `heavy-management`. Its `qwen` profile serves **Qwen3.8-27B**. The local
 harness uses a separate **Qwen3.8-Flash-Next** profile.
 
-The packaged script keeps the supplied runtime revisions, checkpoint selection,
-and experimental gates. Only its command name, help examples, and log prefix
-changed, including the smoke-report filename prefix and the embedded-code
-marker. The original `start-qwen.sh` attachment has SHA-256
+All remote DeepSeek profiles now use the unmodified official Strata source
+`46c152a1310f77cd2f0ce2c7cd213962df14fe83` (0.2.7.1), Control 0.1.53, and signed
+CUDA 13 engine 0.1.52. The standalone file embeds the artifact pins, signature
+verification, and the same outgoing-network restriction as the local harness.
+Qwen, Flint, Ornith, and MiniMax keep their existing llama.cpp paths.
+
+The original `start-qwen.sh` attachment has SHA-256
 `955915e9fc13bc9ba44a580285cd21a70a0c183c2fafb514e3e1c274326b8d3a`.
-The embedded version remains `2026-10-24-deepseek1017-gsq-profiles-3`.
-Packaging checks do not establish GPU inference or throughput.
-RunPod documentation links below were checked on 2026-10-28.
+The current embedded version is `2026-10-29-deepseek-official-strata-1`.
+Packaging checks do not establish remote GPU inference or throughput.
+
+## Migrate an existing DeepSeek Pod
+
+Copy the updated script onto the Pod. Keep the existing model root and quant.
+For four A40 cards with the existing GSQ IQ2_XXS files under `/opt/qwen`, use:
+
+```sh
+bash /workspace/start-remote-model.sh --profile deepseek-gsq-a40-quad \
+  --ctxt 256K --root /opt/qwen --no-ssh --prepare-only --dry-run
+bash /workspace/start-remote-model.sh --profile deepseek-gsq-a40-quad \
+  --ctxt 256K --root /opt/qwen --no-ssh --prepare-only --install-deps
+```
+
+Preparation reuses the four pinned IQ2_XXS GGUF shards and shared IQ4_NL Engram
+in `/opt/qwen/gsq-models/cb02422c900df489cea5833e8a92171224059b3c` after size and
+SHA-256 checks. It downloads missing runtime files and missing model files only.
+It runs the stock `tools/dsv41/pack_gguf.py` with the plain recipe. This creates
+a small index and tokenizer files; it does not copy or requantize the weights,
+load a GPU model, or start a server. No llama.cpp fork runs for DeepSeek.
+Preparation does not require a free API port or unused GPUs.
+
+After you stop the previous server, start the same prepared profile:
+
+```sh
+bash /workspace/start-remote-model.sh --profile deepseek-gsq-a40-quad \
+  --ctxt 256K --root /opt/qwen --no-ssh
+```
+
+Serving verifies the prepared source, signed native engine, dependencies,
+GGUFs, and pack. It does not install or download updates. Missing preparation
+causes an error. An existing server on port 8897 is never stopped automatically.
+The existing `/opt/qwen` data is usually on the container disk. Preserve it
+before a Pod operation that clears that disk, or prepare a persistent root.
+
+Remove `--cpu-moe-layers 2` from the old command. Strata places experts
+automatically across all four selected GPUs. It maps their UUIDs to native
+indices `0,1,2,3`. The following controls replace llama.cpp placement controls:
+
+| Flag | Default | Meaning |
+| --- | --- | --- |
+| `--expert-ram-gb` | `36` | Soft expert RAM cache in GiB |
+| `--gpu-expert-fraction` | `1` | Fraction of the available native GPU expert budget |
+| `--vram-reserve-mib` | `2048` | VRAM reserve per GPU in MiB |
+| `--prefill-chunk` | `4096` | Prompt chunk size in tokens |
+| `--cpu-threads` | Up to 32 host CPUs | CPU expert threads; accepted range 1–64 |
+| `--engram-cache-mib` | `256` | Engram row cache in MiB |
+| `--engram-threads` | `16` | Engram SSD read threads |
+| `--thinking-budget` | `32768` | Maximum reasoning tokens per request |
+| `--reasoning-effort` | `high` | Server default: none, low, medium, or high |
+
+API requests can send `xhigh` or `max`. The native server maps those request
+values. Numeric llama.cpp effort defaults are rejected. Stock Strata detects
+older GGUF tool templates and selects its bundled DeepSeek V4.1 template.
+This emits the spaced DSML tags that its tool parser expects. No custom
+template or parser patch is applied.
+
+`--expert-ram-gb` converts GiB to the native engine's decimal-GB `--ssd-cache`
+unit. It is **not a hard process RAM cap**. The launcher checks available RAM,
+including cgroup v1/v2 limits, and requires the cache plus the Engram row cache
+plus 24 GiB headroom. It does not create a systemd scope or a new cgroup inside
+the Pod. A 200 GB RAM allocation has about 186 GiB before other use. Start with
+the default cache and inspect memory use before increasing it.
+
+DeepSeek rejects `--cpu-moe-layers`, `--tensor-split`, `--gsq-engram`,
+`--engram-ram`, llama.cpp KV/prompt-cache/batch flags, and build-archive flags.
+Use a dedicated `deepseek-gsq-*` profile for GSQ; `--ds-source gsq-rco` does not
+substitute a different quant into an Unsloth profile. Existing Unsloth quant
+choices and GSQ IQ1_M/IQ2_XXS/IQ2_XS choices remain explicit. Remote Strata uses
+six experts per token and ordinary decoding. DSpark/MTP/DFlash are rejected.
+The native packer can reject an unsupported tensor layout; it does not change
+the quant or download another model. Remove unrelated drafter/vision assets
+from the packer's automatic-discovery locations before preparing a plain pack.
+
+The server and native children run under an inherited libseccomp policy.
+It blocks outgoing connections, UDP, addressed sends, descriptor transfers,
+and alternate asynchronous I/O paths. It closes inherited descriptors above
+standard input/output/error. Local API requests and replies still work.
+Missing libseccomp or a policy-load error prevents server startup. File access
+and listening sockets are not restricted. Downloads happen only during the
+explicit preparation step, outside the serving restriction.
 
 ## Choose the Pod
 
-Use a Linux GPU Pod with Python 3.10 or later and a **CUDA development** image.
-The launcher compiles llama.cpp on the Pod. It requires `nvcc`; a CUDA runtime
+Use a Linux x86_64 GPU Pod with Python 3.10 or later. DeepSeek Strata uses a
+prebuilt CUDA 13 engine and needs a compatible NVIDIA host driver plus
+`libseccomp.so.2`. It does not require `nvcc` or a CUDA development image.
+Its `--install-deps --prepare-only` installs Python venv support, certificates,
+libseccomp, and filesystem utilities on Debian/Ubuntu.
+
+For Qwen, Flint, Ornith, and MiniMax, select a **CUDA development** image.
+Their launcher path compiles llama.cpp on the Pod. It requires `nvcc`; a CUDA runtime
 image is insufficient. `--install-deps` installs Debian/Ubuntu build tools but
 does not install CUDA or change the NVIDIA driver. For Blackwell, the launcher
 requires CUDA toolkit 12.8 or later; B300 requires 12.9 or later. Check
@@ -43,7 +131,7 @@ homogeneous allocations; capacities are card labels, not measured free VRAM.
 | 4 RTX PRO 6000 Blackwell, 96 GB each | `deepseek-pro6000-quad-q8` | 256K | 508 GB |
 | 1 B300, 288 GB | `deepseek-b300-iq3` | 1M | 395 GB |
 | 1 B200, 180 GB | `deepseek-b200-iq2` | 256K | 301 GB |
-| 1 H200, 141 GB | `deepseek-h200-iq2`, 18 CPU MoE layers | 256K | 301 GB |
+| 1 H200, 141 GB | `deepseek-h200-iq2` | 256K | 301 GB |
 | 2 H200, 141 GB each | `deepseek-h200-dual-iq3` | 256K | 395 GB |
 
 Here K and M use powers of 1024. Model-file sizes use decimal GB. They exclude
@@ -57,23 +145,16 @@ visibility. The Qwen profile uses one GPU: Q4_K_M with q4_0 KV on 4090/5090,
 and Q8_0 with q8_0 KV on supported 48/96 GB cards. Its default context is 128K
 on 4090 and 256K otherwise. It enables MTP at depth 3.
 
-Host RAM is separate from VRAM. With the default 8192 MiB prompt cache, the
-launcher requires at least 16 GiB available host RAM for Qwen/Flint, 32 GiB for
-Ornith, 64 GiB for B200/B300 or multi-Ampere DeepSeek, and 96 GiB for the H200
-and quad-PRO DeepSeek profiles. These are minimum available-memory checks, not
-recommended Pod RAM sizes. Leave room for the OS and build. DeepSeek also uses
-large CPU/SSD Engram tables. Limited RAM can make random disk reads dominate
-inference. `--engram-ram` requires the full table plus the calculated host
-working set. MiniMax and GSQ calculate additional host requirements from their
-CPU expert placement.
+Host RAM is separate from VRAM. Qwen/Flint require 16 GiB available host RAM
+and Ornith requires 32 GiB with their default prompt cache. MiniMax calculates
+additional host requirements from CPU expert placement. Leave room for the OS
+and builds. For DeepSeek, use the native cache and headroom rules above.
+Large Engram tables can make random disk reads dominate inference when RAM is
+limited. Preview and GPU capacity checks do not establish throughput.
 
-All DeepSeek, GSQ, and MiniMax launches require `--accept-experimental`.
-Dedicated `deepseek-gsq-*` profiles use the pinned GSQ loader adapter;
-`--ds-source gsq-rco` on an ordinary DeepSeek profile remains blocked.
-MiniMax profiles are explicit, text-only experiments. Smaller allocations can
-require explicit `--cpu-moe-layers`. Their GPU fit, runtime, and throughput
-claims remain limited to the checks stated in `--help`. Do not infer successful
-inference from a dry run.
+MiniMax remains an explicit text-only experiment and requires
+`--accept-experimental`. The official Strata DeepSeek path does not require
+that old fork-acceptance flag. The parser retains it for older command lines.
 
 ## Allocate storage
 
@@ -150,12 +231,12 @@ bash /workspace/start-remote-model.sh \
   --profile qwen --root /workspace/remote-models --no-ssh
 ```
 
-Preparation installs build tools when requested, builds or restores the pinned
+For the Qwen example, preparation installs build tools when requested, builds or restores the pinned
 runtime, creates a download venv, downloads and verifies the model files, and
 writes the planned launch. `--prepare-only` then exits without starting the
 server. `--install-deps` alone continues through preparation into serving.
 Use the same profile and settings for preview, preparation, and launch. Add
-`--accept-experimental` to preparation and launch for an experimental profile.
+`--accept-experimental` for MiniMax. Use the separate DeepSeek preparation flow above.
 Detach with Ctrl-b then d. Reconnect with `tmux attach -t remote-model`.
 
 The API binds to `127.0.0.1:8897`. `--port` changes the port; there is no host
@@ -209,7 +290,9 @@ With `--root /workspace/remote-models`, the script uses:
 | `<model-id>/last-launch.json` | Resolved plan and server command |
 | `<model-id>/models/<revision>/` | Model and draft files, unless `--model-dir` overrides it |
 | `gsq-models/<revision>/` | Shared GSQ model files |
-| `runtimes/` | Pinned runtime sources and GPU-specific builds |
+| `runtimes/` | Pinned native Strata files or llama.cpp GPU-specific builds |
+| `<model-id>/strata-engine.log`, `strata-server.json` | Native DeepSeek log and API configuration |
+| `<model-directory>/strata-pack-<quant>/` | Native DeepSeek index, tokenizer, and pack receipt |
 | `download-venv-1.0.1/`, `hf-home/` | Download environment and metadata |
 | `/workspace/archive/` | Default compiled executable archives; configurable with `--archive-dir` |
 
@@ -228,8 +311,9 @@ first run, set `FLINT_REVISION` to a verified full publisher commit before
 preparation. Existing source pins must agree with that value. Keep the source
 pin and manifests in the persistent profile root, together with the model files.
 
-A custom Docker image is optional. The standalone launcher already runs inside
-a RunPod CUDA development container. An official development template with
-working SSH is the shortest setup. The local systemd/cgroup harness is not a
+A custom Docker image is optional. The standalone launcher runs inside
+a RunPod GPU container. Use a template with working SSH and a host driver that
+supports the selected engine. Qwen/Flint/Ornith/MiniMax also need CUDA development
+tools. The local systemd/cgroup harness is not a
 container entrypoint, and a plain Docker port mapping cannot expose this
 launcher's loopback-only API.

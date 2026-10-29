@@ -246,15 +246,19 @@ Stop SearXNG with `Ctrl-C`. The wrappers do not start models in the background.
 
 The supplied `start-qwen.sh` is tracked as
 [`bin/start-remote-model.sh`](bin/start-remote-model.sh). It can select Qwen,
-Flint, Ornith, DeepSeek, and experimental GSQ/MiniMax profiles from the GPU
-allocation. Prefer an explicit profile. It builds its own pinned llama.cpp
-runtime and serves on Pod loopback port **8897**.
+Flint, Ornith, DeepSeek, and MiniMax profiles from the GPU allocation.
+Prefer an explicit profile. DeepSeek uses pinned official Strata with outgoing
+connections blocked. The other profiles build their pinned llama.cpp runtimes.
+All profiles serve on Pod loopback port **8897**.
 
-Choose a CUDA **development** template with direct SSH over TCP. The basic
+Choose a template with direct SSH over TCP. DeepSeek needs Python and a driver
+compatible with CUDA 13; its prebuilt engine does not need a compiler.
+The other profiles need a CUDA **development** image. The basic
 `ssh.runpod.io` gateway is unsuitable for this SCP/forwarding workflow.
 For Qwen3.8-27B, the script supports a single 4090 with its smaller quantization.
-For DeepSeek, inspect the B300 or dual-H200 profiles and their RAM/disk needs.
+For DeepSeek, inspect the four-A40, B300, or dual-H200 profiles and their RAM/disk needs.
 GPU VRAM alone is insufficient: see the [RunPod selection guide](docs/runpod.md).
+For an existing DeepSeek Pod, follow its [Strata migration steps](docs/runpod.md#migrate-an-existing-deepseek-pod).
 
 Use the IP, mapped SSH port, and key shown in the Pod's Connect panel:
 
@@ -301,6 +305,8 @@ omp-remote --mem 32
 Flash-Next profile. There is no cached-model fallback. Its legacy `bonsai`
 provider name does not restrict which model can be served there.
 The main remote model can advertise 1M context; OMP uses the discovered capacity.
+Output reserves at most one quarter of that context. At 256K, output is limited
+to 65536 tokens and automatic compaction starts at 180224 tokens.
 Relaunch OMP after switching a remote server profile.
 
 ## Inspect, tune, remove, and package

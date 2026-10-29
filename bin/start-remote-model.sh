@@ -1,97 +1,16 @@
 #!/usr/bin/env bash
 # start-remote-model.sh -- standalone, consolidated rental-GPU launcher (2026-10-20).
-# Requires Linux, Python >=3.10, a CUDA DEVELOPMENT image, and local model storage.
+# Requires Linux and Python >=3.10. DeepSeek uses a signed CUDA 13 engine.
+# Other profiles require a CUDA development image. Keep model files on local storage.
 # No separate updater/helper is required. The Python implementation is embedded.
 # Reconstructed from the recorded profiles and the supplied Ornith add-on;
 # this is not a claim of byte-for-byte preservation of the missing original.
 #
-# Auto selection:
-#   >=8 CUDA-visible A40/RTX A6000   DeepSeek V4.1 Flash 1017 UD-Q8_K_XL (experimental PR)
-#   exactly 2 visible A40/RTX A6000 Ornith 1.5 122B UD-Q4_K_XL
-#   1 A40/RTX A6000/48GB card  Recursive Flint NVFP4, official 262K context
-#   1 RTX 5090 (32GB)      Recursive Flint NVFP4, 192K/f16 safer default
-#   4090 / explicit qwen   Qwen3.8 27B, GPU-specific quant/context + MTP
-#   4 RTX PRO 6000 Blackwell (96GB each) DeepSeek V4.1 1017 UD-Q8_K_XL, GPU MoE + CPU Engram
-#                         Option: UD-Q4_K_XL, marginally smaller / lower reference fidelity
-#   1 B300 SXM (288GB)  DeepSeek V4.1 1017 IQ3_XXS + CPU/SSD Engram (experimental, default 1M)
-#                         --variant iq3_s for higher precision; --dspark 3 for optional drafter
-#   1 B200 SXM (180GB)  DeepSeek V4.1 1017 IQ2_XXS + CPU/SSD Engram (tight)
-#                         Option: UD-IQ1_M for more KV/cache headroom at lower fidelity
-#   1 H200 SXM (141GB)   DeepSeek V4.1 1017 IQ2_XXS + CPU MoE (experimental, slow)
-#   2 H200 SXM (282GB)   DeepSeek V4.1 1017 IQ3_XXS on GPU, Engram on CPU
-#                         Option: UD-IQ3_S for higher fidelity, tighter VRAM
-#   1–3 RTX PRO 6000 96GB refuse unsupported NVIDIA FP4-Local; no silent fallback
-#
-# DASLab DeepSeek 1017 GSQ-RCO (new dedicated profiles, no Unsloth substitution):
-#   --profile deepseek-gsq-a40-triple --cpu-moe-layers 7   IQ2_XXS, 16K
-#   --profile deepseek-gsq-h200                          IQ2_XXS, 32K, CPU/SSD Engram
-#   --profile deepseek-gsq-h200-dual                     IQ2_XS, 256K, GPU Engram
-#   --profile deepseek-gsq-b300                          IQ2_XS, 512K, GPU Engram
-#   More: a40-dual/quad, pro6000-single/dual/quad, b200, ampere-multi.
-#   Pins smalinin/my_build plus an embedded external-Engram/hash loader adapter.
-#   GPU fit is checked per device; full-model GPU inference remains untested.
-#   Start with --dry-run; actual build/launch requires --accept-experimental.
-#
-# MiniMax M3.1 Flash Q2_K (experimental, text-only, all 60 attention layers sparse):
-#   --profile minimax-pro6000-dual-q2k    2 x RTX PRO 6000 Blackwell 96GB
-#   --profile minimax-a40-quad-q2k        4 x A40 48GB
-#   --profile minimax-pro6000-single-q2k  1 x 96GB, explicit CPU experts required
-#   --profile minimax-a40-dual-q2k        2 x 48GB, explicit CPU experts required
-#   --profile minimax-a40-triple-q2k      3 x A40 48GB, explicit CPU experts required
-#   --profile minimax-h200-single-q2k     1 x H200 141GB, explicit CPU experts required
-#   --profile minimax-h200-dual-q2k       2 x H200 141GB
-#   Defaults: 32K context; 16K on triple/quad A40; 256K on dual H200.
-#   f16 KV, no automatic CPU expert offload; --dflash available on every MiniMax profile.
-#   B300, dual H200, quad PRO and >=8 A40 DeepSeek: --quant UD-Q2_K_XL is optional.
-#   --dflash enables the pinned MiniMax DFlash2 draft (extra memory and conversion).
-#   Small-host experiments: --cache-ram 0 --ctxt 16K --cpu-moe-layers 26 (single PRO)
-#                          --cache-ram 0 --ctxt 16K --cpu-moe-layers 30 (dual A40)
-#   Add --dry-run first; real launches require --accept-experimental.
-#   CPU experts are computed on CPU; speed and GPU inference are unvalidated.
-#
-# Examples:
-#   bash start-remote-model.sh --show-config
-#   bash start-remote-model.sh --install-deps
-#   bash start-remote-model.sh --install-deps --accept-experimental  # DeepSeek
-#   bash start-remote-model.sh --prepare-only --accept-experimental
-#   bash start-remote-model.sh --accept-experimental --engram-ram  # requires ~220+ GiB host RAM
-#   bash start-remote-model.sh --profile deepseek-pro6000-quad-q8 --accept-experimental
-#   bash start-remote-model.sh --profile deepseek-pro6000-quad-q8 --quant UD-Q4_K_XL --accept-experimental
-#   bash start-remote-model.sh --profile deepseek-b300-iq3 --accept-experimental
-#   bash start-remote-model.sh --ctxt 512K --dspark 3 --accept-experimental
-#   bash start-remote-model.sh --variant iq3_s --reuse-engram --ctxt 512K --accept-experimental
-#      ^ avoids re-downloading the Q6_K Engram if filesystem supports reflink (CoW)
-#   bash start-remote-model.sh --profile deepseek-b200-iq2 --accept-experimental
-#   bash start-remote-model.sh --profile deepseek-b200-iq2 --quant UD-IQ1_M --context 524288 --accept-experimental
-#   bash start-remote-model.sh --profile deepseek-h200-iq2 --accept-experimental
-#   bash start-remote-model.sh --profile deepseek-h200-dual-iq3 --accept-experimental
-#   bash start-remote-model.sh --profile deepseek-h200-dual-iq3 --quant UD-IQ3_S --context 131072 --accept-experimental
-#   bash start-remote-model.sh --smoke-test
-#   bash start-remote-model.sh --smoke-full-context --ctxt 1M --smoke-soak-minutes 15
-#   bash start-remote-model.sh --ctxt 1M --variant iq3_s --dspark 3 --accept-experimental
-#   bash start-remote-model.sh --profile flint --ctxt 256K       # single 48 GB A40/A6000
-#   bash start-remote-model.sh --profile flint --ctxt 256K --kv q8_0   # 5090 maximum-context experiment
-#   bash start-remote-model.sh --profile qwen --spec dflash
-#   bash start-remote-model.sh --archive-build-only --accept-experimental  # save binary without weights
-#   bash start-remote-model.sh --help
-#
-# Sources additionally checked 2026-10-24:
-# https://huggingface.co/webmp3/Sakura-MiniMax-M3.1-Flash-Q2_K-GGUF
-# https://huggingface.co/incoai/MiniMax-M3.1-Flash-DFlash2
-# https://huggingface.co/ISTA-DASLab/DeepSeek-V4.1-Flash-1017-GSQ-RCO-GGUF
-# GSQ-RCO separate Engram is incompatible with this launcher's existing DeepSeek PR.
-# Sources checked 2026-10-20/22:
-# https://unsloth.ai/docs/models/deepseek-v4.1-flash
-# https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF/blob/main/engram/README.md
-# https://huggingface.co/ornith-ai/Ornith-1.5-122B
-# https://huggingface.co/unsloth/Ornith-1.5-122B-GGUF
-# https://huggingface.co/ggml-org/Qwen3.8-27B-GGUF
-# https://huggingface.co/Qwen/Qwen3.8-27B
-# https://github.com/ggml-org/llama.cpp/pull/30817
-# https://github.com/ggml-org/llama.cpp/blob/v0.7.0/tools/server/README.md
-# https://huggingface.co/nvidia/Qwen3.8-Flash-Next-FP4-Local
-# https://huggingface.co/RecursiveSI/flint-nvfp4-gguf
-# https://github.com/ggml-org/llama.cpp/pull/30928
+# DeepSeek: official Strata source/control with signed native CUDA engine.
+# Use --prepare-only to install/verify files and create the native pack.
+# Serving uses prepared local files under an inherited outgoing-network block.
+# Qwen/Flint/Ornith/MiniMax keep their supplied llama.cpp execution paths.
+# Run --help for exact profile, memory, preview and migration controls.
 set -Eeuo pipefail
 command -v python3 >/dev/null 2>&1 || { echo 'ERROR: Python 3.10+ is required.' >&2; exit 1; }
 exec python3 - "$@" <<'PYTHON_START_REMOTE_MODEL'
@@ -127,7 +46,7 @@ import urllib.request
 import uuid
 from typing import Any
 
-VERSION = '2026-10-24-deepseek1017-gsq-profiles-3'
+VERSION = '2026-10-29-deepseek-official-strata-1'
 GIB, MIB = 1024**3, 1024**2
 SOURCE = 'https://github.com/ggml-org/llama.cpp.git'
 STABLE = '620d2225cc436ab0b001e3200e590e3b286ef9ab'  # released v0.7.0
@@ -765,6 +684,13 @@ class Plan:
         out['model_dir'] = str(self.model_dir) if self.model_dir else None
         out['endpoint'] = f'http://127.0.0.1:{self.port}/v1'
         out['experimental_runtime'] = self.profile.startswith(('deepseek', 'minimax-'))
+        if self.engine == 'strata':
+            for key in ('kv', 'cache_ram', 'batch', 'ubatch', 'cpu_moe_layers', 'gsq_split', 'gsq_engram_device', 'minimax_split', 'reserve_bytes'):
+                out.pop(key, None)
+            out.update(experimental_runtime=False, memory_estimates_not_gpu_validation=True,
+                       runtime_version='0.1.52', control_version='0.1.53',
+                       native_template_and_parser='deepseek41', hard_ram_limit=None)
+            return out
         if self.profile.startswith('minimax-'):
             out.update(runtime_patch_sha256=MINIMAX_PATCH_SHA256,
                        source_revision=MINIMAX_SOURCE_REV, architecture='minimaxm31_sakura',
@@ -1701,6 +1627,8 @@ def verify_minimax_runtime(src: Path) -> None:
 
 
 def build(plan: Plan, args, env: dict[str, str]) -> tuple[Path, str]:
+    if plan.profile.startswith('deepseek'):
+        raise Error('DeepSeek uses the pinned native Strata runtime; llama.cpp builds are disabled')
     # Dedicated directories keep DeepSeek's draft PR separate from stable Qwen/Ornith.
     root = Path(args.root).expanduser().absolute() / 'runtimes'
     root.mkdir(parents=True, exist_ok=True)
@@ -2333,6 +2261,8 @@ def prepare_minimax_dflash(python: Path, plan: Plan, binary: Path, args, env: di
 
 
 def command_for(plan: Plan, binary: Path, model: Path, draft: Path | None, template: Path | None, args) -> list[str]:
+    if plan.profile.startswith('deepseek'):
+        raise Error('DeepSeek uses strata_settings; llama.cpp serving is disabled')
     cmd = [str(binary), '--model', str(model), '--alias', plan.model_id,
            '--n-gpu-layers', 'all', '--split-mode', 'layer' if len(plan.gpus)>1 else 'none',
            '--ctx-size', str(plan.context), '--parallel', '1', '--batch-size', str(plan.batch),
@@ -3040,195 +2970,34 @@ def smoke_full_context(args) -> int:
 def parser() -> argparse.ArgumentParser:
     p=argparse.ArgumentParser(prog='start-remote-model.sh', description='Recursive Flint, Qwen, Ornith, DeepSeek and MiniMax rental-GPU launcher.',
         formatter_class=argparse.RawDescriptionHelpFormatter, allow_abbrev=False,
-        epilog='''Auto: single A40/RTX A6000/48GB and RTX 5090 -> Flint; >=8 A40/RTX A6000 -> DeepSeek; exactly 2 A40/RTX A6000 -> Ornith.
-Flint: official NVFP4 GGUF (~22.9 GB), upstream llama.cpp merge #30928 pinned; full 262,144 context on 48GB, 192K on 5090.
-The 485 tok/s Flint demo uses a single Blackwell GPU with specialized vLLM kernels. Do NOT extrapolate to Ampere.
-Explicit --profile qwen retains the old single-GPU Qwen setup.
+        epilog='''DeepSeek profiles now use official Strata 0.2.7.1 / signed CUDA engine 0.1.52.
+All existing DeepSeek hardware profiles and exact quant selections remain available.
+Use --profile deepseek-gsq-a40-quad for four A40s with the pinned GSQ IQ2_XXS files.
+Use --prepare-only to install the pinned runtime, verify/download GGUFs and create the
+stock native pack. Normal serving requires prepared local files and never downloads.
+No CUDA compiler is needed for Strata; the host driver must support its CUDA 13 engine.
+--show-config/--dry-run is read-only. --prepare-only does not require a free API port.
 
-Four RTX PRO 6000 Blackwell (>=90000 MiB/card, sm_120) -> DeepSeek 1017 UD-Q8_K_XL, GPU backbone / host Engram.
-One to three RTX PRO 6000 -> NVIDIA FP4-Local profile blocked (no implicit fallback).
-One B300 (>=250000 MiB / sm_103) -> DeepSeek 1017 UD-IQ3_XXS, GPU backbone / host Engram.
-One B200 (>=170000 MiB / sm_100) -> DeepSeek 1017 UD-IQ2_XXS, GPU backbone / host Engram.
-One H200 (>=130000 MiB / sm_90) -> DeepSeek 1017 IQ2 with CPU MoE by default.
-Two H200s (>=130000 MiB each / sm_90) -> DeepSeek 1017 UD-IQ3_XXS with CPU Engram, all MoE on GPU.
-RTX PRO 6000's NVIDIA FP4-Local branch is intentionally blocked pending official vLLM support.
-Local 4070/Bonsai presets are untouched. All inference endpoints bind to localhost.
+Strata uses automatic GPU expert placement across all selected GPUs.
+--expert-ram-gb is a soft RAM cache in GiB; --gpu-expert-fraction is a 0..1 fraction.
+These do not create a hard process limit. Leave host RAM for the OS and other weights.
+--cpu-moe-layers, --tensor-split, --gsq-engram, --engram-ram, llama.cpp KV/cache/batch
+controls and build-archive flags are rejected for DeepSeek. DSpark is not configured.
+Native chat templates and tool parsing remain unmodified. Outgoing network operations
+are blocked for the stock server and its children. Missing libseccomp prevents startup.
 
-Dedicated DASLab DeepSeek 1017 GSQ-RCO profiles (explicit, experimental):
-  deepseek-gsq-a40-triple: 3 A40, IQ2_XXS, 16K, explicit --cpu-moe-layers 7.
-  Triple A40 alternatively: --quant IQ1_M --cpu-moe-layers 1; lower memory/fidelity.
-  deepseek-gsq-a40-quad: 4 A40, IQ2_XXS, 128K, GPU backbone / host Engram.
-  deepseek-gsq-h200: 1 H200, IQ2_XXS, 32K, GPU backbone / host Engram.
-  deepseek-gsq-h200-dual: 2 H200, IQ2_XS, 256K, GPU backbone AND Engram.
-  deepseek-gsq-b300: 1 B300, IQ2_XS, 512K, GPU backbone AND Engram.
-  deepseek-gsq-b200: 1 B200, IQ2_XS, 256K, GPU backbone / host Engram.
-  deepseek-gsq-pro6000-dual: 2 PRO 6000 Blackwell, IQ2_XS, 256K, host Engram.
-  deepseek-gsq-pro6000-quad: 4 PRO 6000 Blackwell, IQ2_XS, 512K, GPU Engram.
-  deepseek-gsq-ampere-multi: 8..40 A40/A6000, IQ2_XS, 512K, host Engram.
-  deepseek-gsq-a40-dual / deepseek-gsq-pro6000-single: IQ1_M, 16K;
-  explicit --cpu-moe-layers is needed when the per-device check cannot fit the backbone.
-  --quant IQ1_M/IQ2_XXS/IQ2_XS selects an EXACT DASLab release; no Q2_K name here.
-  --gsq-engram cpu/gpu changes table placement; --engram-ram keeps CPU tables resident.
-  Each CPU MoE layer uses its actual RCO expert tensor bytes, not a uniform-bit estimate.
-  GPU Engram tables are pinned individually to CUDA0/1, with their bytes charged there.
-  --cpu-moe-layers never turns on automatically. Live VRAM and cgroup RAM checks apply.
-  Runtime: pinned smalinin/my_build + embedded hash/sidecar loader adapter; exact patch
-  and source hashes have independent build-cache identities. Weight files are unchanged.
-  Source review and real-header CPU loading are distinct from full GPU inference.
-  All GSQ profiles/quant variants share <root>/gsq-models/<revision> by default:
-  the identical 110.6 GB Engram is stored/downloaded once. --model-dir can override this.
-  Prefix reuse is disabled by default; use cache_prompt=false in clients.
-  Ordinary decoding only: this target does not enable DSpark or MiniMax DFlash.
-  --accept-experimental (or GSQ_ACCEPT_EXPERIMENTAL=1) is mandatory for build/launch.
-  Existing auto selection, MiniMax DFlash and original Unsloth profiles stay available.
-  Example: --profile deepseek-gsq-a40-triple --cpu-moe-layers 7 --cache-ram 0 --dry-run
-  Example: --profile deepseek-gsq-b300 --dry-run
+Example for existing /opt/qwen/gsq-models files on four A40 GPUs:
+  bash start-remote-model.sh --profile deepseek-gsq-a40-quad --ctxt 256K --dry-run
+  bash start-remote-model.sh --profile deepseek-gsq-a40-quad --ctxt 256K --prepare-only --install-deps --no-ssh
+  bash start-remote-model.sh --profile deepseek-gsq-a40-quad --ctxt 256K --no-ssh
 
-Legacy --ds-source GSQ-RCO config inspection (use dedicated profiles above to launch):
-  --ds-source gsq-rco --quant IQ2_XXS --dry-run selects the pinned DASLab config.
-  IQ1_M: 120.721 GB backbone + 110.595 GB shared Engram = 231.316 GB.
-  IQ2_XXS: 138.239 GB backbone + 110.595 GB Engram = 248.834 GB.
-  IQ2_XS: 155.226 GB backbone + 110.595 GB Engram = 265.821 GB.
-  The Engram is separate, shared and IQ4_NL. Existing Q6 reflink reuse does not apply.
-  These configs are BLOCKED for launch: PR #30817 lacks a verified external-Engram
-  loader; the publisher currently supports Strata. No incompatible download/launch.
-  Existing Unsloth profile defaults and quant/speculation choices remain available.
-  Dedicated GSQ profiles above add an explicit private loader adapter for this layout.
-  Source review covered PR30817, smalinin/my_build, vcruz305/runtime/deepseek41,
-  ik_llama.cpp and Strata/Maya forks; no exact GSQ loader was verified. See dry-run audit.
-
-Optional Unsloth DeepSeek 1017 Q2_K (a DIFFERENT release from GSQ-RCO):
-  --quant UD-Q2_K_XL on B300, dual H200, quad PRO6000 or >=8 A40/A6000 DeepSeek.
-  Seven pinned shards: 334.794 GB total, 199.622 GB backbone + 135.172 GB Q5_K Engram.
-  Keeps old higher-precision defaults; explicit --dspark 3 remains available.
-  Q2_K leaves room for longer context/draft/buffers; speed and quality need measurement.
-  New Q2_K plans disable prompt-prefix caching for the pinned PR's reported Engram
-  history bug (#30944). Clients must keep cache_prompt=false; full re-prefill costs time.
-  Single H200 DeepSeek retains IQ2 + its existing CPU offload policy; use the separate
-  MiniMax H200 profiles below for MiniMax Q2_K. Q6 Engram reflink reuse rejects Q2_K.
-
-MiniMax opt-in (auto selection above stays unchanged):
-  --profile minimax-pro6000-dual-q2k: 2 x RTX PRO 6000 Blackwell 96GB, 32K f16.
-  --profile minimax-a40-quad-q2k: 4 x A40 48GB, 16K f16.
-  --profile minimax-pro6000-single-q2k --cpu-moe-layers 26 --ctxt 16K --cache-ram 0
-  --profile minimax-a40-dual-q2k --cpu-moe-layers 30 --ctxt 16K --cache-ram 0
-  --profile minimax-a40-triple-q2k: 3 x A40 48GB, 16K f16; explicit CPU experts.
-  --profile minimax-h200-single-q2k: 1 x H200 141GB, 32K f16; explicit CPU experts.
-  --profile minimax-h200-dual-q2k: 2 x H200 141GB, 256K f16; GPU-resident experts.
-  Conservative examples with --cache-ram 0: triple A40 ordinary --cpu-moe-layers 15
-  (>=49.1 GiB available RAM), or --dflash --cpu-moe-layers 18 (>=56.4 GiB).
-  Single H200 ordinary --cpu-moe-layers 8 (>=32.0 GiB), or --dflash
-  --cpu-moe-layers 10 (>=36.9 GiB). Dual H200 --dflash needs no CPU experts;
-  optional --ctxt 512K uses more of its VRAM, subject to the same per-GPU checks.
-  DFlash examples: single PRO --cpu-moe-layers 27 --dflash --ctxt 16K --cache-ram 0;
-  quad A40 --cpu-moe-layers 1 --dflash. Dual A40 + DFlash can need 32 CPU layers
-  and >=90.6 GiB CURRENTLY AVAILABLE host RAM; 100 decimal GB total may be too tight.
-  All require --accept-experimental (or MINIMAX_ACCEPT_EXPERIMENTAL=1) to build/launch.
-  DeepSeek's DS_ACCEPT_EXPERIMENTAL does not authorize the MiniMax patch. --dry-run is read-only.
-  Four pinned Sakura Q2_K shards: 155.983 GB / 145.271 GiB on disk.
-  Exact upstream commit + embedded SHA-256-pinned patch preserves sparse attention
-  in ALL 60 layers. Old M3 files that drop indexers 0..2 are rejected.
-  Native f16 main+index cache uses 150 KiB/token including unused index V:
-  16K=2.344 GiB, 32K=4.688 GiB, 64K=9.375 GiB, 128K=18.750 GiB.
-  6 GiB/GPU runtime allowance; actual peaks and inference quality remain untested.
-  --cpu-moe-layers 0..57 explicitly offloads routed gate/up/down experts only.
-  Each costs 2.443 GiB host RAM; shared experts/attention/KV remain on GPU.
-  Host floor = routed experts + 0.406 GiB embedding/metadata + cache + 12 GiB.
-  CPU execution may dominate latency; SSD paging is not a RAM substitute.
-  mmap avoids a second complete resident model. Allow ~180 GB local model storage.
-  --dflash / --spec dflash enables the pinned Inco AI MiniMax DFlash2 draft.
-  Its 4.248 GB BF16 source is converted to F16 using the pinned upstream converter.
-  Draft weights + 2 GiB extra allowance are charged to CUDA0; splitting is replanned.
-  Source/tokenizer hashes, converted metadata and local output SHA-256 are checked.
-  Conversion installs pinned CPU-only dependencies; allow another 16 GiB disk.
-  Speculation adds memory, may need MORE CPU expert offload, and has no measured
-  speedup/acceptance result here. Target features are exposed by the embedded patch.
-  Text-only; no vision projector, DSpark, MTP, KV quantization or MoE GPU cache.
-  Existing --gpu-only remains an SSH option; it permits explicit CPU experts.
-
-Quick start:
-  bash start-remote-model.sh --profile minimax-pro6000-dual-q2k --dry-run
-  bash start-remote-model.sh --profile minimax-a40-quad-q2k --accept-experimental
-  bash start-remote-model.sh --profile minimax-h200-dual-q2k --dflash --dry-run
-  bash start-remote-model.sh --profile minimax-a40-triple-q2k --cpu-moe-layers 18 --dflash --cache-ram 0 --dry-run
-  bash start-remote-model.sh --profile minimax-h200-single-q2k --cpu-moe-layers 10 --dflash --cache-ram 0 --dry-run
-  bash start-remote-model.sh --profile deepseek-h200-dual-iq3 --quant UD-Q2_K_XL --dspark 3 --dry-run
-  bash start-remote-model.sh --show-config
-  bash start-remote-model.sh --profile flint --ctxt 256K           # full 48GB context
-  bash start-remote-model.sh --profile flint --ctxt 256K --kv q8_0  # 5090 optional, KV fidelity unvalidated
-  bash start-remote-model.sh --profile qwen                        # keep former Qwen preset
-  bash start-remote-model.sh --install-deps
-  bash start-remote-model.sh --install-deps --accept-experimental   # >=8 A40/RTX A6000 DeepSeek
-  bash start-remote-model.sh --smoke-test                          # quick checks, another terminal
-  bash start-remote-model.sh --smoke-full-context --ctxt 1M        # actual 95% fill, tools and 10-min soak
-  bash start-remote-model.sh --profile deepseek-pro6000-quad-q8 --accept-experimental
-  bash start-remote-model.sh --profile deepseek-pro6000-quad-q8 --quant UD-Q4_K_XL --accept-experimental
-  bash start-remote-model.sh --profile deepseek-b300-iq3 --accept-experimental
-  bash start-remote-model.sh --profile deepseek-b200-iq2 --accept-experimental
-  bash start-remote-model.sh --profile deepseek-b200-iq2 --quant UD-IQ1_M --context 524288 --accept-experimental
-  bash start-remote-model.sh --profile deepseek-h200-iq2 --accept-experimental
-  bash start-remote-model.sh --profile deepseek-h200-dual-iq3 --accept-experimental
-  bash start-remote-model.sh --profile deepseek-h200-dual-iq3 --quant UD-IQ3_S --context 131072 --accept-experimental
-
-Important:
-  - CUDA DEVELOPMENT image with nvcc, Python >=3.10, local SSD/NVMe required.
-  - Run in tmux/screen; the model server stays in the foreground.
-  - About 650 GB local disk for multi-A40 DeepSeek; 120-150 GB for Ornith.
-  - 4× RTX PRO 6000 Q8: ~550–650 GB disk for ~508.4 GB GGUF including ~202.8 GB Engram.
-    All compute weights on four 96GB GPUs; Engram in RAM/SSD. CUDA 12.8+ SM120.
-    Default 256K and a conservative 0.94,1,1,1.06 placement heuristic, not
-    hardware validated. Q4 is optional, but reduces compute weights only ~7.7 GB.
-    This DOES NOT enable NVIDIA FP4-Local; that exact checkpoint is still blocked.
-  - B300 IQ3: default IQ3_XXS ~394.7 GB complete GGUF, default context 1M.
-    --variant iq3_s selects ~423.6 GB complete GGUF with ~262.3 GB GPU weights.
-    --dspark 3 additionally downloads the verified ~7.98 GB 1017 drafter.
-    Both variants use the SAME ~161.3 GB Q6_K Engram tensor, packed with
-    DIFFERENT GGUF split headers in their respective final shards.
-    --reuse-engram uses CoW reflinks (not hardlinks) to share actual disk blocks,
-    restamps split.no/split.count, then verifies the official target SHA-256.
-    This requires reflink-capable storage; no silent 161GB copy fallback.
-    Without reflinks, keeping both requires ~820 GB total before reserves.
-    Existing weight directories are NEVER automatically deleted or replaced.
-    CUDA toolkit 12.9+ for sm_103; 1M/DSpark/IQ3_S combined has not been validated.
-  - B200 IQ2: ~330–360 GB disk, ~165.3 GB GPU compute weights, ~135.2 GB CPU/SSD Engram.
-    UD-IQ1_M alternatively uses ~139.8 GB weights plus 110.6 GB CPU/SSD Engram.
-    Use CUDA toolkit 12.8+; default 256K context is tight on a 180GB full-memory card.
-    IQ1_M quant loses more coding fidelity, and neither B200 setup has GPU validation.
-  - H200 IQ2: ~330 GB disk, ~135 GB SSD Engram; 18 CPU MoE layers by default.
-  - 2× H200 IQ3: ~415-480 GB GGUF storage, ~161.3 GB Engram on CPU/SSD,
-    ~233.5 GB (IQ3_XXS) or ~262.3 GB (IQ3_S) computational weights on GPU.
-    No automatic CPU MoE fallback; real 256K+ VRAM allocation remains unverified.
-  - Build cache: /workspace/archive/llama-server-<pinned source, CUDA, ABI>.tar.gz.
-    Only compiled llama-server and nonsecret build identity are persisted; NO weights,
-    Engram, configs, keys, token caches or prompts. --archive-build-only stores the
-    binary on your existing pod without model downloads or a server launch.
-    --no-build-archive disables archive restore/write. --archive-dir changes storage.
-    A writable/shared archive is executable code: for sensitive data, pin its
-    SHA-256 out-of-band with --archive-sha256 / QWEN_BUILD_ARCHIVE_SHA256.
-    Exact source commit, CUDA toolkit, compute architecture, CPU arch and glibc
-    are checked on restore; changed environments trigger a fresh build.
-  - Flint runtime is a pinned UPSTREAM llama.cpp Flint merge, not a third-party fork.
-    Flint's publisher currently recommends >=48 GB NVIDIA GPUs for its NVFP4 GGUF;
-    Ampere A40/A6000 may be markedly slower than vLLM's Blackwell measurements.
-    The launcher first pins the publisher's HF commit+GGUF LFS SHA-256 locally,
-    then checks the complete downloaded file. No model-supplied code is executed.
-  - DeepSeek runtime is pinned to an UNMERGED draft PR, not a released runtime.
-  - --no-dflash is the old alias for disabling speculation (same as --no-mtp).
-  - --download-workers / --verify-workers support bounded parallel preparation.
-  - --install-deps does not install Rust or an additional inference engine.
-  - H200 2-GPU IQ3 keeps all experts on GPU, with CPU/SSD Engram. The higher-precision
-    IQ3_S option has little HBM headroom, and long contexts are unvalidated.
-  - H200 IQ2 has CPU expert computation; it will probably be much slower than
-    full-backbone GPU inference. The CPU/GPU split estimate is not measured.
-  - --gpu-only skips SSH setup; compute weights are already GPU-only by default.
-  - Host conversation cache is NOT active-KV CPU offloading.
-  - No silent quant/context downgrades, process killing, or driver installation.
-
-Environment aliases: QWEN_PROFILE, QWEN_ROOT, QWEN_PORT; QWEN/ORNITH/DS_CONTEXT,
-*_KV, *_QUANT, *_SPEC, *_DRAFT_DEPTH, *_REASONING_EFFORT; DS_ACCEPT_EXPERIMENTAL;
-QWEN_INSTALL_DEPS / ORNITH_INSTALL_DEPS / DS_INSTALL_DEPS; SSH_PUBLIC_KEY or PUBLIC_KEY.
-QWEN_ROOT is the common storage root; ORNITH_ROOT/DS_ROOT optionally override profile roots.
-Use --model-dir to reuse already-downloaded pinned GGUF files (hashes are checked).''')
+Qwen/Flint/Ornith/MiniMax retain their prior llama.cpp runtime and controls.
+Auto selection: one supported 48GB card or 5090 -> Flint; two A40/A6000 -> Ornith;
+3..7 A40/A6000 -> one Flint; >=8 A40/A6000 -> DeepSeek; four PRO6000 -> DeepSeek.
+One B300/B200 or one/two H200 -> their DeepSeek profile. One to three PRO6000
+select the blocked FP4-Local path unless an explicit supported profile is supplied.
+The Qwen profile is Qwen3.8-27B. All API endpoints bind to 127.0.0.1, default 8897.
+''')
     p.add_argument('--version',action='version',version=VERSION)
     p.add_argument('--profile',choices=('auto','flint','qwen','ornith','deepseek',
                    'deepseek-h200-iq2','deepseek-h200-dual-iq3','deepseek-b300-iq3',
@@ -3263,6 +3032,13 @@ Use --model-dir to reuse already-downloaded pinned GGUF files (hashes are checke
     p.add_argument('--gpu-count',type=int,help='Local A40/A6000 count; 4 for RTX PRO 6000 Blackwell; 1/2 for H200; 1 for B200/B300')
     p.add_argument('--cpu-moe-layers',type=int,
                    help='H200 IQ2: existing early-layer setting (default 18); MiniMax: explicitly offload 0..57 routed-expert layers (default 0)')
+    p.add_argument('--expert-ram-gb',type=float,default=36,help='Strata expert RAM cache in GiB; soft budget, not a process cap (default 36)')
+    p.add_argument('--gpu-expert-fraction',type=float,default=1.0,help='Strata fraction of automatically available GPU expert capacity, 0..1')
+    p.add_argument('--vram-reserve-mib',type=int,default=2048,help='Strata free VRAM reserve per GPU in MiB (default 2048)')
+    p.add_argument('--prefill-chunk',type=int,default=4096,help='Strata prompt chunk size in tokens (default 4096)')
+    p.add_argument('--engram-cache-mib',type=int,default=256,help='Strata Engram row cache in MiB (default 256)')
+    p.add_argument('--engram-threads',type=int,default=16,help='Strata Engram SSD read threads (default 16)')
+    p.add_argument('--thinking-budget',type=int,default=32768,help='Strata maximum reasoning tokens per request (default 32768)')
     p.add_argument('--cpu-threads',type=int,default=envint('QWEN_CPU_THREADS',min(os.cpu_count() or 8,32)),
                    help='H200 IQ2 / MiniMax CPU MoE threads (default min(CPUs,32))')
     p.add_argument('--engram-ram',action='store_true', help='llama.cpp DeepSeek only: load the Engram table in host RAM instead of lazy SSD mapping (RAM requirement depends on quantization)')
@@ -3352,11 +3128,506 @@ def gsq_config(args, mode: str, chosen: list[GPU]) -> dict[str, Any]:
                 fidelity_note='Publisher results are reported at effort 50; no new local quality or GPU validation')
 
 
+# Official Strata pins and bootstrap. Serving never updates these artifacts.
+STRATA_PINS = {'source_revision': '46c152a1310f77cd2f0ce2c7cd213962df14fe83', 'source_archive_url': 'https://api.github.com/repos/Niko1221/Strata/tarball/46c152a1310f77cd2f0ce2c7cd213962df14fe83', 'source_archive_sha256': 'fae7217a8c4239c3dc7e1cae5a6e813b2b87d556840d55579e5663371d566d2f', 'source_receipt_sha256': '2b517964fba0c633ba61dcfde1d8f12730fd83b072bcb18408b5d2c9da9feb73', 'control_version': '0.1.53', 'runtime': {'release_tag': 'v0.2.7', 'version': '0.1.52', 'archive_url': 'https://github.com/Niko1221/Strata/releases/download/v0.2.7/strata-dsv41-0.1.52-linux-x86_64-cuda-cuda13.tar.gz', 'archive_sha256': 'c1b3d0ca2a575655a395ab4a2d0afc5cd731d0e5d26fbcdb955f2359dbbc1a57', 'archive_size': 444709965, 'feed_url': 'https://github.com/Niko1221/Strata/releases/download/v0.2.7/strata-feed.json', 'feed_sha256': '148dc76b786f65371691b6fd73884c6150f269f0c4e379aa6c472dbe29c6f355', 'feed_signature_sha256': '2999e0efd205a7b99eb3f2c6457b5022426c9104342f1c9cd86ba5692289f4f1', 'manifest_sha256': 'dda8e2470c8cb96bd93b2f19fd0d23d24f7e328fea820c692e5ab7829a55db1a', 'binary_sha256': '5792fd39d3ea5ad2fd82fe4e88b5a4afd2edb15c051e87d05e1a01f17679692c', 'python_packages': ['jinja2==3.1.6', 'markupsafe==3.0.3', 'regex==2026.9.10']}}
+STRATA_INSTALL_CODE = r'''
+import argparse
+import hashlib
+import importlib
+import json
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+import tarfile
+import tempfile
+from typing import Any, cast
+import urllib.request
+
+
+def digest(path: Path) -> str:
+    """Return the SHA256 digest of a file."""
+    with path.open("rb") as stream:
+        value = hashlib.sha256()
+        while block := stream.read(1024**2):
+            value.update(block)
+        return value.hexdigest()
+
+
+def checked_download(url: str, path: Path, expected: str) -> None:
+    """Download an HTTPS artifact and check its pinned digest before use."""
+    if path.is_file():
+        if digest(path) != expected:
+            raise RuntimeError(f"The existing artifact differs from its pin: {path}.")
+        return
+    if not url.startswith("https://"):
+        raise RuntimeError("The artifact URL must use HTTPS.")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    partial = path.with_name(path.name + ".part")
+    with urllib.request.urlopen(url, timeout=120) as response, partial.open("wb") as output:
+        shutil.copyfileobj(response, output, 1024**2)
+    if digest(partial) != expected:
+        partial.unlink()
+        raise RuntimeError(f"The downloaded artifact differs from its pin: {path}.")
+    partial.replace(path)
+
+
+def install_source(source: Path, info: dict[str, Any], cache: Path) -> None:
+    """Extract the pinned source archive without links or path traversal."""
+    if source.exists():
+        return
+    archive = cache / "source.tar.gz"
+    checked_download(str(info["source_archive_url"]), archive, str(info["source_archive_sha256"]))
+    source.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="strata-source-", dir=source.parent) as directory:
+        stage = Path(directory) / "source"
+        stage.mkdir()
+        files: dict[str, str] = {}
+        unpacked = 0
+        with tarfile.open(archive) as contents:
+            for entry in contents:
+                parts = Path(entry.name).parts
+                if entry.name.startswith("/") or ".." in parts:
+                    raise RuntimeError("The source archive contains an unsafe path.")
+                if len(parts) < 2 or entry.isdir():
+                    continue
+                if not entry.isfile():
+                    raise RuntimeError("The source archive contains a link or special file.")
+                unpacked += entry.size
+                if unpacked > 1024**3:
+                    raise RuntimeError("The source archive exceeds the 1 GiB extraction limit.")
+                name = str(Path(*parts[1:]))
+                if name in files:
+                    raise RuntimeError("The source archive contains a duplicate file.")
+                entry.name = name
+                target = stage / name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                with contents.extractfile(entry) as incoming, target.open("wb") as outgoing:
+                    shutil.copyfileobj(incoming, outgoing)
+                target.chmod(entry.mode & 0o777)
+                files[name] = digest(stage / name)
+        receipt = stage / "source-files.json"
+        receipt.write_text(json.dumps(files, indent=2, sort_keys=True) + "\n")
+        if digest(receipt) != info["source_receipt_sha256"]:
+            raise RuntimeError("The source receipt differs from its pin.")
+        (stage / "SOURCE_COMMIT").write_text(str(info["source_revision"]) + "\n")
+        stage.rename(source)
+
+
+def verify_source(source: Path, info: dict[str, Any]) -> None:
+    """Check every upstream source file against the pinned receipt."""
+    receipt = source / "source-files.json"
+    if not receipt.is_file() or digest(receipt) != info["source_receipt_sha256"]:
+        raise RuntimeError("The pinned Strata source receipt is missing or changed.")
+    files = cast(dict[str, str], json.loads(receipt.read_text()))
+    for name, expected in files.items():
+        path = source / name
+        if path.is_symlink() or not path.is_file() or digest(path) != expected:
+            raise RuntimeError(f"The upstream Strata source file is missing or changed: {path}.")
+    extras = [str(path.relative_to(source)) for path in source.rglob("*.py")
+              if str(path.relative_to(source)) not in files]
+    if extras:
+        raise RuntimeError("The Strata source contains unpinned Python files: " + ", ".join(extras[:8]))
+
+
+def verify_native(source: Path, runtime: Path, settings: dict[str, Any], install: bool) -> Path:
+    """Use the stock verifier for the signed feed and every engine file."""
+    feed_path = runtime / "strata-feed.json"
+    signature_path = runtime / "strata-feed.json.sig"
+    url = str(settings["feed_url"])
+    if install:
+        checked_download(url, feed_path, str(settings["feed_sha256"]))
+        checked_download(url + ".sig", signature_path, str(settings["feed_signature_sha256"]))
+    for path, key in ((feed_path, "feed_sha256"), (signature_path, "feed_signature_sha256")):
+        if not path.is_file() or digest(path) != settings[key]:
+            raise RuntimeError(f"The pinned Strata feed is missing or changed: {path}.")
+    sys.path.insert(0, str(source))
+    signing = importlib.import_module("strata_control.signing")
+    feed = importlib.import_module("strata_control.feed")
+    component = importlib.import_module("strata_control.engine_component")
+    # The manifest pins this historical feed. Verify its signature and exact bytes,
+    # without using its expiry date to force an unrequested runtime update.
+    keys = signing.load_trusted_keys({})
+    key_id = signing.verify_bytes(keys, feed_path.read_bytes(), json.loads(signature_path.read_text()))
+    index = feed.parse(feed_path.read_bytes(), source=url, key_id=key_id)
+    package = next((entry for entry in index.dsv41
+                    if entry.version == settings["version"] and entry.platform == "linux-x86_64"
+                    and entry.backend == "cuda" and entry.variant == "cuda13"), None)
+    if package is None or package.sha256 != settings["archive_sha256"]:
+        raise RuntimeError("The signed feed does not contain the pinned CUDA engine.")
+    binary = runtime / "engine-dsv41" / f"{package.version}-linux-x86_64-cuda-cuda13" / "strata-dsv41"
+    if install and not binary.exists():
+        archive = runtime / Path(str(settings["archive_url"])).name
+        checked_download(str(settings["archive_url"]), archive, str(settings["archive_sha256"]))
+        if archive.stat().st_size != int(settings["archive_size"]):
+            raise RuntimeError("The engine archive has the wrong size.")
+        installer = importlib.import_module("strata_control.dsv41_engine")
+        if installer.install_package(runtime / "engine-dsv41", archive) != binary:
+            raise RuntimeError("The official Strata package installer refused the archive.")
+    manifest = binary.parent / component.MANIFEST
+    if not manifest.is_file() or digest(manifest) != package.manifest_sha256:
+        raise RuntimeError("The engine manifest differs from the signed feed.")
+    item = component.read_manifest(binary.parent)
+    signing.install_component_verifier(keys)
+    component.verify_signature(item, {component.ENV_REQUIRE_SIGNED: "1"})
+    component.verify(item, full=True)
+    if digest(binary) != settings["binary_sha256"]:
+        raise RuntimeError("The Strata engine binary differs from its pin.")
+    return binary
+
+
+def ensure_venv(venv: Path, packages: list[str], install: bool) -> None:
+    """Install or check only the pinned serving and tokenizer dependencies."""
+    python = venv / "bin/python"
+    if install and not python.exists():
+        subprocess.run([sys.executable, "-m", "venv", str(venv)], check=True)
+    if install:
+        subprocess.run([str(python), "-m", "pip", "install", "--disable-pip-version-check", "--no-deps", *packages], check=True)
+    code = "import importlib.metadata as m,json;print(json.dumps({d.metadata['Name'].lower():d.version for d in m.distributions()}))"
+    actual = json.loads(subprocess.check_output([str(python), "-c", code], text=True))
+    expected = dict(package.lower().split("==", 1) for package in packages)
+    actual = {key: value for key, value in actual.items() if key not in ("pip", "setuptools")}
+    if actual != expected:
+        raise RuntimeError(f"The isolated Strata Python packages differ from the pins: {actual}.")
+
+
+info = json.loads(sys.argv[1])
+base = Path(sys.argv[2])
+install = sys.argv[3] == "prepare"
+source = base / "source"
+settings = info["runtime"]
+if install:
+    base.mkdir(parents=True, exist_ok=True)
+    install_source(source, info, base / "downloads")
+verify_source(source, info)
+verify_native(source, base, settings, install)
+ensure_venv(base / "venv", settings["python_packages"], install)
+
+'''
+STRATA_NETWORK_GUARD = r'''
+"""Block outbound sockets before the Strata server or its children start."""
+
+from __future__ import annotations
+
+import ctypes
+import errno
+import os
+import socket
+import sys
+
+
+class Comparison(ctypes.Structure):
+    """Use the argument comparison layout from libseccomp."""
+
+    _fields_ = [("arg", ctypes.c_uint), ("op", ctypes.c_int),
+                ("datum_a", ctypes.c_uint64), ("datum_b", ctypes.c_uint64)]
+
+
+def restrict_network() -> None:
+    """Retain inbound API replies. Deny new connections and addressed sends."""
+    lib = ctypes.CDLL("libseccomp.so.2", use_errno=True)
+    lib.seccomp_init.argtypes = [ctypes.c_uint32]
+    lib.seccomp_init.restype = ctypes.c_void_p
+    lib.seccomp_release.argtypes = [ctypes.c_void_p]
+    lib.seccomp_syscall_resolve_name.argtypes = [ctypes.c_char_p]
+    lib.seccomp_syscall_resolve_name.restype = ctypes.c_int
+    lib.seccomp_rule_add_array.argtypes = [ctypes.c_void_p, ctypes.c_uint32, ctypes.c_int,
+                                          ctypes.c_uint, ctypes.POINTER(Comparison)]
+    lib.seccomp_rule_add_array.restype = ctypes.c_int
+    lib.seccomp_load.argtypes = [ctypes.c_void_p]
+    lib.seccomp_load.restype = ctypes.c_int
+    context = lib.seccomp_init(0x7FFF0000)  # SCMP_ACT_ALLOW
+    if not context:
+        raise RuntimeError("libseccomp could not create the network policy.")
+
+    def deny(name: str, *comparisons: Comparison) -> None:
+        number = lib.seccomp_syscall_resolve_name(name.encode())
+        if number < 0:
+            raise RuntimeError(f"libseccomp does not know the required syscall: {name}.")
+        args = (Comparison * len(comparisons))(*comparisons)
+        result = lib.seccomp_rule_add_array(context, 0x00050000 | errno.EPERM,
+                                            number, len(comparisons), args)
+        if result != 0:
+            raise RuntimeError(f"Cannot restrict {name}: {os.strerror(-result)}.")
+
+    try:
+        # Children retain the filter across fork and exec. Block alternate I/O paths.
+        for name in ("connect", "sendmsg", "sendmmsg", "recvmsg", "recvmmsg", "io_uring_setup", "io_uring_enter",
+                     "io_uring_register", "ptrace", "process_vm_writev", "pidfd_getfd"):
+            deny(name)
+        # send() uses sendto() with a null destination on accepted API sockets.
+        deny("sendto", Comparison(4, 1, 0, 0))  # SCMP_CMP_NE
+        # Exclude vsock, packet sockets, netlink and raw sockets.
+        for family in range(socket.AF_INET6):
+            if family not in (socket.AF_UNIX, socket.AF_INET):
+                deny("socket", Comparison(0, 4, family, 0))  # SCMP_CMP_EQ
+        deny("socket", Comparison(0, 6, socket.AF_INET6, 0))  # SCMP_CMP_GT
+        for kind in range(16):
+            if kind != socket.SOCK_STREAM:
+                deny("socket", Comparison(1, 7, 0xF, kind))  # SCMP_CMP_MASKED_EQ
+        deny("socketpair", Comparison(0, 1, socket.AF_UNIX, 0))
+        result = lib.seccomp_load(context)
+        if result != 0:
+            raise RuntimeError(f"Cannot load the network policy: {os.strerror(-result)}.")
+    finally:
+        lib.seccomp_release(context)
+
+
+def main() -> None:
+    """Close inherited descriptors, install the policy, and execute the command."""
+    if len(sys.argv) < 2:
+        raise RuntimeError("A command is required.")
+    descriptors = [int(name) for name in os.listdir("/proc/self/fd") if name.isdecimal() and int(name) > 2]
+    for descriptor in descriptors:
+        try:
+            os.close(descriptor)
+        except OSError:
+            pass
+    restrict_network()
+    print("[start-remote-model] Strata: outgoing connections blocked for the server and its children.",
+          file=sys.stderr, flush=True)
+    os.execv(sys.argv[1], sys.argv[1:])
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (OSError, ValueError, RuntimeError) as error:
+        sys.exit(f"Strata isolation failed. The server was not started: {error}")
+
+'''
+
+
+def strata_paths(args) -> tuple[Path, Path, Path]:
+    """Keep the official runtime separate from all llama.cpp builds."""
+    base = Path(args.root).expanduser().absolute() / 'runtimes' / ('strata-' + STRATA_PINS['source_revision'])
+    return base, base / 'venv/bin/python', base / 'source'
+
+
+def strata_options(args) -> None:
+    """Reject controls whose llama.cpp meaning does not apply to Strata."""
+    old = {'--cpu-moe-layers', '--tensor-split', '--gsq-engram', '--engram-ram', '--kv',
+           '--cache-ram', '--batch', '--ubatch', '--draft-depth', '--mtp-depth', '--draft-sampling',
+           '--archive-build-only', '--no-build-archive', '--archive-dir', '--archive-sha256', '--build-jobs'}
+    used = sorted(old.intersection(args.explicit_flags))
+    if used:
+        raise Error('Strata does not implement these llama.cpp controls: ' + ', '.join(used)
+                    + '. Use --expert-ram-gb, --gpu-expert-fraction, --prefill-chunk and --vram-reserve-mib.')
+    if args.spec not in (None, 'none') or args.dspark not in (None, 0):
+        raise Error('Remote Strata uses ordinary decoding. DSpark/MTP/DFlash are not configured; no draft is downloaded.')
+    if args.ds_source == 'gsq-rco' and args.profile not in GSQ_PROFILES:
+        raise Error('Select an explicit deepseek-gsq-* profile for GSQ-RCO. The selected Unsloth quant is not substituted.')
+    if not math.isfinite(args.expert_ram_gb) or not 0 <= args.expert_ram_gb <= 1024:
+        raise Error('--expert-ram-gb must be 0..1024 GiB; it is a soft cache budget, not a process RAM cap')
+    if not math.isfinite(args.gpu_expert_fraction) or not 0 <= args.gpu_expert_fraction <= 1:
+        raise Error('--gpu-expert-fraction must be 0..1')
+    if not 256 <= args.vram_reserve_mib <= 16384 or not 1 <= args.prefill_chunk <= 32768:
+        raise Error('Use --vram-reserve-mib 256..16384 and --prefill-chunk 1..32768')
+    if not 0 <= args.engram_cache_mib <= 4096 or not 1 <= args.engram_threads <= 64:
+        raise Error('Use --engram-cache-mib 0..4096 and --engram-threads 1..64')
+    if not 1 <= args.cpu_threads <= 64 or not 0 <= args.thinking_budget <= 1048576:
+        raise Error('Strata uses --cpu-threads 1..64 and --thinking-budget 0..1048576')
+
+
+def strata_plan(args, mode: str, gpus: list[GPU]) -> Plan:
+    """Preserve checkpoint selection without llama.cpp placement estimates."""
+    strata_options(args)
+    if mode in GSQ_PROFILES:
+        defaults = GSQ_PROFILES[mode]
+        quant = args.quant or defaults['quant']
+        if quant not in GSQ_LAYOUT or args.variant is not None or args.reuse_engram:
+            raise Error('GSQ uses IQ1_M/IQ2_XXS/IQ2_XS and the existing shared Engram; Unsloth variant/reuse flags do not apply')
+        context = args.context if args.context is not None else defaults['context']
+        if not 4096 <= context <= 1048576:
+            raise Error('DeepSeek context must be 4096..1048576')
+        ident = mode + '-' + quant.lower()
+        root = Path(os.environ.get('GSQ_ROOT', str(Path(args.root).expanduser().absolute() / ident))).expanduser().absolute()
+        plan = Plan(mode, ident, GSQ_REPO, GSQ_REV, quant, context, 'native', 'none', 0,
+                    STRATA_PINS['source_revision'], 'official-Strata-v0.2.7.1',
+                    sum(f['size'] for f in gsq_files(quant).values()), GSQ_FILES[GSQ_ENGRAM_NAME]['size'],
+                    0, 0, root, gpus, args.reasoning_effort or 'high', 0, args.port, 0, 0,
+                    Path(args.model_dir).expanduser().absolute() if args.model_dir else
+                    Path(args.root).expanduser().absolute() / 'gsq-models' / GSQ_REV)
+    else:
+        # This function retains the original profile's exact quant, revision and directory.
+        legacy = argparse.Namespace(**vars(args))
+        legacy.reasoning_effort = 'high'  # Validate the native setting below.
+        plan = make_plan(legacy, mode, gpus)
+        if plan.spec != 'none':
+            raise Error('Strata speculation must be disabled; clear the profile SPEC/DRAFT environment overrides')
+        plan.cpu_moe_layers = 0
+        plan.kv = 'native'
+        plan.cache_ram = plan.batch = plan.ubatch = 0
+        plan.runtime, plan.runtime_ref = STRATA_PINS['source_revision'], 'official-Strata-v0.2.7.1'
+    effort = args.reasoning_effort or 'high'
+    if effort not in ('none', 'low', 'medium', 'high'):
+        raise Error('Strata configuration effort must be none/low/medium/high. API requests may send xhigh/max; no numeric llama.cpp default is retained.')
+    plan.effort, plan.engine = effort, 'strata'
+    return plan
+
+
+def strata_preflight(plan: Plan, args) -> None:
+    """Check headroom without claiming a hard cap or precomputed GPU fit."""
+    if platform.system() != 'Linux' or platform.machine() not in ('x86_64', 'AMD64'):
+        raise Error('The pinned Strata engine requires Linux x86_64')
+    minimum = int(args.expert_ram_gb * GIB) + args.engram_cache_mib * MIB + 24 * GIB
+    available = available_ram()
+    if available < minimum:
+        raise Error(f'Strata needs {minimum/GIB:.1f} GiB available for the requested cache plus 24 GiB headroom; '
+                    f'only {available/GIB:.1f} GiB is available. Reduce --expert-ram-gb.')
+    if any(g.free < args.vram_reserve_mib + 4096 for g in plan.gpus) and not args.prepare_only:
+        raise Error('A selected GPU lacks 4 GiB plus the requested reserve. Stop the old server before serving.')
+    check_storage(model_folder(plan), args.allow_network_storage)
+    if not args.prepare_only:
+        check_port(plan.port)
+    say(f'Strata expert RAM cache: {args.expert_ram_gb:g} GiB; available host RAM: {available/GIB:.1f} GiB. '
+        'This is not a hard process limit. Native GPU expert placement is automatic; GPU fit remains unverified.')
+
+
+def strata_settings(plan: Plan, args) -> dict[str, Any]:
+    """Use the stock DeepSeek template, parser and native device ordinals."""
+    base, python, source = strata_paths(args)
+    binary = base / 'engine-dsv41' / '0.1.52-linux-x86_64-cuda-cuda13/strata-dsv41'
+    pack = model_folder(plan) / ('strata-pack-' + plan.quant.lower())
+    ordinals = list(range(len(plan.gpus)))
+    selected = ','.join('GPU-' + g.uuid[4:] for g in plan.gpus)
+    native = ['--pack', str(pack), '--gpus', ','.join(map(str, ordinals)), '--max-context', str(plan.context),
+              '--ssd-cache', str(args.expert_ram_gb * GIB / 10**9), '--cpu-threads', str(args.cpu_threads),
+              '--vram-experts', str(args.gpu_expert_fraction), '--reserve-mib', str(args.vram_reserve_mib),
+              '--prefill-chunk', str(args.prefill_chunk), '--dspark', 'none', '--experts', '6', '--vision', 'off']
+    return {'exe': str(binary), 'arch': 'deepseek41', 'args': native, 'cwd': str(source),
+            'tokenizer': str(pack / 'tokenizer'), 'model_name': plan.model_id,
+            'gpu': ordinals, 'gpu_order': 'as_given', 'log': str(plan.root / 'strata-engine.log'),
+            'env': {'CUDA_VISIBLE_DEVICES': selected, 'DS4_ENGRAM_CACHE_MB': str(args.engram_cache_mib),
+                    'DS4_ENGRAM_THREADS': str(args.engram_threads), 'STRATA_DS4_DISK_SKIP_W': '0',
+                    'STRATA_DS4_SLOT_KEEP': '0'}, 'lib_dirs': [str(binary.parent)],
+            'sampling': {'temperature': 1.0, 'top_p': 1.0}, 'reasoning_effort': plan.effort,
+            'reasoning_budget_tokens': args.thinking_budget, 'fit_max_tokens': True,
+            'api_monitor': False, 'allowed_hosts': [], 'trusted_origins': [], 'cors_origins': [],
+            'engine_ready_s': 3600}
+
+
+def strata_pack(plan: Plan, args, data: dict, python: Path, source: Path, env: dict) -> None:
+    """Build a small index over verified GGUF files. Do not requantize weights."""
+    folder = model_folder(plan)
+    pack = folder / ('strata-pack-' + plan.quant.lower())
+    assets = {'ds4.txt', 'tensors.txt', 'engram.bin', 'tokenizer/chat_template.jinja',
+              'tokenizer/token_type.json', 'tokenizer/merges.txt', 'tokenizer/vocab.json', 'tokenizer/tokenizer.json'}
+    receipt = pack / 'remote-pack.json'
+    identity = {'source_revision': STRATA_PINS['source_revision'], 'model_revision': plan.revision,
+                'quant': plan.quant, 'model_directory': str(folder)}
+    if not receipt.is_file():
+        if not args.prepare_only:
+            raise Error('Strata pack is not prepared. Run the same profile with --prepare-only first.')
+        shards = sorted(f['path'] for f in data['files'] if f['kind'] == 'model' and f['path'] != GSQ_ENGRAM_NAME)
+        inputs = [folder/name for name in shards]
+        model_base = inputs[0].parent
+        if any(path.parent != model_base for path in inputs):
+            raise Error('The selected GGUF shards must share one directory for the stock packer')
+        parents = {model_base.parent}
+        if any(list(parent.glob('dspark-*.gguf')) or list(parent.glob('mmproj*.gguf'))
+               or (parent/'dspark/dspark.json').exists() or (parent/'vision').exists() for parent in parents):
+            raise Error('Optional drafter/vision files beside this model would be auto-discovered by stock pack_gguf. '
+                        'Use a model directory without those neighboring artifacts.')
+        command = [str(python), '-I', '-B', str(source/'tools/dsv41/pack_gguf.py'),
+                   '--model', str(model_base), '--out', str(pack), '--shards', *[path.name for path in inputs]]
+        if plan.profile in GSQ_PROFILES:
+            command += ['--engram', str(folder/GSQ_ENGRAM_NAME), '--engram-meta', str(folder/shards[0])]
+        run(command, env=env)
+        if not all((pack/name).is_file() and not (pack/name).is_symlink() for name in assets):
+            raise Error('Stock Strata pack is incomplete; no server was started')
+        atomic_json(receipt, {**identity, 'files': {name: file_sha256(pack/name) for name in sorted(assets)}})
+    record = json.loads(receipt.read_text())
+    if any(record.get(key) != value for key, value in identity.items()) or set(record.get('files', {})) != assets:
+        raise Error('Strata pack receipt does not match this source, quant or model directory')
+    for name, expected in record['files'].items():
+        if (pack/name).is_symlink() or file_sha256(pack/name) != expected:
+            raise Error('Strata pack asset changed: ' + name)
+
+
+def strata_main(plan: Plan, args) -> int:
+    """Prepare explicitly, or serve verified local files with outgoing sockets blocked."""
+    global LOG
+    strata_preflight(plan, args)
+    settings = strata_settings(plan, args)
+    base, python, source = strata_paths(args)
+    command = [str(python), '-I', '-B', str(base/'network_guard.py'), str(python), '-I', '-B',
+               str(source/'serve/server.py'), '--engine', 'strata', '--config', str(plan.root/'strata-server.json'),
+               '--host', '127.0.0.1', '--port', str(plan.port), '--offline']
+    print(json.dumps({'plan': plan.public(), 'server': settings, 'command': command,
+                      'runtime_pins': STRATA_PINS, 'outgoing_network': 'blocked by inherited seccomp policy',
+                      'hard_ram_limit': None, 'expert_ram_gib': args.expert_ram_gb}, indent=2), flush=True)
+    if args.show_config:
+        say('Read-only Strata preview complete. No downloads, builds, writes or service changes.')
+        return 0
+    env = {k:v for k,v in os.environ.items() if not k.startswith(('LLAMA_ARG_', 'GGML_', 'LLAMA_DSV', 'STRATA_', 'MAYA_', 'DS4_'))
+           and k not in ('PYTHONPATH', 'PYTHONHOME')}
+    env['CUDA_VISIBLE_DEVICES'] = settings['env']['CUDA_VISIBLE_DEVICES']
+    if args.install_deps:
+        if not args.prepare_only:
+            raise Error('Strata --install-deps requires --prepare-only; serving never installs dependencies')
+        if os.geteuid() != 0 or not shutil.which('apt-get'):
+            raise Error('--install-deps requires root on Debian/Ubuntu')
+        run(['apt-get', 'update'], env=dict(env, DEBIAN_FRONTEND='noninteractive'))
+        run(['apt-get', 'install', '-y', '--no-install-recommends', 'python3-venv', 'ca-certificates',
+             'libseccomp2', 'util-linux'], env=dict(env, DEBIAN_FRONTEND='noninteractive'))
+    ctypes.CDLL('libseccomp.so.2')  # Missing enforcement prevents preparation/serving.
+    plan.root.mkdir(parents=True, exist_ok=True)
+    base.mkdir(parents=True, exist_ok=True)
+    with (base/'.runtime.lock').open('a') as runtime_lock, (plan.root/'.strata-launcher.lock').open('a') as lock:
+        try:
+            fcntl.flock(runtime_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise Error('Another Strata preparation or server owns this runtime/profile') from exc
+        run([sys.executable, '-I', '-B', '-c', STRATA_INSTALL_CODE, json.dumps(STRATA_PINS), str(base),
+             'prepare' if args.prepare_only else 'check'], env=env, quiet=True)
+        guard = base/'network_guard.py'
+        if args.prepare_only:
+            guard.write_text(STRATA_NETWORK_GUARD)
+        elif not guard.is_file() or guard.read_text() != STRATA_NETWORK_GUARD:
+            raise Error('Strata network guard is missing or changed; run --prepare-only')
+        path = plan.root / f'manifest-{plan.quant}-{plan.spec}-{plan.revision[:12]}.json'
+        if plan.profile in GSQ_PROFILES:
+            data = dict(repo=plan.repo, revision=plan.revision, quant=plan.quant, spec='none', official_files=[],
+                        files=[dict(path=n, size=f['size'], sha256=f['sha256'], kind='model')
+                               for n,f in sorted(gsq_files(plan.quant).items())])
+            validate_manifest(plan, data)
+            if args.prepare_only:
+                atomic_json(path, data)
+        elif path.is_file():
+            data = json.loads(path.read_text())
+            validate_manifest(plan, data)
+        elif args.prepare_only:
+            hub = hub_python(args, env)
+            path, data = manifest(hub, plan, env)
+        else:
+            raise Error('Pinned GGUF manifest is missing. Run --prepare-only first.')
+        missing = any(not (model_folder(plan)/f['path']).is_file()
+                      or (model_folder(plan)/f['path']).stat().st_size != f['size'] for f in data['files'])
+        if missing and not args.prepare_only:
+            raise Error('Pinned GGUF files are missing. Run --prepare-only; serving does not download.')
+        hub = hub_python(args, env) if missing else python
+        download(hub, plan, path, data, args, env)
+        strata_pack(plan, args, data, python, source, env)
+        atomic_json(plan.root/'strata-server.json', settings)
+        atomic_json(plan.root/'last-launch.json', {'launcher':VERSION, **plan.public(), 'command':command,
+                    'server':settings, 'hard_ram_limit':None, 'qualification':'Remote GPU inference not validated'})
+        if args.prepare_only:
+            say('Strata runtime, GGUF checks and stock pack complete. No model loaded or server started.\n' + shlex.join(command))
+            return 0
+        LOG = (Path(args.root).expanduser().absolute()/'start.log').open('a', buffering=1)
+        ssh_setup(args)
+        say(f'Strata API: http://127.0.0.1:{plan.port}/v1; server log: {plan.root/"server.log"}')
+        return serve(command, plan, env)
+
+
 def main(argv=None) -> int:
     global LOG
     if sys.version_info < (3,10):
         raise Error('Python 3.10+ is required')
     args=parser().parse_args(argv)
+    args.explicit_flags = {value.split('=', 1)[0] for value in (sys.argv[1:] if argv is None else argv) if value.startswith('--')}
     minimax_accepted = ('--accept-experimental' in (sys.argv[1:] if argv is None else argv)
                         or enabled('MINIMAX_ACCEPT_EXPERIMENTAL'))
     if not 1024<=args.port<=65535 or not 1<=args.ssh_port<=65535:
@@ -3408,6 +3679,12 @@ def main(argv=None) -> int:
             print(json.dumps({'profile':mode,'status':'blocked','reason':FP4_BLOCK},indent=2))
             return 0
         raise Error(FP4_BLOCK)
+    if mode.startswith('deepseek'):
+        return strata_main(strata_plan(args, mode, chosen), args)
+    native_flags = {'--expert-ram-gb', '--gpu-expert-fraction', '--vram-reserve-mib', '--prefill-chunk',
+                    '--engram-cache-mib', '--engram-threads', '--thinking-budget'}
+    if native_flags.intersection(args.explicit_flags):
+        raise Error('Strata cache, prefill and thinking-budget controls require a DeepSeek profile')
     if args.ds_source == 'gsq-rco' and mode not in GSQ_PROFILES:
         config = gsq_config(args,mode,chosen)
         print(json.dumps(config,indent=2),flush=True)

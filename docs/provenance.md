@@ -22,9 +22,10 @@ No general license for third-party code is implied by this package.
 - `collab/upstream` contains the selected OMP collaboration source and its
   upstream license files. `collab/upstream-revision.json` records its revision,
   selected paths, and local changes. See [the audit](../collab/AUDIT.md).
-- `bin/start-remote-model.sh` is the supplied standalone script with renamed
-  command references. Its [guide](runpod.md) records the attachment hash and
-  the limits of packaging validation.
+- `bin/start-remote-model.sh` derives from the supplied standalone script.
+  Its DeepSeek profiles now use the same pinned Strata source and signed engine
+  as the local setup. It embeds the outgoing-network guard and artifact checks.
+  Its [guide](runpod.md) records the attachment hash and validation limits.
 
 ## Downloaded components
 
