@@ -46,7 +46,7 @@ import urllib.request
 import uuid
 from typing import Any
 
-VERSION = '2026-10-29-deepseek-official-strata-2'
+VERSION = '2026-10-29-deepseek-official-strata-3'
 GIB, MIB = 1024**3, 1024**2
 SOURCE = 'https://github.com/ggml-org/llama.cpp.git'
 STABLE = '620d2225cc436ab0b001e3200e590e3b286ef9ab'  # released v0.7.0
@@ -3382,7 +3382,10 @@ def restrict_network() -> None:
                 deny("socket", Comparison(0, 4, family, 0))  # SCMP_CMP_EQ
         deny("socket", Comparison(0, 6, socket.AF_INET6, 0))  # SCMP_CMP_GT
         for kind in range(16):
-            if kind != socket.SOCK_STREAM:
+            if kind == socket.SOCK_SEQPACKET:
+                # Linux CUDA needs a local sequenced-packet listener for UVM.
+                deny("socket", Comparison(1, 7, 0xF, kind), Comparison(0, 1, socket.AF_UNIX, 0))
+            elif kind != socket.SOCK_STREAM:
                 deny("socket", Comparison(1, 7, 0xF, kind))  # SCMP_CMP_MASKED_EQ
         deny("socketpair", Comparison(0, 1, socket.AF_UNIX, 0))
         result = lib.seccomp_load(context)

@@ -13,7 +13,7 @@ Qwen, Flint, Ornith, and MiniMax keep their existing llama.cpp paths.
 
 The original `start-qwen.sh` attachment has SHA-256
 `955915e9fc13bc9ba44a580285cd21a70a0c183c2fafb514e3e1c274326b8d3a`.
-The current embedded version is `2026-10-29-deepseek-official-strata-2`.
+The current embedded version is `2026-10-29-deepseek-official-strata-3`.
 Packaging checks do not establish remote GPU inference or throughput.
 
 ## Migrate an existing DeepSeek Pod
@@ -101,6 +101,10 @@ standard input/output/error. Local API requests and replies still work.
 Missing libseccomp or a policy-load error prevents server startup. File access
 and listening sockets are not restricted. Downloads happen only during the
 explicit preparation step, outside the serving restriction.
+The policy permits local Unix sequenced-packet sockets for Linux CUDA's UVM
+listener. It still blocks outgoing connections and addressed sends.
+Older guards can cause `no CUDA device` even when `nvidia-smi` lists the GPUs.
+Copy the current script and repeat `--prepare-only` to update the guard.
 
 ## Choose the Pod
 
