@@ -89,8 +89,18 @@ omp-remote --mem 32
 
 `omp-remote` discovers the main model on port 8898 through IPv4 or IPv6. Its
 context limit defaults to 1048576 tokens and decreases when the server reports
-a smaller limit. The output limit is at most 262144 tokens. The main, plan,
-small, slow, and title roles use this endpoint.
+a smaller limit. The output limit is one quarter of that context, up to 262144
+tokens. This leaves room for the prompt and compaction. The main, plan, small,
+slow, and title roles use this endpoint. Served IDs such as `deepseek-gsq-*`
+are read directly from the endpoint; no fixed model ID is required.
+
+| Reported context | Output limit | OMP compaction threshold |
+| --- | --- | --- |
+| 8192 | 2048 | 5120 |
+| 131072 | 32768 | 81920 |
+| 262144 | 65536 | 180224 |
+| 524288 | 131072 | 376832 |
+| 1048576 | 262144 | 770048 |
 
 The task, scout, reviewer, security-reviewer, and sonic agents use the live
 model on port 8899. This includes Qwen3.8. The provider name `bonsai` remains
@@ -133,9 +143,16 @@ overlay controls model routing, context thresholds, search, and network
 settings. Edit persistent defaults or profile settings, rather than this
 generated overlay. The launchers reserve `--profile` for their isolated state.
 
-OMP defaults to `xhigh` reasoning. Compaction uses the conversation model,
-runs synchronously, and keeps 20000 recent tokens. It starts at the lower of
-80% of context or context minus the output limit and 16384 tokens.
+OMP defaults to `xhigh` reasoning. For DeepSeek V4.1 and `deepseek-gsq-*` IDs,
+the launcher sends `max` when OMP selects `xhigh`. Pinned Strata maps both
+values to the template's effort 100. The template accepts `max` directly.
+The `minimal` selection sends `low`, which keeps thinking enabled. Other
+efforts and other model families retain their normal mapping.
+
+Compaction uses the conversation model, runs synchronously, and keeps 20000
+recent tokens. It starts at the lower of 80% of context or context minus the
+output limit and a reserve. The reserve is the smaller of 16384 tokens or one
+eighth of context. The table above shows the resulting remote profile limits.
 
 OMP supports its native `/goal` and `/skill:NAME` commands. Skills load from
 the user and project `.agents/skills` directories. A profile links the user's

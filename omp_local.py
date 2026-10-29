@@ -112,6 +112,8 @@ def model_provider(status: dict[str, Any]) -> dict[str, Any]:
     """Describe one live OpenAI-compatible model to OMP."""
     context = int(status["context"])
     output = min(int(status["output"]), context - 1)
+    name = str(status["model"]).lower().split("/")[-1]
+    deepseek = any(name == family or name.startswith(family + "-") for family in ("deepseek-v4.1", "deepseek-gsq"))
     return {
         "baseUrl": status["base_url"],
         "api": "openai-completions",
@@ -130,6 +132,7 @@ def model_provider(status: dict[str, Any]) -> dict[str, Any]:
             "compat": {
                 "maxTokensField": "max_tokens", "supportsDeveloperRole": False,
                 "supportsStore": False, "supportsReasoningEffort": True,
+                **({"reasoningEffortMap": {"minimal": "low", "xhigh": "max"}} if deepseek else {}),
                 "reasoningContentField": status["reasoning_field"],
                 "streamFirstEventTimeoutMs": 3600000, "streamIdleTimeoutMs": 3600000,
                 "extraBody": {"temperature": status["temperature"], "top_p": status["top_p"]},
@@ -155,7 +158,8 @@ def profile(status: dict[str, Any], bonsai: dict[str, Any] | None = None) -> tup
     }
     thresholds = {
         f"{provider}/{model['id']}": max(
-            1, min(int(model["contextWindow"] * 0.8), model["contextWindow"] - model["maxTokens"] - 16384),
+            1, min(int(model["contextWindow"] * 0.8),
+                   model["contextWindow"] - model["maxTokens"] - min(16384, model["contextWindow"] // 8)),
         )
         for provider, info in providers.items() for model in info["models"]
     }

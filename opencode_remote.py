@@ -75,7 +75,7 @@ def current() -> dict[str, Any]:
     return {
         "model": model,
         "context": context,
-        "output": min(OUTPUT, context - 1),
+        "output": min(OUTPUT, max(1, context // 4)),
         "base_url": base_url + "/v1",
         "temperature": 1.0,
         "top_p": 1.0,
