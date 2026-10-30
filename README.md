@@ -191,7 +191,7 @@ localmodel start deepseek
 
 The defaults are **256K context, a 64 GiB process cap, a 36 GiB resident expert
 budget, 4096-token prefill chunks, four CPU expert threads, and all six active
-experts**. It has no configured draft model. Allow **at least 250 GiB free**
+experts**. DSpark is optional. Allow **at least 250 GiB free**
 on a fast Linux SSD: the weights and prepared pack use about 217 GiB.
 The complete three-model collection uses about 300 GiB before toolchains,
 runtimes, caches, and spare working space.
@@ -202,6 +202,23 @@ Example with less RAM and context:
 localmodel start deepseek --context 64k --mem 48G --expert-ram-gb 36
 ```
 
+Fetch and enable the optional DSpark drafter:
+
+```bash
+localmodel fetch deepseek --speculative dspark
+localmodel start deepseek --speculative dspark --draft-tokens 5
+```
+
+The drafter adds about **7.43 GiB** on disk. Strata can keep draft experts
+in RAM when they do not fit in VRAM. This can reduce the main model's GPU
+cache and increase SSD reads. A speed gain is not guaranteed.
+Depth 5 is the default when DSpark is selected. Short local checks reached
+4.6 tok/s on code and 5.5 tok/s on a tool call, versus 4.8 and 5.2 without
+DSpark. These are not long-conversation measurements.
+Use `--speculative none` to unload the drafter.
+Use `localmodel remove deepseek --speculative dspark` to remove only the
+draft weights and their pack. This keeps the main model.
+
 Both Strata profiles use pinned control source **0.2.7.1** and signed native
 engines **0.1.54** from Strata 0.2.8. The server remains on 0.2.7.1 because
 the 0.2.8 parser can treat a quoted tool example as a tool call.
@@ -209,8 +226,8 @@ See the [update review](docs/strata-0.2.8-review.md).
 The DeepSeek packer uses the same pinned 0.2.7.1 source.
 No native compilation is required for Strata.
 Its server and children cannot open outgoing connections; fetch and installation
-remain network-enabled. The local launcher currently accepts context sizes up
-to **262144**. A remote model's advertised 1M capacity is handled separately.
+remain network-enabled. The local profile defaults to **262144** context
+tokens. A remote model's advertised 1M capacity is handled separately.
 
 ## Start the whole local setup
 

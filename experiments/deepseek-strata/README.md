@@ -15,13 +15,13 @@ The complete download is 232,979,608,420 bytes, about 217 GiB.
 The default model profile has 256K context capacity, a hard 64 GiB RAM cap,
 a 36 GiB expert RAM cache, 4096-token prefill chunks, four CPU expert threads,
 and port 8899. Swap and routed-expert skipping are off. OMP and OpenCode
-send explicit `xhigh` requests. No DSpark drafter is loaded. The launcher
+send explicit `xhigh` requests. DSpark is optional. The launcher
 passes `--experts 6`. The five-expert Faster mode is off. These defaults
 leave RAM for other programs and for buffers and charged file cache inside
 the process cap.
 
-All existing performance measurements used the previous ISTA GSQ-RCO IQ1_M
-weights. They do not measure the new Unsloth weights.
+The historical performance measurements used the previous ISTA GSQ-RCO
+IQ1_M weights. They do not measure the new Unsloth weights.
 The performance measurements under the historical heading came from Abyss.
 Do not use them as stock Strata performance results. Filled 256K context
 remains unverified.
@@ -57,6 +57,9 @@ These controls apply to this backend:
 | `--engram-threads` | `16` | Hashed-embedding SSD read threads |
 | `--prefill-chunk` | `4096` | Positive prompt-processing chunk size in tokens |
 | `--thinking-budget` | `32768` | Maximum reasoning tokens per request |
+| `--speculative` | `none` | Use `dspark` to load and enable the optional drafter |
+| `--draft-tokens` | `5` with DSpark | Maximum DSpark candidates to verify, from 1 to 64 |
+| `--dspark-conf` | `0.65` | DSpark confidence threshold; requires `--speculative dspark` |
 | `--reasoning-effort` | `xhigh` | Harness request effort; maps to DeepSeek maximum |
 | `--port` | `8899` | Local API port |
 
@@ -71,6 +74,61 @@ RAM for dense weights, buffers, and charged file cache. The hard cap includes
 child processes. The normal server does not monitor free Windows RAM.
 `--no-offload` cannot fit these weights on this GPU. Bonsai MTP, llama.cpp
 KV cache, and Flint expert-cache controls do not apply to this runtime.
+
+## Optional DSpark drafter
+
+```sh
+localmodel fetch deepseek --speculative dspark
+localmodel start deepseek --speculative dspark --draft-tokens 5
+# Start without draft allocations:
+localmodel start deepseek --speculative none
+# Remove only the draft weights and their pack:
+localmodel remove deepseek --speculative dspark --dry-run
+localmodel remove deepseek --speculative dspark
+```
+
+The Q8_0 drafter uses 7,976,914,240 bytes on disk. Its SHA-256 is pinned.
+The draft pack has a separate receipt and does not copy the main weights.
+The normal `localmodel remove deepseek` command removes both variants.
+
+Strata allocates draft experts before main-model experts. Some draft experts
+can remain in RAM. They remain subject to the 64 GiB process cap, but are
+outside the `--expert-ram-gb` store. They can reduce the GPU cache available
+to the main model. The depth setting limits verification candidates. The
+drafter still computes its fixed five-position block.
+
+This mode passes native `--dspark on`. The native `auto` mode normally
+disables DSpark when expert weights greatly exceed GPU capacity. Native
+`off` keeps the draft allocations; this launcher uses `none` to unload them.
+See the [Strata guide](https://github.com/Niko1221/Strata/blob/v0.2.8/docs/DEEPSEEK41.md).
+
+### Short IQ1_S checks, 2026-10-30
+
+All three configurations loaded at 262144-token capacity under a 64 GiB
+cap with swap disabled. The GPU was an RTX 4070 SUPER with 12 GiB VRAM.
+The requests used 17, 29, and 308 prompt tokens. They generated 8, 42, and
+41 tokens. Each configuration ran once. The run order was DSpark2, none,
+then DSpark5. Temperature was zero and thinking was disabled.
+
+| Configuration | Code decode tok/s | Tool-call decode tok/s | Draft acceptance, all requests | Peak cgroup RAM | Peak GPU memory |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| No draft | 4.8 | 5.2 | — | 35.64 GiB | 10268 MiB |
+| DSpark2 | 4.0 | 4.4 | 59 / 63 | 42.87 GiB | 10348 MiB |
+| DSpark5 | 4.6 | 5.5 | 73 / 85 | 35.24 GiB | 10348 MiB |
+
+All runs answered the known-answer question correctly and produced the
+requested structured tool call. They returned identical code. That code
+only removes adjacent duplicates, so this is not evidence of coding quality.
+No run swapped or recorded an OOM event. Linux available memory stayed
+above 64.65 GiB. Peak RAM includes charged file cache and depends on prior
+cache state. Do not use these peaks as a stable memory requirement.
+
+DSpark5 had mixed timing results. DSpark2 was slower in both longer replies.
+Keep DSpark optional until a representative long-conversation test shows a
+benefit. Five draft tokens is the default when DSpark is selected.
+These checks do not fill the context or run OMP. All test servers were stopped.
+Raw responses and samples are in the local, untracked directory
+`results/deepseek-iq1s-dspark-20261030/`.
 
 ## Historical stock startup checks with GSQ IQ1_M
 

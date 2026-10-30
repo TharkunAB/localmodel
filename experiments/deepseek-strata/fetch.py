@@ -22,13 +22,18 @@ def main() -> int:
     """Fetch only the selected backbone and shared Engram file."""
     info = read_manifest(Path(__file__).with_name("manifest.json"))
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--directory", type=Path, default=Path(info["model_directory"]))
+    parser.add_argument("--directory", type=Path, help="Override the managed weight or draft directory.")
+    parser.add_argument("--draft", action="store_true", help="Download only the pinned DSpark draft into the selected directory.")
     parser.add_argument("--run", action="store_true", help="Download files. Omit to print the plan.")
     parser.add_argument("--jobs", type=int, default=3, choices=range(1, 5), help="Parallel files (default: 3).")
     args = parser.parse_args()
-    files = cast(list[dict[str, Any]], info["files"])
+    files = cast(list[dict[str, Any]], [info["dspark"]] if args.draft else info["files"])
+    if args.directory is None:
+        base = Path(info["model_directory"])
+        args.directory = base / "drafter" if args.draft else base
     print(json.dumps({"directory": str(args.directory), "bytes": sum(int(f["size"]) for f in files),
-                      "revision": info["model_revision"], "files": [f["name"] for f in files]}, indent=2), flush=True)
+                      "revision": info["dspark"]["revision"] if args.draft else info["model_revision"],
+                      "files": [f["name"] for f in files]}, indent=2), flush=True)
     if not args.run:
         return 0
     args.directory.mkdir(parents=True, exist_ok=True)

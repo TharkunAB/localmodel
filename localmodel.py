@@ -159,7 +159,7 @@ def current(port: int | None = None) -> dict[str, Any]:
             result["rounds"] = managed.get("rounds")
             result["kv_offload_gb"] = managed.get("kv_offload_gb", 0)
         else:
-            for key in ("speculative", "draft_tokens", "draft_kv_cache", "mtp_chain", "mtp_head", "checkpoint_every", "replay", "gdn_mma", "slot_save_path", "prompt_lookup", "lookup_type", "lookup_tokens", "lookup_min_tokens", "draft_window", "kv_vram_cells", "mma_decode_min_kv", "cache_ram_mib", "kv_cache", "kv_mean_center", "reasoning_effort"):
+            for key in ("speculative", "draft_tokens", "dspark_conf", "draft_kv_cache", "mtp_chain", "mtp_head", "checkpoint_every", "replay", "gdn_mma", "slot_save_path", "prompt_lookup", "lookup_type", "lookup_tokens", "lookup_min_tokens", "draft_window", "kv_vram_cells", "mma_decode_min_kv", "cache_ram_mib", "kv_cache", "kv_mean_center", "reasoning_effort"):
                 result[key] = managed.get(key)
     return result
 
@@ -217,7 +217,7 @@ def fetch(name: str, item: dict[str, Any], speculative: str = "none", mtp_head: 
         qwen_strata.fetch()
         return
     if item["runtime"] == "strata":
-        deepseek_strata.fetch()
+        deepseek_strata.fetch(speculative)
         return
     if name == "dory":
         with (STATE / "models-dory.lock").open("w") as lock:
@@ -277,7 +277,7 @@ def remove(name: str, speculative: str = "none", dry_run: bool = False, mtp_head
         qwen_strata.remove(dry_run)
         return
     if name == deepseek_strata.NAME:
-        deepseek_strata.remove(dry_run)
+        deepseek_strata.remove(dry_run, speculative)
         return
     if name == "dory":
         hub = ROOT / "dory/.cache/huggingface/hub"
@@ -618,7 +618,10 @@ def serve(args: argparse.Namespace, item: dict[str, Any]) -> int:
             raise RuntimeError("Another localmodel server is running. Stop it before switching models.") from None
         check_free(args.port)
         if item["runtime"] in ("strata", "strata-qwen"):
-            strata.check_ready()
+            if item["runtime"] == "strata":
+                deepseek_strata.check_ready(args.speculative)
+            else:
+                qwen_strata.check_ready()
             config_name = "qwen-server.json" if item["runtime"] == "strata-qwen" else "deepseek-server.json"
             (STATE / config_name).write_text(json.dumps(strata.settings(args, item), indent=2) + "\n")
         process = subprocess.Popen(command, env=environment, start_new_session=True)
@@ -638,6 +641,7 @@ def serve(args: argparse.Namespace, item: dict[str, Any]) -> int:
             "rounds": args.rounds if item["runtime"] in ("dory", "dory-native") else None,
             "kv_offload_gb": args.kv_offload_gb if item["runtime"] == "dory" else None,
             "speculative": args.speculative, "draft_tokens": args.draft_tokens,
+            "dspark_conf": (args.dspark_conf if args.dspark_conf is not None else 0.65) if args.speculative == "dspark" else None,
             "mtp_chain": environment.get("LLAMA_MTP_CHAIN") == "1" if mtp else None,
             "mtp_head": args.mtp_head if mtp else None,
             "checkpoint_every": args.checkpoint_every,
@@ -717,7 +721,10 @@ def stats_text() -> str:
             "Previous 128K capacity / 48G cap: 16K OMP 1396 prompt / 61.68 decode tok/s.\n"
             "Previous 48G code/recall pass; resume used fenced JSON (strict format fail). 40G/16 GiB: 609/46.34 tok/s, all checks pass.\n"
             "Source: results/strata-027-20261027/summary.md.\n\n"
-            "deepseek: Unsloth Dynamic v3.1 UD-IQ1_S, 256K capacity. No local measurements yet.\n"
+            "deepseek: Unsloth Dynamic v3.1 UD-IQ1_S, 256K capacity, 64G cap, native 0.1.54.\n"
+            "Short API checks (17-308 prompt tokens): code/tool-call decode none 4.8/5.2, DSpark2 4.0/4.4, DSpark5 4.6/5.5 tok/s.\n"
+            "Peak cgroup RAM 35.64/42.87/35.24 GiB respectively; zero swap/OOM. DSpark remains optional.\n"
+            "Single passes, no filled-context or OMP benchmark. See experiments/deepseek-strata/README.md.\n"
             "Historical GSQ-RCO IQ1_M results below do not measure this quantization.\n"
             "Strata 0.2.6, 16K OMP, six experts, 4096-token chunks: 48G/36 GiB cache gave 257.7 prompt and 5.4 decode tok/s;\n"
             "64G/48 GiB cache gave 262.0 prompt and 5.6 decode tok/s. Peaks: 40.3/59.0 GiB. Single passes; see experiments/deepseek-strata/README.md.\n"
@@ -759,15 +766,15 @@ def main() -> int:
     preset_parser.add_argument("--json", action="store_true")
     fetch_parser = commands.add_parser("fetch", aliases=["pull"], help="Fetch pinned weights and the required runtime.")
     fetch_parser.add_argument("model")
-    fetch_parser.add_argument("--speculative", choices=("none", "mtp", "dflash"), default="none",
+    fetch_parser.add_argument("--speculative", choices=("none", "mtp", "dflash", "dspark"), default="none",
                               help="Fetch a supported optional decoder (default: plain weights).")
     fetch_parser.add_argument("--mtp-head", choices=("teacher", "procreations"), default="teacher",
                               help="MTP head to fetch (default: selected preset, otherwise teacher). Requires --speculative mtp.")
     removal = commands.add_parser("remove", help="Delete selected weights and download data. Keep configuration and runtimes.",
                                   description="Remove the artifacts selected by fetch. Refuse weights that a running process uses.")
     removal.add_argument("model", help="Model name, alias, or preset. Presets select their configured decoder.")
-    removal.add_argument("--speculative", choices=("none", "mtp", "dflash"), default="none",
-                         help="Match fetch: none removes plain weights; mtp removes MTP weights; dflash removes plain and draft weights. Shared files affect all profiles that use them.")
+    removal.add_argument("--speculative", choices=("none", "mtp", "dflash", "dspark"), default="none",
+                         help="none removes the model and its optional DeepSeek draft; mtp removes MTP weights; dflash removes plain and draft weights; dspark removes only the DeepSeek draft and its pack.")
     removal.add_argument("--mtp-head", choices=("teacher", "procreations"), default="teacher",
                          help="Select the same MTP artifact as fetch (default: selected preset, otherwise teacher).")
     removal.add_argument("--dry-run", action="store_true", help="Show the selected paths and storage use without deleting files.")
@@ -835,9 +842,10 @@ def main() -> int:
                        help="Native Bonsai active KV positions kept in VRAM. Remaining KV uses RAM. Requires --runtime bonsai-native.")
     start.add_argument("--mma-decode-min-kv", type=int,
                        help="Added native Bonsai wide-GQA MMA dispatch threshold (0 disables this override). Other MMA kernels remain available. Requires --runtime bonsai-native.")
-    start.add_argument("--speculative", choices=("none", "mtp", "dflash"), default="none",
-                       help="Prism optional draft decoder (default: none).")
-    start.add_argument("--draft-tokens", type=int, default=2, help="Maximum neural draft tokens per step (default: 2; Qwen: 3).")
+    start.add_argument("--speculative", choices=("none", "mtp", "dflash", "dspark"), default="none",
+                       help="Optional draft decoder (default: none; Qwen: mtp). DSpark requires Strata DeepSeek.")
+    start.add_argument("--draft-tokens", type=int, default=2, help="Maximum neural draft tokens per step (default: 2; Qwen: 3; DeepSeek DSpark: 5).")
+    start.add_argument("--dspark-conf", type=float, help="DSpark confidence threshold, 0 to 1 (default: 0.65). Requires --speculative dspark.")
     start.add_argument("--mtp-chain", action=argparse.BooleanOptionalAction, default=None,
                        help="Prism MTP chained drafting (default: on). Preset settings override LLAMA_MTP_CHAIN=0/1. Explicit flags take priority.")
     start.add_argument("--mtp-head", choices=("teacher", "procreations"), default="teacher",
@@ -903,6 +911,13 @@ def main() -> int:
     args.model = ALIASES.get(args.model, args.model)
     if args.model not in models:
         parser.error("Unknown model. Use localmodel list.")
+    if getattr(args, "speculative", "none") == "dspark" and args.model != deepseek_strata.NAME:
+        parser.error("DSpark requires the Strata DeepSeek model.")
+    if getattr(args, "dspark_conf", None) is not None and (args.model != deepseek_strata.NAME or args.speculative != "dspark"):
+        parser.error("--dspark-conf requires Strata DeepSeek with --speculative dspark.")
+    if args.model == deepseek_strata.NAME and args.action in ("start", "serve") and args.speculative == "dspark":
+        if not any(arg.split("=", 1)[0] == "--draft-tokens" for arg in sys.argv[2:]):
+            args.draft_tokens = 5
     if args.model == qwen_strata.NAME and args.action in ("start", "serve"):
         explicit_flags = {arg.split("=", 1)[0] for arg in sys.argv[2:]}
         if "--speculative" not in explicit_flags:
@@ -918,7 +933,9 @@ def main() -> int:
         return 0
     if args.action in ("fetch", "pull", "remove"):
         STATE.mkdir(exist_ok=True)
-        if args.speculative != "none" and args.speculative not in models[args.model] and not (args.model == qwen_strata.NAME and args.speculative == "mtp"):
+        if args.speculative != "none" and args.speculative not in models[args.model] and not (
+                (args.model == qwen_strata.NAME and args.speculative == "mtp") or
+                (args.model == deepseek_strata.NAME and args.speculative == "dspark")):
             parser.error("This profile has no pinned artifact for the selected decoder.")
         if args.action == "remove":
             remove(args.model, args.speculative, args.dry_run, args.mtp_head)

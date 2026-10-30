@@ -55,30 +55,46 @@ def model_lock(shared: bool = False) -> Generator[None]:
         yield
 
 
-def installed() -> bool:
-    """Require all five pinned files at their expected sizes."""
-    folder = directory()
+def drafter_directory() -> Path:
+    """Reject linked, unknown, or nonregular draft files."""
+    folder = directory() / "drafter"
+    if folder.is_symlink() or (folder.exists() and not folder.is_dir()):
+        raise RuntimeError("The DeepSeek drafter must be a regular directory.")
+    names = {manifest()["dspark"]["name"] + suffix for suffix in ("", ".part", ".moving")}
+    names.add("verification.json")
+    if folder.exists() and any(path.name not in names or path.is_symlink() or not path.is_file()
+                               for path in folder.iterdir()):
+        raise RuntimeError("The DeepSeek drafter contains unknown files or links.")
+    return folder
+
+
+def installed(draft: bool = False) -> bool:
+    """Require the selected pinned files at their expected sizes."""
+    folder = drafter_directory() if draft else directory()
+    files = [manifest()["dspark"]] if draft else manifest()["files"]
     return all(not (folder / item["name"]).is_symlink() and (folder / item["name"]).is_file()
-               and (folder / item["name"]).stat().st_size == item["size"] for item in manifest()["files"])
+               and (folder / item["name"]).stat().st_size == item["size"] for item in files)
 
 
-def verification_receipt() -> dict[str, Any]:
+def verification_receipt(draft: bool = False) -> dict[str, Any]:
     """Record file identities after a complete successful checksum check."""
     info = manifest()
+    folder = drafter_directory() if draft else directory()
     files: list[dict[str, Any]] = []
-    for item in info["files"]:
-        path = directory() / item["name"]
+    for item in [info["dspark"]] if draft else info["files"]:
+        path = folder / item["name"]
         stat = path.stat()
         files.append({"name": item["name"], "sha256": item["sha256"], "size": stat.st_size,
                       "mtime_ns": stat.st_mtime_ns, "ctime_ns": stat.st_ctime_ns,
                       "inode": stat.st_ino, "device": stat.st_dev})
-    return {"revision": info["model_revision"], "files": files}
+    return {"revision": info["dspark"]["revision"] if draft else info["model_revision"], "files": files}
 
 
-def verified() -> bool:
+def verified(draft: bool = False) -> bool:
     """Reuse checksum evidence only while all file identities match."""
     try:
-        return installed() and json.loads((directory() / "verification.json").read_text()) == verification_receipt()
+        folder = drafter_directory() if draft else directory()
+        return installed(draft) and json.loads((folder / "verification.json").read_text()) == verification_receipt(draft)
     except (OSError, ValueError):
         return False
 
@@ -92,9 +108,16 @@ def environment() -> dict[str, str]:
     return env
 
 
-def pack_files() -> dict[str, Path]:
+def pack_directory(speculative: str = "none") -> Path:
+    """Keep the baseline and DSpark packs separate."""
+    if speculative not in ("none", "dspark"):
+        raise RuntimeError("DeepSeek supports --speculative none or dspark.")
+    return directory() / ("strata-pack-dspark" if speculative == "dspark" else "strata-pack")
+
+
+def pack_files(speculative: str = "none") -> dict[str, Path]:
     """Reject linked, unknown, or nonregular pack entries."""
-    pack = directory() / "strata-pack"
+    pack = pack_directory(speculative)
     if pack.is_symlink() or (pack.exists() and not pack.is_dir()):
         raise RuntimeError("The DeepSeek pack must be a regular directory.")
     files: dict[str, Path] = {}
@@ -106,36 +129,47 @@ def pack_files() -> dict[str, Path]:
             continue
         if not path.is_file() or name not in PACK_ASSETS | {"localmodel-pack.json", "expert-profile.bin"}:
             raise RuntimeError("The DeepSeek pack contains an unknown or nonregular file.")
-        if name == "expert-profile.bin" and path.stat().st_size != 40 * 384 * 4:
+        if name == "expert-profile.bin" and path.stat().st_size not in (40 * 384 * 4, 43 * 384 * 4):
             raise RuntimeError("The Strata expert profile has an unexpected size.")
         files[name] = path
     return files
 
 
-def check_pack() -> None:
+def check_pack(speculative: str = "none") -> None:
     """Require every generated pack asset and verify its recorded bytes."""
     try:
-        paths = pack_files()
+        paths = pack_files(speculative)
         record = cast(dict[str, Any], json.loads(paths["localmodel-pack.json"].read_text()))
         if record["model_revision"] != manifest()["model_revision"] or record["source_revision"] != manifest().get("pack_source_revision", manifest()["source_revision"]):
             raise ValueError("Pack pins changed.")
+        if record.get("draft") != (manifest()["dspark"] if speculative == "dspark" else None):
+            raise ValueError("Draft pins changed.")
         if set(record["files"]) != set(PACK_ASSETS) or set(paths) - {"expert-profile.bin"} != set(PACK_ASSETS) | {"localmodel-pack.json"}:
             raise ValueError("The pack asset list is incomplete.")
         for name, expected in record["files"].items():
             with paths[name].open("rb") as stream:
                 if hashlib.file_digest(stream, "sha256").hexdigest() != expected:
                     raise ValueError("Pack bytes changed.")
+        expected_files = [item["name"] for item in manifest()["files"]]
+        if speculative == "dspark":
+            expected_files.append("drafter/" + manifest()["dspark"]["name"])
+        actual_files = [line.split(maxsplit=2)[2] for line in paths["tensors.txt"].read_text().splitlines()
+                        if line.startswith("file ")]
+        if actual_files != expected_files:
+            raise ValueError("The pack references unexpected weight files.")
     except (OSError, ValueError, KeyError, TypeError) as error:
-        raise RuntimeError("DeepSeek pack is missing or changed. Remove strata-pack/localmodel-pack.json and run localmodel fetch deepseek.") from error
+        suffix = " --speculative dspark" if speculative == "dspark" else ""
+        raise RuntimeError(f"DeepSeek pack is missing or changed. Remove {pack_directory(speculative).name}/localmodel-pack.json and run localmodel fetch deepseek{suffix}.") from error
 
 
-def fetch() -> None:
+def fetch(speculative: str = "none") -> None:
     """Fetch verified weights, check the runtime, and create its small index."""
+    pack = pack_directory(speculative)
     with model_lock():
         receipt = directory() / "verification.json"
         if receipt.is_symlink() or (receipt.exists() and not receipt.is_file()):
             raise RuntimeError("The DeepSeek verification receipt must be a regular file.")
-        pack_files()
+        pack_files(speculative)
         env = environment()
         subprocess.run([str(CAPPED), "--mem", "2G", "--time", "15m", sys.executable,
                         str(HERE / "runtime.py"), "--run"], env=env, check=True)
@@ -145,42 +179,60 @@ def fetch() -> None:
             (directory() / "verification.json").write_text(json.dumps(verification_receipt(), indent=2) + "\n")
         else:
             print("DeepSeek UD-IQ1_S is already installed. Checksum receipt matches all five files.", flush=True)
-        pack = directory() / "strata-pack"
+        if speculative == "dspark" and not verified(draft=True):
+            draft = drafter_directory()
+            subprocess.run([str(CAPPED), "--mem", "4G", "--time", "2h", str(PYTHON),
+                            str(HERE / "fetch.py"), "--directory", str(draft), "--draft", "--run"], env=env, check=True)
+            (draft / "verification.json").write_text(json.dumps(verification_receipt(draft=True), indent=2) + "\n")
         if not (pack / "localmodel-pack.json").is_file():
+            if speculative == "none" and (any(directory().parent.glob("dspark-*.gguf")) or
+                    (directory().parent / "dspark/dspark.json").exists()):
+                raise RuntimeError("The stock packer found an external draft beside the model. Move it before rebuilding the baseline pack.")
+            draft_args = (["--dspark-gguf", str(drafter_directory() / manifest()["dspark"]["name"])]
+                          if speculative == "dspark" else [])
             subprocess.run([str(CAPPED), "--mem", "4G", "--time", "10m", str(PYTHON),
                             str(PACK_SOURCE / "tools/dsv41/pack_gguf.py"), "--model", str(directory()),
-                            "--out", str(pack), "--shards", *[item["name"] for item in manifest()["files"]]],
+                            "--out", str(pack), "--shards", *[item["name"] for item in manifest()["files"]], *draft_args],
                            env=env, check=True)
             record = {"model_revision": manifest()["model_revision"], "source_revision": manifest().get("pack_source_revision", manifest()["source_revision"]),
+                      "draft": manifest()["dspark"] if speculative == "dspark" else None,
                       "files": {str(path.relative_to(pack)): hashlib.sha256(path.read_bytes()).hexdigest()
                                 for path in pack.rglob("*") if path.is_file() and str(path.relative_to(pack)) in PACK_ASSETS}}
             (pack / "localmodel-pack.json").write_text(json.dumps(record, indent=2) + "\n")
-        check_pack()
+        check_pack(speculative)
 
 
-def check_ready() -> None:
+def check_ready(speculative: str = "none") -> None:
     """Check build, model identities, and generated pack bytes before serving."""
     if not verified():
         raise RuntimeError("DeepSeek files lack current checksum evidence. Run localmodel fetch deepseek.")
+    if speculative == "dspark" and not verified(draft=True):
+        raise RuntimeError("The DSpark draft lacks current checksum evidence. Run localmodel fetch deepseek --speculative dspark.")
     subprocess.run([sys.executable, str(HERE / "runtime.py"), "--check"], env=environment(), check=True,
                    stdout=subprocess.DEVNULL)
-    check_pack()
+    check_pack(speculative)
 
 
-def remove(dry_run: bool = False) -> None:
+def remove(dry_run: bool = False, speculative: str = "none") -> None:
     """Delete only this model's data. Refuse linked or unexpected entries."""
     folder = directory()
+    pack_directory(speculative)
     if not folder.exists():
         print("DeepSeek weights are already absent.")
         return
-    names = {item["name"] + suffix for item in manifest()["files"] for suffix in ("", ".part", ".moving")}
-    names |= {"strata-pack", "verification.json"}
-    if any(path.name not in names or path.is_symlink() or
-           (not path.is_dir() if path.name == "strata-pack" else not path.is_file()) for path in folder.iterdir()):
-        raise RuntimeError("The DeepSeek directory contains unknown files or links. No files were deleted.")
-    pack_files()
-    size = sum(path.stat().st_size for path in folder.rglob("*") if path.is_file() and not path.is_symlink())
-    print(f"{'Would remove' if dry_run else 'Removing'} {folder} ({size / 2**30:.2f} GiB).", flush=True)
+    draft = drafter_directory()
+    pack_files("dspark")
+    targets = [draft, pack_directory("dspark")] if speculative == "dspark" else [folder]
+    if speculative == "none":
+        names = {item["name"] + suffix for item in manifest()["files"] for suffix in ("", ".part", ".moving")}
+        folders = {"strata-pack", "strata-pack-dspark", "drafter"}
+        names |= folders | {"verification.json"}
+        if any(path.name not in names or path.is_symlink() or
+               (not path.is_dir() if path.name in folders else not path.is_file()) for path in folder.iterdir()):
+            raise RuntimeError("The DeepSeek directory contains unknown files or links. No files were deleted.")
+        pack_files()
+    size = sum(path.stat().st_size for target in targets for path in target.rglob("*") if path.is_file())
+    print(f"{'Would remove' if dry_run else 'Removing'} {', '.join(map(str, targets))} ({size / 2**30:.2f} GiB).", flush=True)
     if dry_run:
         return
     with model_lock():
@@ -195,16 +247,26 @@ def remove(dry_run: bool = False) -> None:
                     raise RuntimeError(f"DeepSeek is in use by PID {process.name}. Stop it before removal.")
             except OSError:
                 continue
-        shutil.rmtree(folder)
-    print(f"Deleted DeepSeek model data. Restore it with localmodel fetch deepseek. Freed {size / 2**30:.2f} GiB.")
+        for target in targets:
+            if target.exists():
+                shutil.rmtree(target)
+    suffix = " --speculative dspark" if speculative == "dspark" else ""
+    print(f"Deleted selected DeepSeek data. Restore it with localmodel fetch deepseek{suffix}. Freed {size / 2**30:.2f} GiB.")
 
 
 def settings(args: argparse.Namespace, item: dict[str, Any]) -> dict[str, Any]:
     """Generate the reviewed server settings from explicit launcher controls."""
     if args.no_offload:
         raise RuntimeError("DeepSeek UD-IQ1_S needs RAM and SSD experts on this GPU. --no-offload cannot fit its weights.")
-    if args.runtime != "stock" or args.speculative != "none" or args.prompt_lookup:
-        raise RuntimeError("This Strata profile uses its pinned runtime with speculation off.")
+    if args.runtime != "stock" or args.speculative not in ("none", "dspark") or args.prompt_lookup:
+        raise RuntimeError("This Strata profile uses its pinned runtime with --speculative none or dspark.")
+    pack = pack_directory(args.speculative)
+    confidence = getattr(args, "dspark_conf", None)
+    if confidence is not None and args.speculative != "dspark":
+        raise RuntimeError("--dspark-conf requires --speculative dspark.")
+    if args.speculative == "dspark" and (not 1 <= args.draft_tokens <= 64 or
+            (confidence is not None and not 0 <= confidence <= 1)):
+        raise RuntimeError("Use 1 to 64 DSpark draft tokens and confidence from 0 to 1.")
     if args.cache_ram is not None or args.kv_cache or args.kv_mean_center or args.cpu_offload_gb or args.kv_offload_gb:
         raise RuntimeError("Use --expert-ram-gb for Strata. llama.cpp prompt/KV cache and Dory offload controls do not apply.")
     if any(getattr(args, key) is not None for key in ("cpu_moe_layers", "moe_cache_mib", "batch_tokens", "draft_window", "kv_vram_cells", "mma_decode_min_kv")):
@@ -232,9 +294,12 @@ def settings(args: argparse.Namespace, item: dict[str, Any]) -> dict[str, Any]:
     context = args.context or item["context"]
     if not 1024 <= context <= 1048576:
         raise RuntimeError("Use 1024 to 1048576 context tokens for Strata.")
-    native_args = ["--pack", str(directory() / "strata-pack"), "--max-context", str(context),
+    native_args = ["--pack", str(pack), "--max-context", str(context),
                    "--ssd-cache", str(ram * 2**30 / 10**9), "--cpu-threads", str(threads),
-                   "--reserve-mib", str(reserve), "--dspark", "none", "--experts", "6", "--vision", "off"]
+                   "--reserve-mib", str(reserve), "--dspark", "on" if args.speculative == "dspark" else "none",
+                   "--experts", "6", "--vision", "off"]
+    if args.speculative == "dspark":
+        native_args += ["--dspark-block", str(args.draft_tokens), "--dspark-conf", str(0.65 if confidence is None else confidence)]
     if fraction is not None:
         native_args += ["--vram-experts", str(fraction)]
     if chunk is not None:
@@ -242,7 +307,7 @@ def settings(args: argparse.Namespace, item: dict[str, Any]) -> dict[str, Any]:
     runtime = manifest()["runtime"]
     binary = Path(runtime["directory"]) / "engine-dsv41" / f"{runtime['version']}-linux-x86_64-cuda-cuda13/strata-dsv41"
     return {"exe": str(binary), "arch": "deepseek41", "args": native_args,
-            "cwd": str(SOURCE), "tokenizer": str(directory() / "strata-pack/tokenizer"),
+            "cwd": str(SOURCE), "tokenizer": str(pack / "tokenizer"),
             "model_name": item["alias"], "gpu": [0], "log": str(ROOT / "state/deepseek-engine.log"),
             "env": env, "lib_dirs": [str(binary.parent)],
             "sampling": {"temperature": 1.0, "top_p": 0.95},
