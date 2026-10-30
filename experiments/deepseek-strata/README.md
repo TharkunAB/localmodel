@@ -130,6 +130,51 @@ These checks do not fill the context or run OMP. All test servers were stopped.
 Raw responses and samples are in the local, untracked directory
 `results/deepseek-iq1s-dspark-20261030/`.
 
+### 16K OMP comparison, 2026-10-30
+
+Both runs used the real OMP launcher with `xhigh`, 256K capacity, a 64 GiB
+process cap, a 36 GiB expert cache, and six active experts. The conversation
+contained constructed tool history from pinned public source. The task,
+three recall facts, and validator were the same in both runs. The earlier
+attempt was canceled at the user's request and is excluded.
+
+| Metric | No draft | DSpark5 |
+| --- | ---: | ---: |
+| Initial actual input tokens | 15963 | 15961 |
+| Initial prefill tok/s | 275.41 | 276.10 |
+| Weighted decode tok/s | 4.98 | 4.60 |
+| Generated tokens | 562 | 1347 |
+| Repair plus resumed follow-up | 211.19 s | 422.34 s |
+| Model requests | 5 | 7 |
+| Tool errors | 0 | 1 |
+| Draft acceptance | — | 881 / 1114 (79.08%) |
+| Peak model cgroup RAM | 38.28 GiB | 39.50 GiB |
+| Peak total GPU memory | 10268 MiB | 10348 MiB |
+| Repair, 100 assertions, three-fact recall, strict JSON resume | Pass | Pass |
+
+Both runs reused earlier context. The final requests contained 16750 and
+18977 tokens respectively. DSpark recovered from one command rejected by
+the benchmark's approval rules. The test fixture remained unchanged.
+Neither run swapped or recorded an OOM event. Linux available memory stayed
+above 60.80 GiB. All benchmark servers and workers stopped. The existing
+SearXNG service was left running.
+
+DSpark decoded about 7.7% slower in this comparison. Its longer elapsed time
+also reflects more generated text and tool steps. Do not attribute the full
+time difference to drafting. These are single passes with background CPU
+activity and sampling enabled. They do not establish a general slowdown or
+measure a filled 256K context. Automatic compaction was disabled.
+Keep local DeepSeek drafting optional on this evidence.
+
+Both local and remote native engine pins matched the current Strata 0.2.8
+release during the requested recheck. The 0.2.7.1 frontend remains pinned
+because the [parser regression](../../docs/strata-0.2.8-review.md) still
+reproduces in the current release. No dependency changed for the repeat.
+
+The local, untracked [report](../../results/deepseek-iq1s-dspark-omp-20261030/summary.md)
+contains per-request timings, context reuse, memory events, and cleanup
+evidence. Its directory also contains the driver and comparison script.
+
 ## Historical stock startup checks with GSQ IQ1_M
 
 At 256K capacity, the stock automatic 8192-token prefill chunk left 0.58 GB

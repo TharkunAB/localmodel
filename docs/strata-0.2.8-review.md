@@ -16,6 +16,14 @@ Keeping the old parser avoids this identified regression. It does not establish
 that the old parser has no other defects. This choice also excludes the new
 server-side tool recovery and stop-token fixes.
 
+Rechecked at 18:50 UTC on 2026-10-30. The latest official release is still
+0.2.8, and `main` still points to `870aedd`. The published engine archive
+and signed-feed hashes match the installed local pins. The remote launcher
+pins the same engine archive. The parser reproduction still fails on 0.2.8,
+including with recovery disabled. No dependency changed during this recheck.
+The frontend source remains 0.2.7.1, with Control 0.1.53. Inference uses the
+0.1.54 native engine from 0.2.8.
+
 ## Parser regression
 
 The new `OutputParser._stray_think_at()` accepts a closing `</think>` at the start

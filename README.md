@@ -212,9 +212,10 @@ localmodel start deepseek --speculative dspark --draft-tokens 5
 The drafter adds about **7.43 GiB** on disk. Strata can keep draft experts
 in RAM when they do not fit in VRAM. This can reduce the main model's GPU
 cache and increase SSD reads. A speed gain is not guaranteed.
-Depth 5 is the default when DSpark is selected. Short local checks reached
-4.6 tok/s on code and 5.5 tok/s on a tool call, versus 4.8 and 5.2 without
-DSpark. These are not long-conversation measurements.
+Depth 5 is the default when DSpark is selected. A 16K OMP comparison reached
+4.60 tok/s with DSpark and 4.98 without it. Both runs passed the repair,
+100 assertions, recall, and resume checks. DSpark remains optional.
+See the [measurements and limits](experiments/deepseek-strata/README.md#16k-omp-comparison-2026-10-30).
 Use `--speculative none` to unload the drafter.
 Use `localmodel remove deepseek --speculative dspark` to remove only the
 draft weights and their pack. This keeps the main model.

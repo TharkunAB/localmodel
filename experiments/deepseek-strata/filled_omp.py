@@ -26,7 +26,7 @@ import localmodel
 HERE = Path(__file__).resolve().parent
 HELPERS = HERE / 'omp-filled'
 PYTHON = ROOT / 'state/venvs/strata-official/bin/python'
-MODEL = 'deepseek-v4.1-1017-iq1-m'
+MODEL = localmodel.deepseek_strata.NAME
 Record = dict[str, Any]
 FUNCTIONS = ['clamp', 'clamp_index', 'clamp_many', 'clamp_span']
 SOURCE = '''def clamp(value, lower, upper):
@@ -154,7 +154,7 @@ class Benchmark:
             pack = Path(info['pack_directory']) / 'tokenizer'
         else:
             source = localmodel.deepseek_strata.SOURCE
-            pack = ROOT / 'models/deepseek41-1017-ista-iq1-m/strata-pack/tokenizer'
+            pack = localmodel.deepseek_strata.directory() / 'strata-pack/tokenizer'
         sys.path[:0] = [str(source), str(source / 'tools')]
         frontend: Any = importlib.import_module('serve.frontend')
         api: Any = importlib.import_module('serve.server')
