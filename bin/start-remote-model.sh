@@ -47,7 +47,7 @@ import urllib.request
 import uuid
 from typing import Any
 
-VERSION = '2026-10-30-mistral-b300-strata-1'
+VERSION = '2026-10-30-deepseek-v31-1'
 GIB, MIB = 1024**3, 1024**2
 SOURCE = 'https://github.com/ggml-org/llama.cpp.git'
 STABLE = '620d2225cc436ab0b001e3200e590e3b286ef9ab'  # released v0.7.0
@@ -552,9 +552,14 @@ def select(gpus: list[GPU], mode: str, gpu_count: int | None) -> tuple[str, list
             raise Error('Native DeepSeek requires 1..40 selected physical GPUs; --gpu-count selects the first CUDA-visible devices')
         chosen = gpus[:count]
         strata_gpu_compatibility(chosen)
-        if len(chosen) == 4 and all(is_a40(g) for g in chosen):
-            return 'deepseek-gsq-a40-quad', chosen
+        if len(chosen) == 4 and all(is_a40(g) and g.cc == 86 for g in chosen):
+            return 'deepseek-a40-quad', chosen
         return 'deepseek-auto', chosen
+    if mode == 'deepseek-a40-quad':
+        if (len(gpus) != 4 or gpu_count not in (None, 4)
+                or not all(is_a40(g) and g.cc == 86 for g in gpus)):
+            raise Error('deepseek-a40-quad requires exactly four CUDA-visible full-memory A40 GPUs (sm_86)')
+        return mode, gpus
     if mode in GSQ_PROFILES:
         info=GSQ_PROFILES[mode];need=info['count']
         valid={'a40':lambda g:is_a40(g) and g.cc==86,'ampere48':lambda g:is_ampere_48(g) and g.cc==86,
@@ -1817,6 +1822,8 @@ def validate_manifest(plan: Plan, data: dict[str, Any]) -> None:
             raise Error('GSQ requires exactly four pinned backbone shards and the shared IQ4_NL Engram with exact SHA-256')
         shard_sequence([f['path'] for f in main if f['path']!=GSQ_ENGRAM_NAME])
     elif plan.engine == 'strata' and plan.repo == DS_REPO and plan.quant in DS_NATIVE:
+        if plan.revision != DS_NATIVE[plan.quant].get('revision', DS_REV):
+            raise Error('DeepSeek quant does not match its pinned source revision')
         expected_files = {name: (f['size'], f['sha256']) for name, f in DS_NATIVE[plan.quant]['files'].items()}
         if {f['path']: (f['size'], f.get('sha256')) for f in main} != expected_files:
             raise Error('DeepSeek requires the exact pinned Unsloth shards and published SHA-256')
@@ -3008,10 +3015,13 @@ The older server avoids a quoted-tool parser regression in the 0.2.8 frontend.
 Auto selects DeepSeek on 1..40 physical sm_86/sm_89/sm_120 GPUs with >=11000 MiB each.
 The pinned engine does not cover H200/sm_90, B200/sm_100 or B300/sm_103.
 DeepSeek defaults to 1M context. Quant selection uses total VRAM, never current GPU load.
-The ordered catalog is Q8, Q4, Q3_K, IQ3_S, IQ3_XXS, Q2_K, GSQ IQ2_XS, IQ2_XXS, IQ1_M.
+The general catalog is Q8, Q4, Q3_K, IQ3_S, IQ3_XXS, GSQ IQ2_XS, IQ2_XXS, IQ1_M.
+UD-Q2_K_XL is disabled because its Q5_K Engram tables are unsupported by this engine.
 If no target fits, auto uses GSQ IQ1_M with RAM/SSD expert offload. DSpark is automatic
 only when its additional first-GPU weights fit; explicit --spec dspark/none wins.
-Quad A40 defaults: pinned GSQ IQ2_XS, 1M context, DSpark on, 9,11,10,10 layers.
+Quad A40 defaults: pinned Unsloth Dynamic v3.1 UD-IQ1_M, 1M context and DSpark.
+Profile deepseek-a40-quad uses computed layer counts (10,12,9,9 on 46068 MiB cards).
+Explicit deepseek-gsq-a40-quad retains the old GSQ checkpoint and placement for rollback.
 --reuse prefers complete existing IQ2_XXS files, with SHA checks at preparation/serving.
 Explicit --quant wins. Qwen/Flint/Ornith/MiniMax retain their previous defaults.
 Use --prepare-only to install the pinned runtime, verify/download GGUFs and create the
@@ -3035,11 +3045,12 @@ model/draft pack without changing active server configuration, runtime packages 
 Native chat templates and tool parsing remain unmodified. Outgoing network operations
 are blocked for the stock server and its children. Missing libseccomp prevents startup.
 
-Example for existing /opt/qwen/gsq-models files on four A40 GPUs:
-  bash start-remote-model.sh --profile deepseek-gsq-a40-quad --prepare-only --dry-run
-  bash start-remote-model.sh --profile deepseek-gsq-a40-quad --prepare-only --prepare-assets-only --no-ssh
-  bash start-remote-model.sh --profile deepseek-gsq-a40-quad --no-ssh
-  # Ordinary rollback: --spec none --layer-split auto --quant IQ2_XXS --ctxt 1M
+Quad-A40 migration uses a separate model directory and the existing pinned draft:
+  bash start-remote-model.sh --profile deepseek-a40-quad --prepare-only --dry-run
+  bash start-remote-model.sh --profile deepseek-a40-quad --prepare-only --prepare-assets-only --no-ssh
+  bash start-remote-model.sh --profile deepseek-a40-quad --no-ssh
+  # GSQ rollback: --profile deepseek-gsq-a40-quad --quant IQ2_XS
+  # Ordinary GSQ rollback also uses: --spec none --layer-split auto --quant IQ2_XXS --ctxt 1M
 
 Qwen/Flint/Ornith/MiniMax retain their prior llama.cpp runtime and controls.
 Other model families require --profile. Auto preserves CUDA-visible order and uses
@@ -3047,7 +3058,7 @@ all visible GPUs; --gpu-count selects the first N. Unsupported selected GPUs fai
 The Qwen profile is Qwen3.8-27B. All API endpoints bind to 127.0.0.1, default 8897.
 ''')
     p.add_argument('--version',action='version',version=VERSION)
-    p.add_argument('--profile',choices=('auto','mistral-b300','deepseek-auto','flint','qwen','ornith','deepseek',
+    p.add_argument('--profile',choices=('auto','mistral-b300','deepseek-auto','flint','qwen','ornith','deepseek','deepseek-a40-quad',
                    'deepseek-h200-iq2','deepseek-h200-dual-iq3','deepseek-b300-iq3',
                    'deepseek-b200-iq2','deepseek-pro6000-quad-q8',
                    *MINIMAX_PROFILES,*GSQ_PROFILES,
@@ -3075,7 +3086,7 @@ The Qwen profile is Qwen3.8-27B. All API endpoints bind to 127.0.0.1, default 88
     p.add_argument('--dspark',type=int,metavar='N',
                    help='Strata block limit 1..64; Mistral draft count 1..3 (default 3). 0 disables.')
     p.add_argument('--dspark-conf',type=float,help='Strata DSpark confidence threshold, 0..1 (default 0.65 when enabled)')
-    p.add_argument('--layer-split',help='Strata layer counts per GPU, summing to 40, or auto; quad A40 defaults to 9,11,10,10')
+    p.add_argument('--layer-split',help='Strata layer counts per GPU, summing to 40, or native auto; default uses the planner, legacy GSQ quad uses 9,11,10,10')
     p.add_argument('--no-mtp','--no-dflash',dest='no_spec',action='store_true')
     p.add_argument('--draft-depth','--mtp-depth',type=int)
     p.add_argument('--draft-sampling',choices=('greedy','probabilistic'),default='greedy')
@@ -3473,7 +3484,9 @@ if __name__ == "__main__":
 
 
 # Exact tensor layouts and file hashes from the pinned Unsloth GGUF headers.
+# Dynamic v3.1 IQ1_M has its own revision. Other quants retain DS_REV.
 DS_NATIVE = {
+    'UD-IQ1_M': {"revision":"8a6ec9cf118e785a362ea94ee123c61c70553be6","layer_bytes":[2807521752,2936627672,2828954584,2807521752,2807521752,3090637272,3090637272,3090637272,3112070104,3090637272,3090637272,3090637272,3090637272,3090637272,3241176024,3090637272,3090637272,3090637272,3090637272,3090637272,3956173784,3939983832,3939983832,3939983832,3950797272,3939983832,3939983832,3926712792,3937526232,3926712792,3785155032,3785155032,3795968472,3785155032,3785155032,3785155032,3795968472,3785155032,4068270552,4068270552],"expert_layer_bytes":[2654208000,2654208000,2654208000,2654208000,2654208000,2937323520,2937323520,2937323520,2937323520,2937323520,2937323520,2937323520,2937323520,2937323520,2937323520,2937323520,2937323520,2937323520,2937323520,2937323520,3786670080,3786670080,3786670080,3786670080,3786670080,3786670080,3786670080,3786670080,3786670080,3786670080,3645112320,3645112320,3645112320,3645112320,3645112320,3645112320,3645112320,3645112320,3928227840,3928227840],"output_bytes":542996480,"weight_bytes":250404346724,"table_bytes":110595290400,"files":{"UD-IQ1_M/DeepSeek-V4.1-Flash-1017-UD-IQ1_M-00001-of-00005.gguf":{"size":5780868,"sha256":"5197c309479c7be06e3612dc696d7f18e13e5942cfe52e70c3c586b7e585a5ac"},"UD-IQ1_M/DeepSeek-V4.1-Flash-1017-UD-IQ1_M-00002-of-00005.gguf":{"size":49707332128,"sha256":"fbfb546557a33f41332ffbed7f15fbed249b9f7796975d9db571c8cf3870f335"},"UD-IQ1_M/DeepSeek-V4.1-Flash-1017-UD-IQ1_M-00003-of-00005.gguf":{"size":49292777280,"sha256":"394b7a06e04d4b1b96b6028ec3d4dec49e4716900c26a493e8c2aa38a357ea1a"},"UD-IQ1_M/DeepSeek-V4.1-Flash-1017-UD-IQ1_M-00004-of-00005.gguf":{"size":40803165856,"sha256":"323a7f59a2938879eaac82b37c443c85151e518071ad44c79b1e4580c91d0ed7"},"UD-IQ1_M/DeepSeek-V4.1-Flash-1017-UD-IQ1_M-00005-of-00005.gguf":{"size":110595290592,"sha256":"771805301e695d72d268151dfc43043581ba904298574aa879d4349cbe67b020"}}},
     'UD-Q3_K_XL': {"layer_bytes":[6058625496,7532530136,5513827288,5492394456,5492394456,7403424216,7403424216,7403424216,7424857048,7403424216,6023236056,6023236056,6023236056,6023236056,6292476888,7522126296,7522126296,7522126296,7522126296,7522126296,7538316248,7522126296,7522126296,7522126296,7532939736,7522126296,7522126296,7403424216,7414237656,7403424216,7403424216,7403424216,7414237656,7403424216,7403424216,7403424216,7414237656,7403424216,6023236056,5598562776],"expert_layer_bytes":[5874647040,7219445760,5308416000,5308416000,5308416000,7219445760,7219445760,7219445760,7219445760,7219445760,5839257600,5839257600,5839257600,5839257600,5839257600,7219445760,7219445760,7219445760,7219445760,7219445760,7219445760,7219445760,7219445760,7219445760,7219445760,7219445760,7219445760,7219445760,7219445760,7219445760,7219445760,7219445760,7219445760,7219445760,7219445760,7219445760,7219445760,7219445760,5839257600,5414584320],"output_bytes":703303680,"weight_bytes":485068639215,"table_bytes":202758032400,"files":{"UD-Q3_K_XL/DeepSeek-V4.1-Flash-1017-UD-Q3_K_XL-00001-of-00008.gguf":{"size":5780927,"sha256":"427a6be72b502c52562b1f1f7c5c764cad2a4cb3af991e9aaf02a33d958cc322"},"UD-Q3_K_XL/DeepSeek-V4.1-Flash-1017-UD-Q3_K_XL-00002-of-00008.gguf":{"size":48856795552,"sha256":"9a3500224d10ca5565f010f57154f5b1999406c9453d86e4a0903a8183503697"},"UD-Q3_K_XL/DeepSeek-V4.1-Flash-1017-UD-Q3_K_XL-00003-of-00008.gguf":{"size":48089732928,"sha256":"ba5c295631a392c7f929a14b633f6c9badc0eb1c9d719ecad92ec43efd4ddc6d"},"UD-Q3_K_XL/DeepSeek-V4.1-Flash-1017-UD-Q3_K_XL-00004-of-00008.gguf":{"size":49795067616,"sha256":"4dd4ea5d34219cd1444218352def2977dd153739853464154a3936276f31ffbb"},"UD-Q3_K_XL/DeepSeek-V4.1-Flash-1017-UD-Q3_K_XL-00005-of-00008.gguf":{"size":49964720992,"sha256":"1a733e505a723fb1a5ccc15a45547c6d42097d8830d8fa4c4d17ca7bbb580855"},"UD-Q3_K_XL/DeepSeek-V4.1-Flash-1017-UD-Q3_K_XL-00006-of-00008.gguf":{"size":49332666816,"sha256":"0592a53ddba5a57062e266116bae26e9f1a97c268acb5287c8f4be5bb1741314"},"UD-Q3_K_XL/DeepSeek-V4.1-Flash-1017-UD-Q3_K_XL-00007-of-00008.gguf":{"size":36265841792,"sha256":"e6e8dd016ffbb2820f0e6a37f4f8a531f5365fbdd009e758dda1c054453f9ffc"},"UD-Q3_K_XL/DeepSeek-V4.1-Flash-1017-UD-Q3_K_XL-00008-of-00008.gguf":{"size":202758032592,"sha256":"18ddc73eea11981cb6317c6d3c4a4e58ec71baaea2de41b071d9127bc15c2a94"}}},
     "UD-Q2_K_XL": {"layer_bytes":[5209278936,5338384856,3708965848,3687533016,3687533016,4253764056,4253764056,4253764056,4275196888,4253764056,4253764056,4253764056,4253764056,4253764056,4404302808,5492394456,5492394456,5492394456,5492394456,5492394456,5048521688,5032331736,5032331736,5032331736,5043145176,5598562776,5598562776,5559327192,5570140632,5559327192,5346990552,5346990552,5357803992,5346990552,5346990552,5346990552,5357803992,5346990552,5346990552,5346990552],"expert_layer_bytes":[5025300480,5025300480,3503554560,3503554560,3503554560,4069785600,4069785600,4069785600,4069785600,4069785600,4069785600,4069785600,4069785600,4069785600,4069785600,5308416000,5308416000,5308416000,5308416000,5308416000,4848353280,4848353280,4848353280,4848353280,4848353280,5414584320,5414584320,5414584320,5414584320,5414584320,5202247680,5202247680,5202247680,5202247680,5202247680,5202247680,5202247680,5202247680,5202247680,5202247680],"output_bytes":542996480,"weight_bytes":334793544895,"table_bytes":135172021600,"files":{"UD-Q2_K_XL/DeepSeek-V4.1-Flash-1017-UD-Q2_K_XL-00001-of-00007.gguf":{"size":5780927,"sha256":"0c2a2031bd93ebd60aa6a4f3912775ba3990b5f39b24c6edf9ea029d2f387a28"},"UD-Q2_K_XL/DeepSeek-V4.1-Flash-1017-UD-Q2_K_XL-00002-of-00007.gguf":{"size":49290279808,"sha256":"605972fece1b43277b9ff86a2cd79c9002ff424caefc507f20b6ccd47ae4ab39"},"UD-Q2_K_XL/DeepSeek-V4.1-Flash-1017-UD-Q2_K_XL-00003-of-00007.gguf":{"size":49745070208,"sha256":"1cb58786245bd8c38478174eecc648b12691bb79c2bb2f446c135ab00263580e"},"UD-Q2_K_XL/DeepSeek-V4.1-Flash-1017-UD-Q2_K_XL-00004-of-00007.gguf":{"size":48680128800,"sha256":"7b753295dd32534dfea52b2e9b5c4741b8007a955e38702ee37034271df7526e"},"UD-Q2_K_XL/DeepSeek-V4.1-Flash-1017-UD-Q2_K_XL-00005-of-00007.gguf":{"size":49970937696,"sha256":"336be674937fe29683e7aeee7c6af32f896b864931a6c916907b78e0f3692de4"},"UD-Q2_K_XL/DeepSeek-V4.1-Flash-1017-UD-Q2_K_XL-00006-of-00007.gguf":{"size":1929325664,"sha256":"192694fb09612e1200cce9ae35f3645ad39cf8aa43e94417070af9c4f4ecb43b"},"UD-Q2_K_XL/DeepSeek-V4.1-Flash-1017-UD-Q2_K_XL-00007-of-00007.gguf":{"size":135172021792,"sha256":"a653c5309b7c74a6c41580aaa8c2d2bbdae0342253bca2cd3fc9e69d05f3d0eb"}}},
     "UD-IQ3_XXS": {"layer_bytes":[5209278936,5338384856,4947596248,4926163416,4926163416,5492394456,5492394456,5492394456,5513827288,5492394456,5032331736,5032331736,5032331736,5032331736,5182870488,6058625496,6058625496,6058625496,6058625496,6058625496,6074815448,6058625496,6058625496,6058625496,6069438936,6483298776,6483298776,6483298776,6494112216,6483298776,6483298776,6483298776,6494112216,6483298776,6483298776,5598562776,5609376216,5598562776,6023236056,5598562776],"expert_layer_bytes":[5025300480,5025300480,4742184960,4742184960,4742184960,5308416000,5308416000,5308416000,5308416000,5308416000,4848353280,4848353280,4848353280,4848353280,4848353280,5874647040,5874647040,5874647040,5874647040,5874647040,5874647040,5874647040,5874647040,5874647040,5874647040,6299320320,6299320320,6299320320,6299320320,6299320320,6299320320,6299320320,6299320320,6299320320,6299320320,5414584320,5414584320,5414584320,5839257600,5414584320],"output_bytes":703303680,"weight_bytes":394736596867,"table_bytes":161284798500,"files":{"UD-IQ3_XXS/DeepSeek-V4.1-Flash-1017-UD-IQ3_XXS-00001-of-00007.gguf":{"size":5780927,"sha256":"0c2a2031bd93ebd60aa6a4f3912775ba3990b5f39b24c6edf9ea029d2f387a28"},"UD-IQ3_XXS/DeepSeek-V4.1-Flash-1017-UD-IQ3_XXS-00002-of-00007.gguf":{"size":49485970112,"sha256":"aa7827cc3c88958f4bc4134fab2c2d63dff1e53f947f76cbb34ce429205d551c"},"UD-IQ3_XXS/DeepSeek-V4.1-Flash-1017-UD-IQ3_XXS-00003-of-00007.gguf":{"size":49037273088,"sha256":"7e5bc7c88e2bbcdadafcf672a1959581aeb2f2b23732ffd77823a756151a4e76"},"UD-IQ3_XXS/DeepSeek-V4.1-Flash-1017-UD-IQ3_XXS-00004-of-00007.gguf":{"size":49580635872,"sha256":"a6b33c1cc73bbd2a54617f0714c5144ee8ee6d6403ceea49628633a7a2be21de"},"UD-IQ3_XXS/DeepSeek-V4.1-Flash-1017-UD-IQ3_XXS-00005-of-00007.gguf":{"size":48448165536,"sha256":"5e392a945c534eb439279bbb638e7ea47e5a1cfca620b96c3fd47da87d5923a8"},"UD-IQ3_XXS/DeepSeek-V4.1-Flash-1017-UD-IQ3_XXS-00006-of-00007.gguf":{"size":36893972640,"sha256":"e1b4a74844e637d8b15c94c30757e2359f81f287824c421e8b5b746b010e030e"},"UD-IQ3_XXS/DeepSeek-V4.1-Flash-1017-UD-IQ3_XXS-00007-of-00007.gguf":{"size":161284798692,"sha256":"9d21807ac1a40cd1635634c14135b5acca1c8b855dae228170361602c7de560b"}}},
@@ -3592,9 +3605,10 @@ def strata_options(args) -> None:
 
 
 STRATA_AUTO_QUANTS = ('UD-Q8_K_XL', 'UD-Q4_K_XL', 'UD-Q3_K_XL', 'UD-IQ3_S', 'UD-IQ3_XXS',
-                      'UD-Q2_K_XL', 'IQ2_XS', 'IQ2_XXS', 'IQ1_M')
+                      'IQ2_XS', 'IQ2_XXS', 'IQ1_M')
 # Keep explicit profile identities, quant choices and directory overrides.
 STRATA_PROFILES = {
+    'deepseek-a40-quad': ('DS_A40_QUAD', 'deepseek-v4.1-1017-a40-quad-v31-iq1m', 'UD-IQ1_M', ('UD-IQ1_M',)),
     'deepseek': ('DS', 'deepseek-v4.1-flash-1017', 'UD-Q8_K_XL', ('UD-Q8_K_XL', 'UD-Q4_K_XL', 'UD-Q2_K_XL')),
     'deepseek-pro6000-quad-q8': ('DS_PRO6000_QUAD', 'deepseek-v4.1-1017-quad-pro6000-q8', 'UD-Q8_K_XL', ('UD-Q8_K_XL', 'UD-Q4_K_XL', 'UD-Q2_K_XL')),
     'deepseek-b300-iq3': ('DS_B300', 'deepseek-v4.1-flash-1017-b300-iq3', 'UD-IQ3_XXS', ('UD-IQ3_XXS', 'UD-IQ3_S', 'UD-Q2_K_XL')),
@@ -3671,10 +3685,11 @@ def strata_plan(args, mode: str, gpus: list[GPU]) -> Plan:
     """Select pinned native weights without the llama.cpp planning path."""
     strata_gpu_compatibility(gpus)
     strata_options(args)
-    if (mode == 'deepseek-gsq-a40-quad' and args.profile in ('auto', 'deepseek-auto')
-            and (args.ds_source == 'unsloth' or args.variant is not None
-                 or (args.quant is not None and args.quant.startswith('UD-')))):
-        mode = 'deepseek-auto'
+    if mode == 'deepseek-a40-quad' and args.profile in ('auto', 'deepseek-auto'):
+        if args.ds_source == 'gsq-rco' or args.reuse or args.quant in GSQ_LAYOUT:
+            mode = 'deepseek-gsq-a40-quad'
+        elif args.variant is not None or args.quant not in (None, 'UD-IQ1_M'):
+            mode = 'deepseek-auto'
     base = Path(args.root).expanduser().absolute()
     generic = mode == 'deepseek-auto'
     quad = mode == 'deepseek-gsq-a40-quad'
@@ -3710,6 +3725,9 @@ def strata_plan(args, mode: str, gpus: list[GPU]) -> Plan:
             quant = 'IQ1_M'
     elif quant is None:
         quant = GSQ_PROFILES[mode]['quant'] if mode in GSQ_PROFILES else STRATA_PROFILES[mode][2]
+    if quant == 'UD-Q2_K_XL':
+        raise Error('UD-Q2_K_XL is disabled: its Q5_K Engram tables are unsupported by the pinned native engine. '
+                    'Choose another quant; no automatic replacement is made.')
     allowed = STRATA_AUTO_QUANTS if generic else tuple(GSQ_LAYOUT) if mode in GSQ_PROFILES else STRATA_PROFILES[mode][3]
     if quant not in allowed:
         raise Error(f'Unsupported quant for {mode}: {quant}; allowed: {allowed}')
@@ -3768,7 +3786,7 @@ def strata_plan(args, mode: str, gpus: list[GPU]) -> Plan:
             if quant == 'UD-Q2_K_XL':
                 ident += '-q2k'
             root = Path(os.environ.get(prefix + '_ROOT', str(base / ident))).expanduser().absolute()
-        repo, revision = DS_REPO, DS_REV
+        repo, revision = DS_REPO, DS_NATIVE[quant].get('revision', DS_REV)
         weights, table = DS_NATIVE[quant]['weight_bytes'], DS_NATIVE[quant]['table_bytes']
         model_dir = None
     effort = args.reasoning_effort or 'high'

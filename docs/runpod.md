@@ -18,17 +18,46 @@ Qwen, Flint, Ornith, and MiniMax keep their explicit llama.cpp paths.
 
 The original `start-qwen.sh` attachment has SHA-256
 `955915e9fc13bc9ba44a580285cd21a70a0c183c2fafb514e3e1c274326b8d3a`.
-The current embedded version is `2026-10-30-mistral-b300-strata-1`.
+The current embedded version is `2026-10-30-deepseek-v31-1`.
 Packaging checks do not establish remote GPU inference or throughput.
 
 ## Migrate an existing DeepSeek Pod
+
+On four A40 cards, `--profile auto` now selects `deepseek-a40-quad`:
+**Unsloth Dynamic V3.1 UD-IQ1_M, 1M context, DSpark, and split 10,12,9,9**.
+The weights are pinned to `8a6ec9cf118e785a362ea94ee123c61c70553be6`.
+This preset has a checked capacity estimate. It has not been benchmarked here.
+It replaces the automatic GSQ choice; the explicit GSQ profile remains available.
+
+Copy the updated script onto the Pod. Keep the same `--root` to reuse the
+existing verified DSpark draft. Stop the previous server before a runtime
+upgrade. Prepare and start the new profile:
+
+```sh
+bash /workspace/start-remote-model.sh --profile deepseek-a40-quad \
+  --root /opt/qwen --no-ssh --prepare-only --install-deps
+bash /workspace/start-remote-model.sh --profile deepseek-a40-quad \
+  --root /opt/qwen --no-ssh
+```
+
+The new five-file checkpoint needs 250.4 GB of disk space. Preparation verifies
+every file against its pinned SHA-256. It does not remove the old GSQ weights
+or restart a server. The script retains the previous parser and outgoing-network
+restriction. Mistral on one B300 still defaults to 512K.
+If the current 0.1.54 runtime is already prepared, use
+`--prepare-only --prepare-assets-only` instead of `--prepare-only --install-deps`
+to stage the new weights while the old server runs. Stop it before the launch step.
+The default new weight directory is
+`/opt/qwen/deepseek-v4.1-1017-a40-quad-v31-iq1m/models/8a6ec9cf118e785a362ea94ee123c61c70553be6`.
+
+### Previous GSQ profile and rollback
 
 Copy the updated script onto the Pod. To install engine 0.1.54, stop the old
 server and run `--prepare-only --install-deps` with the same profile and root.
 Then start it with the same command without those two preparation flags.
 `--prepare-assets-only` does not update the runtime.
 
-The quad-A40 profile defaults to
+The explicit `deepseek-gsq-a40-quad` profile defaults to
 **IQ2_XS, 1M context, DSpark on, and layer counts 9,11,10,10**. It still selects
 six experts per token. On engine 0.1.52, the first 13 normal requests generated
 5,302 tokens in 95.468 decode seconds: 55.5 tokens/s. The previous ordinary
@@ -113,7 +142,7 @@ indices `0,1,2,3`. The following controls replace llama.cpp placement controls:
 
 | Flag | Default | Meaning |
 | --- | --- | --- |
-| `--layer-split` | Planned contiguous counts; `9,11,10,10` on quad A40 | Layer counts per GPU; sum must be 40; `auto` delegates placement to Strata |
+| `--layer-split` | Planned contiguous counts; `10,12,9,9` for Unsloth on quad A40 | Layer counts per GPU; sum must be 40; `auto` delegates placement to Strata |
 | `--spec` | `dspark` when it fits; `none` otherwise | Native DSpark or ordinary decoding |
 | `--dspark N` | No block override | Positive N enables DSpark and limits drafts per round; 0 disables |
 | `--dspark-conf` | `0.65` when DSpark is enabled | Draft confidence threshold, 0–1 |
@@ -155,8 +184,9 @@ native limit unchanged. It conflicts with an incompatible explicit `--spec`.
 `--layer-split` takes one positive layer count per selected GPU, summing to 40.
 The launcher sets `DS4_SPLIT`; the native engine ignores the generic
 `--layer-split` argument. Use `--layer-split auto` to leave native placement
-automatic. The draft stays on the first selected GPU. The quad-A40 default gives that
-GPU nine trunk layers to leave space for the draft. The counts come from
+automatic. The draft stays on the first selected GPU. The Unsloth quad-A40
+profile gives that GPU ten trunk layers. The explicit GSQ profile gives it nine.
+The counts come from
 weight-size estimates; they do not prove that 1M runtime buffers fit.
 `--layer-split 10,10,10,10` remains an explicit override.
 The native packer can reject an unsupported tensor layout; it does not change
@@ -260,12 +290,15 @@ configured reserve, which defaults to 2 GiB. The 3.5 GiB allowance comes from
 the quad-A40 observations. It is not a measured bound for every GPU or flag.
 
 It selects the highest precision in this pinned catalog that fits those
-per-GPU budgets: Unsloth Q8_K_XL, Q4_K_XL, Q3_K_XL, IQ3_S, IQ3_XXS, Q2_K_XL, then
+per-GPU budgets: Unsloth Q8_K_XL, Q4_K_XL, Q3_K_XL, IQ3_S, IQ3_XXS, then
 GSQ IQ2_XS, IQ2_XXS, and IQ1_M. It adds DSpark only if the selected weights
 and draft fit together. It does not reduce precision just to add a draft.
 If no candidate fits, it selects GSQ IQ1_M with CPU/RAM/SSD expert streaming.
 That choice minimizes weight traffic; it is not a speed benchmark.
 Explicit `--quant` and `--spec` can override the choice.
+Four A40 cards use the separate Dynamic V3.1 IQ1_M profile above.
+The Q2_K_XL candidate is excluded because its Q5_K Engram is not supported
+by the pinned Strata engine. The new Unsloth IQ2_XXS has the same restriction.
 
 These examples use 46,068 MiB per A40 and 97,887 MiB per PRO 6000. Actual
 reported capacity can change a selection. DeepSeek defaults to **1M** context.
@@ -277,8 +310,8 @@ Mistral on B300 defaults to **512K**.
 | 1 supported 48 GB card | GSQ IQ1_M | Off | CPU/SSD experts required |
 | 2 A40 | GSQ IQ1_M | Off | CPU/SSD experts required |
 | 3 A40 | GSQ IQ1_M | Off | Estimated GPU fit |
-| 4 A40 | GSQ IQ2_XS | On | Measured working preset, split 9,11,10,10 |
-| 5 A40 | Unsloth UD-Q2_K_XL | Off | Estimated GPU fit |
+| 4 A40 | Unsloth V3.1 UD-IQ1_M | On | Estimated GPU fit, split 10,12,9,9; not benchmarked |
+| 5 A40 | GSQ IQ2_XS | On | Estimated GPU fit; Q5_K Engram candidate excluded |
 | 6 A40 | Unsloth UD-IQ3_XXS | On | Estimated GPU fit |
 | 7 A40 | Unsloth UD-IQ3_S | On | Estimated GPU fit |
 | 8 A40 | Unsloth UD-Q8_K_XL | Off | Estimated GPU fit; draft exceeds a stage budget |
