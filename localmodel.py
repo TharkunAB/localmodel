@@ -658,7 +658,7 @@ def serve(args: argparse.Namespace, item: dict[str, Any]) -> int:
             "kv_cache": args.kv_cache or item.get("kv_cache"),
             "kv_mean_center": str(args.kv_mean_center) if args.kv_mean_center else None,
             "reasoning_effort": (args.reasoning_effort or DEFAULT_REASONING_EFFORT) if item["runtime"] in ("prism", "strata", "strata-qwen") else None,
-            "expert_ram_gb": args.expert_ram_gb if args.expert_ram_gb is not None else 48 if item["runtime"] == "strata" else 32 if item["runtime"] == "strata-qwen" else None,
+            "expert_ram_gb": args.expert_ram_gb if args.expert_ram_gb is not None else 64 if item["runtime"] == "strata" else 32 if item["runtime"] == "strata-qwen" else None,
             "cpu_threads": args.cpu_threads if args.cpu_threads is not None else 4 if item["runtime"] == "strata" else None,
             "gpu_expert_cache_gb": args.gpu_expert_cache_gb,
             "gpu_expert_fraction": args.gpu_expert_fraction,
@@ -721,7 +721,12 @@ def stats_text() -> str:
             "Previous 128K capacity / 48G cap: 16K OMP 1396 prompt / 61.68 decode tok/s.\n"
             "Previous 48G code/recall pass; resume used fenced JSON (strict format fail). 40G/16 GiB: 609/46.34 tok/s, all checks pass.\n"
             "Source: results/strata-027-20261027/summary.md.\n\n"
-            "deepseek: Unsloth Dynamic v3.1 UD-IQ1_S, 256K capacity, 64G cap, native 0.1.54.\n"
+            "deepseek: Unsloth Dynamic v3.1 UD-IQ1_S, 256K capacity, native 0.1.54.\n"
+            "Default: 64 GiB expert cache, 70G process cap, no draft.\n"
+            "16K OMP cache comparison: 48 GiB/64G cap 5.24 decode / 278.80 prefill tok/s; 64 GiB/70G cap 5.49 / 292.14.\n"
+            "Peak RAM 48.45/58.81 GiB; both pass repair, 100 assertions, recall and resume. No swap/OOM or memory-limit events.\n"
+            "Single passes, no OS page-cache flush; generated 694/515 tokens. No filled-256K or compaction test.\n"
+            "Earlier DSpark comparison used a 36 GiB expert cache and a 64G cap:\n"
             "16K OMP: none 4.98 decode / 275.41 prefill tok/s; DSpark5 4.60 / 276.10. Both pass code, 100 assertions, recall and resume.\n"
             "Generated 562/1347 tokens; repair+resume 211.19/422.34 s. Different output lengths affect elapsed time.\n"
             "Peak cgroup RAM 38.28/39.50 GiB; zero swap/OOM. DSpark acceptance 79.08%; remains optional.\n"
@@ -799,7 +804,7 @@ def main() -> int:
     start.add_argument("--port", type=int, default=8899)
     start.add_argument("--mem", type=memory_size,
                        help="Hard RAM cap for the model process and its children, including Linux file cache. Bare numbers use GiB, for example --mem 32. Swap is disabled for this process tree. Omit to keep the profile cap. This does not reduce --cache-ram automatically.")
-    start.add_argument("--expert-ram-gb", type=float, help="Strata expert RAM budget in GiB, inside --mem (DeepSeek: 48 with a 64 GiB cap; Qwen: 32 with a 64 GiB cap). Separate from llama.cpp --cache-ram.")
+    start.add_argument("--expert-ram-gb", type=float, help="Strata expert RAM budget in GiB, inside --mem (DeepSeek: 64 with a 70 GiB cap; Qwen: 32 with a 64 GiB cap). Separate from llama.cpp --cache-ram.")
     start.add_argument("--cpu-threads", type=int, help="DeepSeek Strata CPU expert compute threads (default: 4; 0 uses the stock automatic count). I/O threads are separate.")
     start.add_argument("--gpu-expert-cache-gb", type=float, help="Legacy control. Official Strata requires --gpu-expert-fraction instead.")
     start.add_argument("--gpu-expert-fraction", type=float, help="DeepSeek Strata GPU expert-cache fraction, from 0 to 1, of free VRAM after dense weights and the reserve (default: stock automatic).")

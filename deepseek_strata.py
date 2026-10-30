@@ -273,7 +273,7 @@ def settings(args: argparse.Namespace, item: dict[str, Any]) -> dict[str, Any]:
         raise RuntimeError("Flint MoE, llama.cpp batching, and Bonsai draft/KV controls do not apply to Strata.")
     if args.gpu_expert_cache_gb is not None:
         raise RuntimeError("Official Strata uses --gpu-expert-fraction instead of --gpu-expert-cache-gb.")
-    ram = args.expert_ram_gb if args.expert_ram_gb is not None else 48
+    ram = args.expert_ram_gb if args.expert_ram_gb is not None else 64
     threads = args.cpu_threads if args.cpu_threads is not None else 4
     reserve = args.vram_reserve_mib if args.vram_reserve_mib is not None else 700
     engram = args.engram_cache_mib if args.engram_cache_mib is not None else 256

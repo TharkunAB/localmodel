@@ -12,8 +12,8 @@ The weights are Unsloth Dynamic V3.1 UD-IQ1_S at revision
 SHA-256 values. The last shard contains the IQ4_NL Engram table.
 The complete download is 232,979,608,420 bytes, about 217 GiB.
 
-The default model profile has 256K context capacity, a hard 64 GiB RAM cap,
-a 48 GiB expert RAM cache, 4096-token prefill chunks, four CPU expert threads,
+The default model profile has 256K context capacity, a hard 70 GiB RAM cap,
+a 64 GiB expert RAM cache, 4096-token prefill chunks, four CPU expert threads,
 and port 8899. Swap and routed-expert skipping are off. OMP and OpenCode
 send explicit `xhigh` requests. DSpark is optional. The launcher
 passes `--experts 6`. The five-expert Faster mode is off. These defaults
@@ -48,8 +48,8 @@ These controls apply to this backend:
 | Flag | Default | Function |
 | --- | --- | --- |
 | `--context` | `256k` | Maximum context capacity |
-| `--mem` | `64` | Hard process-tree RAM cap in GiB; swap disabled |
-| `--expert-ram-gb` | `48` | Expert RAM cache in GiB, inside the hard cap |
+| `--mem` | `70` | Hard process-tree RAM cap in GiB; swap disabled |
+| `--expert-ram-gb` | `64` | Expert RAM cache in GiB, inside the hard cap |
 | `--cpu-threads` | `4` | CPU expert compute threads |
 | `--gpu-expert-fraction` | `1` | Fraction from 0 to 1 of the available GPU expert budget |
 | `--vram-reserve-mib` | `700` | VRAM reserve outside model allocations |
@@ -66,17 +66,51 @@ These controls apply to this backend:
 The old `--gpu-expert-cache-gb` flag is rejected. The stock engine takes a
 fraction rather than a GiB value. `--expert-ram-gb` still uses GiB. The
 launcher converts this value to the decimal GB unit of stock `--ssd-cache`.
-The 48 GiB default becomes `--ssd-cache 51.539607552`.
-This leaves 16 GiB inside the process cap for other allocations.
-The IQ1_S measurements below used the previous 36 GiB cache.
-The 48 GiB cache has not been benchmarked with IQ1_S.
+The 64 GiB default becomes `--ssd-cache 68.719476736`.
+This leaves 6 GiB inside the process cap for other allocations.
+The cache comparison below passed at this setting with DSpark off.
+The earlier DSpark measurements used the previous 36 GiB cache.
 
-Use `--expert-ram-gb N` to change the expert cache within the 64 GiB process cap.
+Use `--expert-ram-gb N` to change the expert cache within the 70 GiB process cap.
 Do not set the expert cache equal to the process cap. The engine also needs
 RAM for dense weights, buffers, and charged file cache. The hard cap includes
 child processes. The normal server does not monitor free Windows RAM.
 `--no-offload` cannot fit these weights on this GPU. Bonsai MTP, llama.cpp
 KV cache, and Flint expert-cache controls do not apply to this runtime.
+
+## Expert cache comparison, 2026-10-30
+
+Both runs used IQ1_S, native engine 0.1.54, `xhigh`, and no drafter.
+They used the same 16K OMP repair, recall, and resume workload.
+The 48 GiB cache ran first. The 64 GiB cache ran second.
+The process cap increased from 64 to 70 GiB at the user's request.
+
+| Metric | 48 GiB cache / 64 GiB cap | 64 GiB cache / 70 GiB cap |
+| --- | ---: | ---: |
+| Initial actual input tokens | 15963 | 15964 |
+| Initial prefill tok/s | 278.80 | 292.14 |
+| Weighted decode tok/s | 5.24 | 5.49 |
+| Generated tokens | 694 | 515 |
+| Repair plus resumed follow-up | 231.53 s | 190.96 s |
+| Peak model cgroup RAM | 48.45 GiB | 58.81 GiB |
+| Minimum Linux available RAM | 51.81 GiB | 40.05 GiB |
+| Tool errors | 0 | 0 |
+| Repair, 100 assertions, three-fact recall, strict JSON resume | Pass | Pass |
+
+The larger cache decoded about 4.8% faster and read the initial prompt
+about 4.8% faster. Both runs had zero swap use, OOM events, and memory-limit
+events. The benchmark stopped both servers and workers.
+The new default uses a 64 GiB expert cache and a 70 GiB process cap.
+DSpark remains optional. It was not tested with the larger cache.
+
+These are single passes with sampling enabled. The OS page cache was not
+cleared between runs. Different output lengths also affect elapsed time.
+The final requests had 17399 and 16706 input tokens. This does not test
+filled 256K context or compaction. The earlier 36 GiB cache result was
+4.98 decode and 275.41 prefill tokens/s under more background CPU activity.
+The initial 48 GiB attempt stopped before OMP because its Python environment
+lacked Jinja2. It is excluded. The rerun used the installed Strata environment.
+Raw evidence is in the local directory `results/deepseek-iq1s-cache-20261030/`.
 
 ## Optional DSpark drafter
 

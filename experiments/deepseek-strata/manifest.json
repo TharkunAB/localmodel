@@ -5,8 +5,8 @@
   "source_repository": "https://github.com/Niko1221/Strata",
   "source_revision": "46c152a1310f77cd2f0ce2c7cd213962df14fe83",
   "context": 262144,
-  "memory_limit": "64G",
-  "expert_ram_budget_gib": 48,
+  "memory_limit": "70G",
+  "expert_ram_budget_gib": 64,
   "swap_limit": 0,
   "dspark": {
     "name": "dspark-DeepSeek-V4.1-Flash-1017-Q8_0.gguf",
