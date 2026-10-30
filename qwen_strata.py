@@ -19,7 +19,7 @@ from project_paths import CAPPED, read_manifest
 ROOT = Path(__file__).resolve().parent
 NAME = "qwen3.8"
 HERE = ROOT / "experiments/qwen-strata"
-PYTHON = ROOT / "state/venvs/strata-official/bin/python"
+PYTHON = Path(read_manifest(HERE / "manifest.json")["runtime"]["venv"]) / "bin/python"
 
 
 def manifest() -> dict[str, Any]:

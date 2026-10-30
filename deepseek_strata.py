@@ -20,7 +20,7 @@ from project_paths import CAPPED, read_manifest
 ROOT = Path(__file__).resolve().parent
 NAME = "deepseek-v4.1-1017-iq1-m"
 HERE = ROOT / "experiments/deepseek-strata"
-PYTHON = ROOT / "state/venvs/strata-official/bin/python"
+PYTHON = Path(read_manifest(HERE / "manifest.json")["runtime"]["venv"]) / "bin/python"
 SOURCE = Path(read_manifest(HERE / "manifest.json")["source_directory"])
 PACK_SOURCE = Path(read_manifest(HERE / "manifest.json").get("pack_source_directory", str(SOURCE)))
 PACK_ASSETS = frozenset({"ds4.txt", "tensors.txt", "engram.bin",

@@ -195,7 +195,9 @@ replacement for Bonsai or Qwen. Scores across publishers use different harnesses
 
 ## Qwen3.8 Flash-Next IQ2_XS with MTP
 
-Use the pinned Strata 0.2.7.1 source with Control 0.1.53 and CUDA engine 0.1.52.
+Use the pinned Strata 0.2.7.1 source with Control 0.1.53 and CUDA engine 0.1.54.
+The engine comes from 0.2.8. The older server avoids a tool-parser regression.
+See the [update review](strata-0.2.8-review.md).
 It uses the original ISTA IQ2_XS weights and their MTP draft layer.
 The download includes both model shards. Preparation
 keeps the native expert weights in their original shard.
@@ -228,10 +230,11 @@ Use `--prefill-chunk N` to set the prefill chunk size and `--vram-reserve-mib N`
 to change the GPU memory reserve. This profile uses MTP with 1 to 7
 draft tokens. Strata adds one accepted token to each verification window.
 Prompt lookup is off. `--speculative none` and `--no-offload` are not supported
-by this profile. `STRATA_ROUTE_PRIOR=0` disables the new expert-routing bias.
+by this profile. The launcher forces `STRATA_ROUTE_PRIOR=0`.
+Upstream 0.2.8 also disables this bias by default on 12 GiB NVIDIA cards.
 Bonsai remains the default for `localmodel start` without a model name.
 
-The 256K / 64 GiB repeat passed the 16K OMP benchmark at 520.1 prompt and
+With engine 0.1.52, the 256K / 64 GiB repeat passed the 16K OMP benchmark at 520.1 prompt and
 35.49 decode tokens/s. Code, 100 assertions, recall, and strict JSON resume
 passed. Peak model RAM was 64 GiB, with no swap or OOM. This run omitted
 Windows memory queries and kept the Linux floor and cgroup cap. Its GPU
@@ -250,11 +253,12 @@ The 128K and 256K settings are capacities, not filled workload validations.
 
 `deepseek` selects ISTA GSQ-RCO IQ1_M and official
 [Strata](https://github.com/Niko1221/Strata). The API source is pinned to
-the 0.2.7.1 tag (Control 0.1.53). The signed CUDA engine is `strata-dsv41` 0.1.52.
-This patch release keeps both Linux x86 CUDA engines unchanged.
+the 0.2.7.1 tag (Control 0.1.53). The signed CUDA engine is `strata-dsv41` 0.1.54
+from Strata 0.2.8. The older server avoids a tool-parser regression.
 The source CLI still reports product version 0.2.7 and build 0.1.53.
+See the [update review](strata-0.2.8-review.md). The new engine is not benchmarked here.
 Both Strata profiles use a 64 GiB process cap after the WSL memory increase.
-The 64 GiB DeepSeek repeat passed the 16K OMP checks at 264.7 prompt and
+With engine 0.1.52, the 64 GiB DeepSeek repeat passed the 16K OMP checks at 264.7 prompt and
 5.15 decode tokens/s, with a 47.58 GiB peak. It did not show a speed gain.
 See the [repeat report](../results/strata-0271-20261028/summary.md).
 The [update checks](../results/strata-official/20261028-update/summary.md) cover
@@ -263,7 +267,7 @@ The 0.2.7 update passed a filled 16K OMP repair, recall, and resume run. Vision 
 With a 48 GiB cap and 36 GiB expert cache, prefill measured 284 tokens/s and
 decode 5.31 tokens/s. This is one sampled run. See the
 [comparison](../results/strata-027-20261027/comparison.json).
-The installation uses three pinned Python packages. It does not use Abyss
+The installation uses four pinned Python packages. It does not use Abyss
 patches, a compiler, or the private CUDA toolkit from the Dory setup.
 The five original GGUF files use 215.43 GiB on native WSL storage on C:.
 The model directory is `models/deepseek41-1017-ista-iq1-m`.

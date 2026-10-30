@@ -32,17 +32,17 @@
     "mtp"
   ],
   "runtime": {
-    "directory": "/home/tritlo/Code/local-models/state/runtimes/strata-qwen-0.1.52",
-    "binary": "/home/tritlo/Code/local-models/state/runtimes/strata-qwen-0.1.52/engine/strata",
-    "version": "0.1.52",
-    "archive_url": "https://github.com/Niko1221/Strata/releases/download/v0.2.7/strata-engine-0.1.52-linux-x86_64-cuda-cuda13.tar.gz",
-    "archive_sha256": "4177c1a8ffc59bf66074093b22ac55ed477bcbe84f8bd12e378b0f1236da55c7",
-    "archive_size": 645979691,
-    "manifest_sha256": "52f57c1943e982cccc75426a050ab3961d0fd5791b0b9e66dacc3a764be1b4a7",
-    "feed_url": "https://github.com/Niko1221/Strata/releases/download/v0.2.7/strata-feed.json",
-    "feed_sha256": "148dc76b786f65371691b6fd73884c6150f269f0c4e379aa6c472dbe29c6f355",
-    "feed_signature_sha256": "2999e0efd205a7b99eb3f2c6457b5022426c9104342f1c9cd86ba5692289f4f1",
-    "venv": "/home/tritlo/Code/local-models/state/venvs/strata-official"
+    "directory": "/home/tritlo/Code/local-models/state/runtimes/strata-qwen-0.1.54",
+    "binary": "/home/tritlo/Code/local-models/state/runtimes/strata-qwen-0.1.54/engine/strata",
+    "version": "0.1.54",
+    "archive_url": "https://github.com/Niko1221/Strata/releases/download/v0.2.8/strata-engine-0.1.54-linux-x86_64-cuda-cuda13.tar.gz",
+    "archive_sha256": "a183c298e26145a11b87baaeda5fe2ec32b305c600e6886206fd225bf3070726",
+    "archive_size": 645985849,
+    "manifest_sha256": "5c2504c1440c219c6cba0714913101ea0b079deb91d9bb02629354a67754ca5a",
+    "feed_url": "https://github.com/Niko1221/Strata/releases/download/v0.2.8/strata-feed.json",
+    "feed_sha256": "b62c5e0d4502bf23328bb4c95702f59b08769e13a31727b9be62e702c23f30ab",
+    "feed_signature_sha256": "dbb2761dbbd0969ba966a64054e1cd94657ce6ed7ea83e8de5333e61c31a48f2",
+    "venv": "/home/tritlo/Code/local-models/state/venvs/strata-official-0.2.8"
   },
   "gguf_source": {
     "url": "https://codeload.github.com/ggml-org/llama.cpp/zip/3cf03257f219afbe7334045ff7c6a06ac68c627d",
