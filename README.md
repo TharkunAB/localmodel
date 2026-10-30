@@ -189,19 +189,18 @@ localmodel start deepseek --dry-run
 localmodel start deepseek
 ```
 
-The defaults are **256K context, a 70 GiB process cap, a 64 GiB resident expert
+The defaults are **256K context, a 70 GiB process cap, a 48 GiB resident expert
 budget, 4096-token prefill chunks, four CPU expert threads, and all six active
 experts**. DSpark is optional. Allow **at least 250 GiB free**
 on a fast Linux SSD: the weights and prepared pack use about 217 GiB.
 The complete three-model collection uses about 300 GiB before toolchains,
 runtimes, caches, and spare working space.
 
-The 64 GiB cache passed a 16K OMP workload at 5.49 decode and 292.14 prefill
-tokens/s. Peak process memory was 58.81 GiB. This does not test filled 256K
-context. See the [cache comparison](experiments/deepseek-strata/README.md#expert-cache-comparison-2026-10-30).
-At 64K input, the larger cache gained only 5.1% decode and 0.6% prefill
-throughput over a 48 GiB cache. Use `--expert-ram-gb 48` when RAM headroom
-matters. See the [64K follow-up](experiments/deepseek-strata/README.md#64k-follow-up).
+The default cache passed a 64K OMP workload at 5.22 decode and 423.04 prefill
+tokens/s. Peak process memory was 61.72 GiB. A 64 GiB cache gained only 5.1%
+decode and 0.6% prefill throughput, so the default retains more RAM headroom.
+Use `--expert-ram-gb 64` to select the larger cache. This does not test filled
+256K context. See the [64K comparison](experiments/deepseek-strata/README.md#64k-follow-up).
 
 Example with less RAM and context:
 

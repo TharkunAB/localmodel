@@ -13,7 +13,7 @@ SHA-256 values. The last shard contains the IQ4_NL Engram table.
 The complete download is 232,979,608,420 bytes, about 217 GiB.
 
 The default model profile has 256K context capacity, a hard 70 GiB RAM cap,
-a 64 GiB expert RAM cache, 4096-token prefill chunks, four CPU expert threads,
+a 48 GiB expert RAM cache, 4096-token prefill chunks, four CPU expert threads,
 and port 8899. Swap and routed-expert skipping are off. OMP and OpenCode
 send explicit `xhigh` requests. DSpark is optional. The launcher
 passes `--experts 6`. The five-expert Faster mode is off. These defaults
@@ -49,7 +49,7 @@ These controls apply to this backend:
 | --- | --- | --- |
 | `--context` | `256k` | Maximum context capacity |
 | `--mem` | `70` | Hard process-tree RAM cap in GiB; swap disabled |
-| `--expert-ram-gb` | `64` | Expert RAM cache in GiB, inside the hard cap |
+| `--expert-ram-gb` | `48` | Expert RAM cache in GiB, inside the hard cap |
 | `--cpu-threads` | `4` | CPU expert compute threads |
 | `--gpu-expert-fraction` | `1` | Fraction from 0 to 1 of the available GPU expert budget |
 | `--vram-reserve-mib` | `700` | VRAM reserve outside model allocations |
@@ -66,8 +66,8 @@ These controls apply to this backend:
 The old `--gpu-expert-cache-gb` flag is rejected. The stock engine takes a
 fraction rather than a GiB value. `--expert-ram-gb` still uses GiB. The
 launcher converts this value to the decimal GB unit of stock `--ssd-cache`.
-The 64 GiB default becomes `--ssd-cache 68.719476736`.
-This leaves 6 GiB inside the process cap for other allocations.
+The 48 GiB default becomes `--ssd-cache 51.539607552`.
+This leaves 22 GiB inside the process cap for other allocations.
 The cache comparison below passed at this setting with DSpark off.
 The earlier DSpark measurements used the previous 36 GiB cache.
 
@@ -100,7 +100,8 @@ The process cap increased from 64 to 70 GiB at the user's request.
 The larger cache decoded about 4.8% faster and read the initial prompt
 about 4.8% faster. Both runs had zero swap use, OOM events, and memory-limit
 events. The benchmark stopped both servers and workers.
-The new default uses a 64 GiB expert cache and a 70 GiB process cap.
+After the 64K follow-up below, the default uses a 48 GiB expert cache
+and a 70 GiB process cap to retain more RAM headroom.
 DSpark remains optional. It was not tested with the larger cache.
 
 These are single passes with sampling enabled. The OS page cache was not
@@ -145,9 +146,9 @@ file cache. Recorded memory stalls totaled about 0.076 seconds. The 48 GiB
 cache recorded no cap events. Neither run swapped or recorded an OOM.
 The benchmark stopped both servers and all OMP workers.
 
-Prefer `localmodel start deepseek --expert-ram-gb 48` when RAM headroom matters.
-This retains the 70 GiB cap for other allocations. The configured default
-remains 64 GiB; this follow-up changes measurements, not launch settings.
+`localmodel start deepseek` now selects the 48 GiB expert cache.
+It retains the 70 GiB cap for other allocations. Use `--expert-ram-gb 64`
+to select the larger cache.
 These are single passes with sampling enabled. Different generated text and
 tool calls affect elapsed time. The final requests had 68365 and 66787 input
 tokens. This does not test filled 256K context or automatic compaction.
