@@ -112,6 +112,47 @@ The initial 48 GiB attempt stopped before OMP because its Python environment
 lacked Jinja2. It is excluded. The rerun used the installed Strata environment.
 Raw evidence is in the local directory `results/deepseek-iq1s-cache-20261030/`.
 
+### 64K follow-up
+
+Both cache sizes passed the larger OMP workload. Each initial request had
+65308 input tokens. Both runs used the same 70 GiB process cap and kept
+DSpark off. The 64 GiB cache ran first, reversing the earlier order.
+Before each start, the runner requested release of clean cached pages for
+the five GGUF files with `POSIX_FADV_DONTNEED`. It did not clear global caches.
+
+| Metric | 48 GiB expert cache | 64 GiB expert cache |
+| --- | ---: | ---: |
+| Initial prefill tok/s | 423.04 | 425.46 |
+| Initial prefill time | 154.38 s | 153.50 s |
+| Weighted decode tok/s | 5.22 | 5.48 |
+| Generated tokens | 956 | 768 |
+| Repair plus resumed follow-up | 392.64 s | 342.16 s |
+| Model requests | 6 | 5 |
+| Peak model cgroup RAM | 61.72 GiB | 70.00 GiB |
+| Minimum Linux available RAM | 49.43 GiB | 36.52 GiB |
+| Tool errors | 0 | 0 |
+| Repair, 100 assertions, three-fact recall, strict JSON resume | Pass | Pass |
+
+The larger cache gained 5.1% decode throughput and 0.6% prefill throughput.
+This saves about 9.3 seconds per 1000 output tokens at the measured rates.
+It saved 0.88 seconds on the initial prompt. Peak charged memory increased
+by 8.28 GiB. This peak includes file cache. Decode-time memory samples suggest
+about 12 GiB more anonymous/shared memory and kernel allocations with the
+larger cache. These samples do not cover every phase or establish a peak.
+
+The 64 GiB cache reached the 70 GiB cap during prefill. The kernel reclaimed
+file cache. Recorded memory stalls totaled about 0.076 seconds. The 48 GiB
+cache recorded no cap events. Neither run swapped or recorded an OOM.
+The benchmark stopped both servers and all OMP workers.
+
+Prefer `localmodel start deepseek --expert-ram-gb 48` when RAM headroom matters.
+This retains the 70 GiB cap for other allocations. The configured default
+remains 64 GiB; this follow-up changes measurements, not launch settings.
+These are single passes with sampling enabled. Different generated text and
+tool calls affect elapsed time. The final requests had 68365 and 66787 input
+tokens. This does not test filled 256K context or automatic compaction.
+Raw evidence is in `results/deepseek-iq1s-cache-64k-20261030/`.
+
 ## Optional DSpark drafter
 
 ```sh
@@ -129,7 +170,7 @@ The draft pack has a separate receipt and does not copy the main weights.
 The normal `localmodel remove deepseek` command removes both variants.
 
 Strata allocates draft experts before main-model experts. Some draft experts
-can remain in RAM. They remain subject to the 64 GiB process cap, but are
+can remain in RAM. They remain subject to the 70 GiB process cap, but are
 outside the `--expert-ram-gb` store. They can reduce the GPU cache available
 to the main model. The depth setting limits verification candidates. The
 drafter still computes its fixed five-position block.

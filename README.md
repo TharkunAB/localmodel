@@ -199,6 +199,9 @@ runtimes, caches, and spare working space.
 The 64 GiB cache passed a 16K OMP workload at 5.49 decode and 292.14 prefill
 tokens/s. Peak process memory was 58.81 GiB. This does not test filled 256K
 context. See the [cache comparison](experiments/deepseek-strata/README.md#expert-cache-comparison-2026-10-30).
+At 64K input, the larger cache gained only 5.1% decode and 0.6% prefill
+throughput over a 48 GiB cache. Use `--expert-ram-gb 48` when RAM headroom
+matters. See the [64K follow-up](experiments/deepseek-strata/README.md#64k-follow-up).
 
 Example with less RAM and context:
 
