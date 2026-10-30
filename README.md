@@ -177,8 +177,9 @@ examples, not claims that they outperform the defaults.
 
 ## Set up DeepSeek V4.1 Flash 1017
 
-`deepseek` selects the ISTA-DASLab **GSQ-RCO IQ1_M** backbone with the separate
-**IQ4_NL Engram** table. Strata keeps selected experts in RAM and reads other
+`deepseek` selects Unsloth **Dynamic V3.1 UD-IQ1_S** with an **IQ4_NL Engram**
+table, pinned to revision `8a6ec9cf118e785a362ea94ee123c61c70553be6`.
+Strata keeps selected experts in RAM and reads other
 weights from SSD. This is how the larger model runs on the 12 GiB card.
 
 ```bash
@@ -191,8 +192,8 @@ localmodel start deepseek
 The defaults are **256K context, a 64 GiB process cap, a 36 GiB resident expert
 budget, 4096-token prefill chunks, four CPU expert threads, and all six active
 experts**. It has no configured draft model. Allow **at least 250 GiB free**
-on a fast Linux SSD: the weights and prepared pack use about 215.44 GiB.
-The complete three-model collection uses about 298 GiB before toolchains,
+on a fast Linux SSD: the weights and prepared pack use about 217 GiB.
+The complete three-model collection uses about 300 GiB before toolchains,
 runtimes, caches, and spare working space.
 
 Example with less RAM and context:
@@ -205,8 +206,8 @@ Both Strata profiles use pinned control source **0.2.7.1** and signed native
 engines **0.1.54** from Strata 0.2.8. The server remains on 0.2.7.1 because
 the 0.2.8 parser can treat a quoted tool example as a tool call.
 See the [update review](docs/strata-0.2.8-review.md).
-The DeepSeek packer remains pinned separately to 0.2.6.
-Setup installs it explicitly. No native compilation is required for Strata.
+The DeepSeek packer uses the same pinned 0.2.7.1 source.
+No native compilation is required for Strata.
 Its server and children cannot open outgoing connections; fetch and installation
 remain network-enabled. The local launcher currently accepts context sizes up
 to **262144**. A remote model's advertised 1M capacity is handled separately.

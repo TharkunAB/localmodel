@@ -30,7 +30,7 @@ STATE = ROOT / "state"
 CAPPED = ROOT / "libexec/capped"
 ALIASES = {"bonsai": "bonsai2-27b", "bonsai2": "bonsai2-27b", "bonsai-ptq2": "bonsai-pq2",
            "groot": "groot-19b", "lfm": "lfm3-1.7b", "lfm3": "lfm3-1.7b",
-           "deepseek": deepseek_strata.NAME, "deepseek-iq1-m": deepseek_strata.NAME, "strata": deepseek_strata.NAME}
+           "deepseek": deepseek_strata.NAME, "deepseek-iq1-s": deepseek_strata.NAME, "strata": deepseek_strata.NAME}
 DEFAULT_CACHE_RAM_MIB = 32768
 DEFAULT_REASONING_EFFORT = "xhigh"
 DEFAULT_START_MODEL = "27b-256k-optimized"
@@ -717,7 +717,8 @@ def stats_text() -> str:
             "Previous 128K capacity / 48G cap: 16K OMP 1396 prompt / 61.68 decode tok/s.\n"
             "Previous 48G code/recall pass; resume used fenced JSON (strict format fail). 40G/16 GiB: 609/46.34 tok/s, all checks pass.\n"
             "Source: results/strata-027-20261027/summary.md.\n\n"
-            "deepseek: official Strata IQ1_M, 256K capacity.\n"
+            "deepseek: Unsloth Dynamic v3.1 UD-IQ1_S, 256K capacity. No local measurements yet.\n"
+            "Historical GSQ-RCO IQ1_M results below do not measure this quantization.\n"
             "Strata 0.2.6, 16K OMP, six experts, 4096-token chunks: 48G/36 GiB cache gave 257.7 prompt and 5.4 decode tok/s;\n"
             "64G/48 GiB cache gave 262.0 prompt and 5.6 decode tok/s. Peaks: 40.3/59.0 GiB. Single passes; see experiments/deepseek-strata/README.md.\n"
             "Strata 0.2.7 / engine 0.1.52: 16K OMP 284 prompt / 5.31 decode tok/s, 48G cap / 36 GiB cache; all checks pass.\n"

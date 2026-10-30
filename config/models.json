@@ -185,8 +185,8 @@
       "donor_filename": "Ternary-Bonsai-2-27B-PQ2_0-MTP-Q8_0.gguf"
     }
   },
-  "deepseek-v4.1-1017-iq1-m": {
-    "alias": "deepseek-v4.1-1017-iq1-m",
+  "deepseek-v4.1-1017-iq1-s": {
+    "alias": "deepseek-v4.1-1017-iq1-s",
     "runtime": "strata",
     "context": 262144
   },

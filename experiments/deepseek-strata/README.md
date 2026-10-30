@@ -1,12 +1,16 @@
-# DeepSeek 1017 IQ1_M on SSD
+# DeepSeek 1017 UD-IQ1_S on SSD
 
 The active backend uses official [Strata](https://github.com/Niko1221/Strata).
 The API source is pinned to the 0.2.7.1 tag, commit
 `46c152a1310f77cd2f0ce2c7cd213962df14fe83` (Control 0.1.53).
-The native engine is the signed Linux CUDA 13 package `strata-dsv41` 0.1.52.
+The native engine is the signed Linux CUDA 13 package `strata-dsv41` 0.1.54.
 The API and engine use upstream
-code without local inference patches. The five existing ISTA GSQ-RCO IQ1_M
-and IQ4_NL Engram GGUF files retain their published SHA-256 values.
+code without local inference patches. The older server avoids the
+[0.2.8 parser regression](../../docs/strata-0.2.8-review.md).
+The weights are Unsloth Dynamic V3.1 UD-IQ1_S at revision
+`8a6ec9cf118e785a362ea94ee123c61c70553be6`. All five files have pinned
+SHA-256 values. The last shard contains the IQ4_NL Engram table.
+The complete download is 232,979,608,420 bytes, about 217 GiB.
 
 The default model profile has 256K context capacity, a hard 64 GiB RAM cap,
 a 36 GiB expert RAM cache, 4096-token prefill chunks, four CPU expert threads,
@@ -16,6 +20,8 @@ passes `--experts 6`. The five-expert Faster mode is off. These defaults
 leave RAM for other programs and for buffers and charged file cache inside
 the process cap.
 
+All existing performance measurements used the previous ISTA GSQ-RCO IQ1_M
+weights. They do not measure the new Unsloth weights.
 The performance measurements under the historical heading came from Abyss.
 Do not use them as stock Strata performance results. Filled 256K context
 remains unverified.
@@ -66,7 +72,7 @@ child processes. The normal server does not monitor free Windows RAM.
 `--no-offload` cannot fit these weights on this GPU. Bonsai MTP, llama.cpp
 KV cache, and Flint expert-cache controls do not apply to this runtime.
 
-## Stock startup checks
+## Historical stock startup checks with GSQ IQ1_M
 
 At 256K capacity, the stock automatic 8192-token prefill chunk left 0.58 GB
 of GPU expert weights, or 79 experts. A 512-token chunk left 3.24 GB, or
@@ -78,8 +84,8 @@ The first guarded API runs used 36 GiB and 20 GiB expert caches. They reached
 37,223 MiB and 20,918 MiB of charged process-scope RAM. Windows free RAM
 crossed the 8 GiB floor, so the guard stopped both runs. Neither recorded
 an OOM event. A concurrent `bench-huge-list` process used about 37 GiB of
-RAM during these checks. It was left unchanged. The profile now defaults
-to the smaller 8 GiB cache. That short OMP check passed.
+RAM during these checks. It was left unchanged. That configuration used
+the smaller 8 GiB cache. Its short OMP check passed.
 
 ## Official runtime and API
 
@@ -90,8 +96,8 @@ It uses the bundled CUDA libraries from the official prebuilt engine.
 It does not use the old Abyss or Project Maya checkouts, local patches,
 GGML build, compiler tools, or the Dory private CUDA toolkit.
 
-The isolated Python environment has three pinned packages: Jinja2,
-MarkupSafe, and regex. The selected serving and tokenizer paths do not need
+The isolated Python environment has four pinned packages: Jinja2,
+MarkupSafe, regex, and psutil. The selected serving and tokenizer paths do not need
 the full Strata desktop dependency set. The packer uses the Python standard
 library. The installer uses `uv` to create this environment.
 
@@ -158,17 +164,17 @@ It does not contain conversation text.
 
 ## Storage and lifecycle
 
-The five original files occupy 231,316,411,072 bytes, or 215.43 GiB.
-The four backbone files occupy 120.72 GB. The shared IQ4_NL Engram file
+The five files occupy 232,979,608,420 bytes, or about 217 GiB.
+The first four shards occupy 122.38 GB. The IQ4_NL Engram shard
 occupies 110.60 GB. The directory is
-`/home/tritlo/Code/local-models/models/deepseek41-1017-ista-iq1-m`.
+`/home/tritlo/Code/local-models/models/deepseek41-1017-unsloth-iq1-s`.
 This uses WSL's ext4 filesystem in the existing C: virtual disk.
 
 The stock packer creates `ds4.txt`, `tensors.txt`, `engram.bin`, and five
 files in `tokenizer/`. A separate receipt records their checksums.
 `tensors.txt` points to the existing GGUF files and tensor offsets.
 The packer reads those files without changing or requantizing their weights.
-It reads the ISTA Engram hash tensors directly. It does not use the former
+It reads the Engram metadata directly. It does not use the former
 Abyss BF16 conversion pack or `--dense-override` and `--skip-tensors`.
 
 `localmodel fetch deepseek` installs the pinned runtime, resumes missing

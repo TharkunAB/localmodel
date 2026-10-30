@@ -1,4 +1,4 @@
-"""Manage the pinned DeepSeek IQ1_M files and the reviewed Strata server."""
+"""Manage the pinned DeepSeek UD-IQ1_S files and the reviewed Strata server."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ from typing import Any, cast
 from project_paths import CAPPED, read_manifest
 
 ROOT = Path(__file__).resolve().parent
-NAME = "deepseek-v4.1-1017-iq1-m"
+NAME = "deepseek-v4.1-1017-iq1-s"
 HERE = ROOT / "experiments/deepseek-strata"
 PYTHON = Path(read_manifest(HERE / "manifest.json")["runtime"]["venv"]) / "bin/python"
 SOURCE = Path(read_manifest(HERE / "manifest.json")["source_directory"])
@@ -36,9 +36,9 @@ def manifest() -> dict[str, Any]:
 def directory() -> Path:
     """Use the managed native Linux directory. Reject directory links."""
     parent = ROOT / "models"
-    path = parent / "deepseek41-1017-ista-iq1-m"
-    if parent.is_symlink() or path.is_symlink():
-        raise RuntimeError("The DeepSeek model directory must not be a symbolic link.")
+    path = Path(manifest()["model_directory"])
+    if path.parent != parent or parent.is_symlink() or path.is_symlink():
+        raise RuntimeError("Use a regular DeepSeek directory directly inside models.")
     return path
 
 
@@ -144,15 +144,13 @@ def fetch() -> None:
                             str(HERE / "fetch.py"), "--directory", str(directory()), "--run"], env=env, check=True)
             (directory() / "verification.json").write_text(json.dumps(verification_receipt(), indent=2) + "\n")
         else:
-            print("DeepSeek IQ1_M is already installed. Checksum receipt matches all five files.", flush=True)
+            print("DeepSeek UD-IQ1_S is already installed. Checksum receipt matches all five files.", flush=True)
         pack = directory() / "strata-pack"
         if not (pack / "localmodel-pack.json").is_file():
-            first = directory() / manifest()["files"][0]["name"]
             subprocess.run([str(CAPPED), "--mem", "4G", "--time", "10m", str(PYTHON),
                             str(PACK_SOURCE / "tools/dsv41/pack_gguf.py"), "--model", str(directory()),
-                            "--out", str(pack), "--shards", *[item["name"] for item in manifest()["files"][:4]],
-                            "--engram", str(directory() / manifest()["files"][4]["name"]),
-                            "--engram-meta", str(first)], env=env, check=True)
+                            "--out", str(pack), "--shards", *[item["name"] for item in manifest()["files"]]],
+                           env=env, check=True)
             record = {"model_revision": manifest()["model_revision"], "source_revision": manifest().get("pack_source_revision", manifest()["source_revision"]),
                       "files": {str(path.relative_to(pack)): hashlib.sha256(path.read_bytes()).hexdigest()
                                 for path in pack.rglob("*") if path.is_file() and str(path.relative_to(pack)) in PACK_ASSETS}}
@@ -204,7 +202,7 @@ def remove(dry_run: bool = False) -> None:
 def settings(args: argparse.Namespace, item: dict[str, Any]) -> dict[str, Any]:
     """Generate the reviewed server settings from explicit launcher controls."""
     if args.no_offload:
-        raise RuntimeError("DeepSeek IQ1_M needs RAM and SSD experts on this GPU. --no-offload cannot fit its weights.")
+        raise RuntimeError("DeepSeek UD-IQ1_S needs RAM and SSD experts on this GPU. --no-offload cannot fit its weights.")
     if args.runtime != "stock" or args.speculative != "none" or args.prompt_lookup:
         raise RuntimeError("This Strata profile uses its pinned runtime with speculation off.")
     if args.cache_ram is not None or args.kv_cache or args.kv_mean_center or args.cpu_offload_gb or args.kv_offload_gb:

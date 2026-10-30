@@ -251,12 +251,15 @@ The 128K and 256K settings are capacities, not filled workload validations.
 
 ## DeepSeek 1017 with SSD experts
 
-`deepseek` selects ISTA GSQ-RCO IQ1_M and official
+`deepseek` selects Unsloth Dynamic V3.1 UD-IQ1_S and official
 [Strata](https://github.com/Niko1221/Strata). The API source is pinned to
 the 0.2.7.1 tag (Control 0.1.53). The signed CUDA engine is `strata-dsv41` 0.1.54
 from Strata 0.2.8. The older server avoids a tool-parser regression.
 The source CLI still reports product version 0.2.7 and build 0.1.53.
-See the [update review](strata-0.2.8-review.md). The new engine is not benchmarked here.
+See the [update review](strata-0.2.8-review.md).
+The new weights are pinned to `8a6ec9cf118e785a362ea94ee123c61c70553be6`.
+The following measurements used the previous ISTA GSQ-RCO IQ1_M weights.
+They do not measure the new Unsloth weights.
 Both Strata profiles use a 64 GiB process cap after the WSL memory increase.
 With engine 0.1.52, the 64 GiB DeepSeek repeat passed the 16K OMP checks at 264.7 prompt and
 5.15 decode tokens/s, with a 47.58 GiB peak. It did not show a speed gain.
@@ -269,8 +272,8 @@ decode 5.31 tokens/s. This is one sampled run. See the
 [comparison](../results/strata-027-20261027/comparison.json).
 The installation uses four pinned Python packages. It does not use Abyss
 patches, a compiler, or the private CUDA toolkit from the Dory setup.
-The five original GGUF files use 215.43 GiB on native WSL storage on C:.
-The model directory is `models/deepseek41-1017-ista-iq1-m`.
+The five Unsloth GGUF files use about 217 GiB on native WSL storage on C:.
+The model directory is `models/deepseek41-1017-unsloth-iq1-s`.
 Bonsai remains the default when you omit the model name.
 
 Stop the current model before switching. Keep SearXNG running. Use these

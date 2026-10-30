@@ -1,4 +1,4 @@
-"""Download the pinned IQ1_M files. Verify every file before use."""
+"""Download the pinned UD-IQ1_S files. Verify every file before use."""
 
 from __future__ import annotations
 
@@ -20,12 +20,12 @@ from project_paths import read_manifest  # noqa: E402
 
 def main() -> int:
     """Fetch only the selected backbone and shared Engram file."""
+    info = read_manifest(Path(__file__).with_name("manifest.json"))
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--directory", type=Path, default=Path(__file__).resolve().parents[2] / "models/deepseek41-1017-ista-iq1-m")
+    parser.add_argument("--directory", type=Path, default=Path(info["model_directory"]))
     parser.add_argument("--run", action="store_true", help="Download files. Omit to print the plan.")
     parser.add_argument("--jobs", type=int, default=3, choices=range(1, 5), help="Parallel files (default: 3).")
     args = parser.parse_args()
-    info = read_manifest(Path(__file__).with_name("manifest.json"))
     files = cast(list[dict[str, Any]], info["files"])
     print(json.dumps({"directory": str(args.directory), "bytes": sum(int(f["size"]) for f in files),
                       "revision": info["model_revision"], "files": [f["name"] for f in files]}, indent=2), flush=True)
