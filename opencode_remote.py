@@ -72,13 +72,15 @@ def current() -> dict[str, Any]:
             f"Remote server reports {context} context tokens; using that limit instead of {CONTEXT}.",
             file=sys.stderr,
         )
+    name = model.lower().split("/")[-1]
+    mistral = name == "mistral-large-4" or name.startswith("mistral-large-4-")
     return {
         "model": model,
         "context": context,
         "output": min(OUTPUT, max(1, context // 4)),
         "base_url": base_url + "/v1",
         "temperature": 1.0,
-        "top_p": 1.0,
+        "top_p": 0.95 if mistral else 1.0,
         "reasoning_field": "reasoning_content",
     }
 

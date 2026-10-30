@@ -2,26 +2,35 @@
 
 `bin/start-remote-model.sh` is the supplied standalone rental-GPU launcher.
 It embeds Python and does not require the local harness, systemd, or
-`heavy-management`. Automatic selection serves **DeepSeek V4.1 Flash 1017**.
-Other models require an explicit profile. The legacy `qwen` profile serves
+`heavy-management`. Automatic selection serves **DeepSeek V4.1 Flash 1017**
+on supported Strata GPUs. One B300 selects **Mistral Large 4 UD-IQ1_S**
+with llama.cpp, DSpark, and 512K context. Other models require an explicit profile.
+The legacy `qwen` profile serves
 Qwen3.8-27B; the local harness uses a separate Qwen3.8-Flash-Next profile.
 
 All remote DeepSeek profiles now use the unmodified official Strata source
 `46c152a1310f77cd2f0ce2c7cd213962df14fe83` (0.2.7.1), Control 0.1.53, and signed
-CUDA 13 engine 0.1.52. The standalone file embeds the artifact pins, signature
+CUDA 13 engine 0.1.54 from Strata 0.2.8. The older server avoids a tool-parser
+regression. See the [update review](strata-0.2.8-review.md).
+The standalone file embeds the artifact pins, signature
 verification, and the same outgoing-network restriction as the local harness.
 Qwen, Flint, Ornith, and MiniMax keep their explicit llama.cpp paths.
 
 The original `start-qwen.sh` attachment has SHA-256
 `955915e9fc13bc9ba44a580285cd21a70a0c183c2fafb514e3e1c274326b8d3a`.
-The current embedded version is `2026-10-29-deepseek-strata-auto-1`.
+The current embedded version is `2026-10-30-mistral-b300-strata-1`.
 Packaging checks do not establish remote GPU inference or throughput.
 
 ## Migrate an existing DeepSeek Pod
 
-Copy the updated script onto the Pod. The quad-A40 profile now defaults to
+Copy the updated script onto the Pod. To install engine 0.1.54, stop the old
+server and run `--prepare-only --install-deps` with the same profile and root.
+Then start it with the same command without those two preparation flags.
+`--prepare-assets-only` does not update the runtime.
+
+The quad-A40 profile defaults to
 **IQ2_XS, 1M context, DSpark on, and layer counts 9,11,10,10**. It still selects
-six experts per token. After restart, the first 13 normal requests generated
+six experts per token. On engine 0.1.52, the first 13 normal requests generated
 5,302 tokens in 95.468 decode seconds: 55.5 tokens/s. The previous ordinary
 IQ2_XXS run averaged 37.1 tokens/s. These requests used different prompts and
 context lengths, so this is an observation, not a controlled comparison.
@@ -172,6 +181,40 @@ copy the current script, repeat `--prepare-only`, and start the server again.
 Refresh the browser after startup. The disk rate covers all reads visible
 to the operating system or container; it is not a per-process measurement.
 
+## Mistral on one B300
+
+`--profile auto` selects `mistral-b300` for one full B300. It uses the pinned
+Unsloth UD-IQ1_S weights and DSpark draft with a pinned upstream llama.cpp build.
+The defaults are **512K context, q8_0 KV, three draft tokens, and GPU weights**.
+The draft has no confidence head, so its confidence cutoff is zero.
+Use a CUDA development image with toolkit 12.9 or later. Allocate at least
+300 GiB of disk space for weights, the draft, source, and build files.
+
+Prepare once, then serve:
+
+```sh
+bash /workspace/start-remote-model.sh --profile mistral-b300 \
+  --root /workspace/remote-models --no-ssh --install-deps --prepare-only
+bash /workspace/start-remote-model.sh --profile mistral-b300 \
+  --root /workspace/remote-models --no-ssh
+```
+
+Preparation downloads and verifies the artifacts, then compiles llama.cpp.
+Serving checks the prepared binary, weights, and network guard. It does not
+download or compile. The server uses loopback port 8897 and the same inherited
+outgoing-connection restriction as Strata. The SSH tunnel and `omp-remote`
+commands are unchanged. OMP discovers the served 512K capacity and maps its
+`xhigh` setting to Mistral's `high` effort.
+
+The planner estimates main KV and index-cache memory from the GGUF geometry.
+It includes the draft and an 8 GiB runtime allowance. It checks actual reported
+VRAM, not the advertised 288 GB. This is a capacity estimate, not a B300 inference
+test. Use `--ctxt 256K` to reduce capacity explicitly, or `--ctxt 1M` to request
+more. `--kv f16|q8_0|q4_0`, `--draft-depth N`, and `--spec none` are explicit
+controls. An allocation failure does not select smaller weights or context.
+The official NVFP4 checkpoint does not fit the advertised single-B300 GPU and
+host memory allocation. This profile therefore uses GGUF with llama.cpp.
+
 ## Choose the Pod
 
 Use a Linux x86_64 GPU Pod with Python 3.10 or later. DeepSeek Strata uses a
@@ -183,11 +226,13 @@ libseccomp, and filesystem utilities on Debian/Ubuntu.
 The pinned native executable contains SM86, SM89, and SM120 kernels, plus
 SM120 PTX. The launcher accepts those three architectures. A newer driver
 does not supply missing engine kernels. H200 (SM90), B200 (SM100), and B300
-(SM103) therefore fail before preparation or serving. This restriction also
+(SM103) cannot use Strata. This restriction also
 applies to their legacy explicit DeepSeek profile names. No source build or
-alternate engine is selected automatically.
+alternate DeepSeek engine is selected automatically. A single B300 uses the
+separate Mistral profile described below. Multiple B300s and mixed B300
+allocations have no automatic profile.
 
-For explicit Qwen, Flint, Ornith, and MiniMax profiles, select a **CUDA development** image.
+For Mistral, Qwen, Flint, Ornith, and MiniMax profiles, select a **CUDA development** image.
 Their launcher path compiles llama.cpp on the Pod. It requires `nvcc`; a CUDA runtime
 image is insufficient. `--install-deps` installs Debian/Ubuntu build tools but
 does not install CUDA or change the NVIDIA driver. For Blackwell, the launcher
@@ -200,7 +245,8 @@ VRAM. The launcher rejects MIG/vGPU allocations. Use RunPod's CUDA compatibility
 filter for the selected image. See [Choose a Pod](https://docs.runpod.io/pods/choose-a-pod)
 and [Manage Pods](https://docs.runpod.io/pods/manage-pods).
 
-`--profile auto` selects DeepSeek on every supported allocation. It uses the
+`--profile auto` selects DeepSeek on supported Strata allocations and Mistral
+on a single B300. It uses the
 detected total VRAM to make the choice stable while another server runs.
 Startup checks current free memory separately. Restrict `CUDA_VISIBLE_DEVICES`
 or use `--gpu-count` to select fewer GPUs deliberately.
@@ -222,7 +268,8 @@ That choice minimizes weight traffic; it is not a speed benchmark.
 Explicit `--quant` and `--spec` can override the choice.
 
 These examples use 46,068 MiB per A40 and 97,887 MiB per PRO 6000. Actual
-reported capacity can change a selection. Context defaults to **1M** throughout.
+reported capacity can change a selection. DeepSeek defaults to **1M** context.
+Mistral on B300 defaults to **512K**.
 
 | Visible GPUs | Automatic weights | DSpark | Capacity status |
 | --- | --- | --- | --- |
@@ -239,7 +286,8 @@ reported capacity can change a selection. Context defaults to **1M** throughout.
 | 2 RTX PRO 6000 Blackwell | GSQ IQ2_XS | On | Estimated GPU fit |
 | 3 RTX PRO 6000 Blackwell | Unsloth UD-Q3_K_XL | Off | Estimated GPU fit; draft exceeds a stage budget |
 | 4 RTX PRO 6000 Blackwell | Unsloth UD-Q8_K_XL | On | Estimated GPU fit |
-| H200, B200, or B300 | None | None | Missing kernels in the pinned engine |
+| 1 B300 | Mistral UD-IQ1_S | On, 3 draft tokens | Estimated GPU fit at 512K; separate llama.cpp runtime |
+| H200 or B200 | None | None | Missing kernels in the pinned Strata engine |
 
 These are capacity candidates, not a performance ranking. Quants from different
 publishers do not form a measured quality ranking merely from their names.

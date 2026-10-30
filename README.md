@@ -202,7 +202,10 @@ localmodel start deepseek --context 64k --mem 48G --expert-ram-gb 36
 ```
 
 Both Strata profiles use pinned control source **0.2.7.1** and signed native
-engines **0.1.52**. The DeepSeek packer remains pinned separately to 0.2.6.
+engines **0.1.54** from Strata 0.2.8. The server remains on 0.2.7.1 because
+the 0.2.8 parser can treat a quoted tool example as a tool call.
+See the [update review](docs/strata-0.2.8-review.md).
+The DeepSeek packer remains pinned separately to 0.2.6.
 Setup installs it explicitly. No native compilation is required for Strata.
 Its server and children cannot open outgoing connections; fetch and installation
 remain network-enabled. The local launcher currently accepts context sizes up
@@ -246,8 +249,10 @@ Stop SearXNG with `Ctrl-C`. The wrappers do not start models in the background.
 
 The supplied `start-qwen.sh` is tracked as
 [`bin/start-remote-model.sh`](bin/start-remote-model.sh). Automatic selection uses
-DeepSeek V4.1 Flash 1017 on pinned official Strata, with outgoing connections
-blocked. It selects weights and DSpark from the GPU capacity and defaults to
+DeepSeek V4.1 Flash 1017 on pinned official Strata for supported GPUs.
+A single B300 selects **Mistral Large 4 UD-IQ1_S**, llama.cpp, DSpark,
+and **512K context**. Both serving paths block outgoing connections.
+DeepSeek selects weights and DSpark from the GPU capacity and defaults to
 1M context. Qwen, Flint, Ornith, and MiniMax require explicit profile selection.
 All profiles serve on Pod loopback port **8897**.
 
@@ -257,7 +262,9 @@ The other profiles need a CUDA **development** image. The basic
 `ssh.runpod.io` gateway is unsuitable for this SCP/forwarding workflow.
 The pinned Strata engine supports SM86, SM89, and SM120. These include A40,
 RTX A6000, RTX 4090, RTX 5090, and RTX PRO 6000 Blackwell. H200, B200, and B300
-are rejected because this engine has no compatible kernels for those cards.
+cannot run this Strata engine. H200 and B200 are rejected. A single B300 uses
+the separate Mistral profile and requires a CUDA 12.9 or later development image.
+Its capacity estimate and launch flags are checked; GPU inference is not yet tested.
 GPU VRAM alone is insufficient: see the [RunPod selection guide](docs/runpod.md).
 For an existing DeepSeek Pod, follow its [Strata migration steps](docs/runpod.md#migrate-an-existing-deepseek-pod).
 

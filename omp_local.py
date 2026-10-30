@@ -114,6 +114,7 @@ def model_provider(status: dict[str, Any]) -> dict[str, Any]:
     output = min(int(status["output"]), context - 1)
     name = str(status["model"]).lower().split("/")[-1]
     deepseek = any(name == family or name.startswith(family + "-") for family in ("deepseek-v4.1", "deepseek-gsq"))
+    mistral = name == "mistral-large-4" or name.startswith("mistral-large-4-")
     return {
         "baseUrl": status["base_url"],
         "api": "openai-completions",
@@ -133,6 +134,7 @@ def model_provider(status: dict[str, Any]) -> dict[str, Any]:
                 "maxTokensField": "max_tokens", "supportsDeveloperRole": False,
                 "supportsStore": False, "supportsReasoningEffort": True,
                 **({"reasoningEffortMap": {"minimal": "low", "xhigh": "max"}} if deepseek else {}),
+                **({"reasoningEffortMap": {"minimal": "low", "xhigh": "high", "max": "high"}} if mistral else {}),
                 "reasoningContentField": status["reasoning_field"],
                 "streamFirstEventTimeoutMs": 3600000, "streamIdleTimeoutMs": 3600000,
                 "extraBody": {"temperature": status["temperature"], "top_p": status["top_p"]},

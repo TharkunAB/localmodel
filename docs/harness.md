@@ -153,7 +153,11 @@ OMP defaults to `xhigh` reasoning. For DeepSeek V4.1 and `deepseek-gsq-*` IDs,
 the launcher sends `max` when OMP selects `xhigh`. Pinned Strata maps both
 values to the template's effort 100. The template accepts `max` directly.
 The `minimal` selection sends `low`, which keeps thinking enabled. Other
-efforts and other model families retain their normal mapping.
+DeepSeek efforts retain their normal mapping. For Mistral Large 4, `xhigh`
+and `max` send `high`; `minimal` sends `low`. These are supported Mistral
+effort values. Mistral requests use temperature 1.0 and top-p 0.95.
+Remote discovery reads the served context capacity, including the B300
+profile's 512K default. It reserves one quarter of context for output.
 
 Compaction uses the conversation model, runs synchronously, and keeps 20000
 recent tokens. It starts at the lower of 80% of context or context minus the

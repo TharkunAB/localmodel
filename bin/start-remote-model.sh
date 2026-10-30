@@ -47,12 +47,17 @@ import urllib.request
 import uuid
 from typing import Any
 
-VERSION = '2026-10-29-deepseek-strata-auto-1'
+VERSION = '2026-10-30-mistral-b300-strata-1'
 GIB, MIB = 1024**3, 1024**2
 SOURCE = 'https://github.com/ggml-org/llama.cpp.git'
 STABLE = '620d2225cc436ab0b001e3200e590e3b286ef9ab'  # released v0.7.0
 FLINT_RUNTIME = 'a37cc46104eb50900d5ab4a9ba02a0abdac039db'  # upstream merged Flint+Jinja hex escapes
 DEEPSEEK_RUNTIME = 'b72050d03ae14bb3cb5138ecefab3f3f65157d31'  # draft PR 30817
+MISTRAL_REPO = 'unsloth/Mistral-Large-4-1T-A52B-GGUF'
+MISTRAL_REV = '1eb4373d37e76f6e7b4b8efa20e1b1ca40b3b964'
+MISTRAL_RUNTIME = '3c809f44383bcebc318b8cddd8c6d11aaa861e9b'  # upstream Mistral Large 4 and DSpark
+MISTRAL_FILES = {"UD-IQ1_S":{"UD-IQ1_S/Mistral-Large-4-1T-A52B-UD-IQ1_S-00001-of-00006.gguf":{"size":14234626,"sha256":"cbfc979f130a16684be1e590009e1e7af2503b55a20ddd019c3882ff96f3beee"},"UD-IQ1_S/Mistral-Large-4-1T-A52B-UD-IQ1_S-00002-of-00006.gguf":{"size":49120322688,"sha256":"7f0ccd0a8be5d09dc1cef920fa960a66d7afda2325581f36502a3771f25a4448"},"UD-IQ1_S/Mistral-Large-4-1T-A52B-UD-IQ1_S-00003-of-00006.gguf":{"size":49466414752,"sha256":"4a8cba991ed82f1151f607fcf34ae057e04b2abd0a71be53c9cbebd7552e805d"},"UD-IQ1_S/Mistral-Large-4-1T-A52B-UD-IQ1_S-00004-of-00006.gguf":{"size":49929252544,"sha256":"c541049313418ae3a15ab082f48a64e9f35b33ab1fe0c4be9786f7c51175c30d"},"UD-IQ1_S/Mistral-Large-4-1T-A52B-UD-IQ1_S-00005-of-00006.gguf":{"size":49989012928,"sha256":"de39417a93cb02e5f82d5b9238b164d3f904c5a9f3a30a16b6938a731a35a216"},"UD-IQ1_S/Mistral-Large-4-1T-A52B-UD-IQ1_S-00006-of-00006.gguf":{"size":34490326784,"sha256":"9fa1c8780785658e99de3cfd7234944d91d6ba67885cb2622d98f6e603bb568e"}},"UD-IQ1_M":{"UD-IQ1_M/Mistral-Large-4-1T-A52B-UD-IQ1_M-00001-of-00007.gguf":{"size":14234626,"sha256":"2e0600b84372f15cce6c5fca706acf263b0c8c1d4bf91e3da7a616488a0f5cb7"},"UD-IQ1_M/Mistral-Large-4-1T-A52B-UD-IQ1_M-00002-of-00007.gguf":{"size":49291169280,"sha256":"fdfbc285fabdbea900ba8334b763df445dbb56007b88cc11bc68f1d1202e333e"},"UD-IQ1_M/Mistral-Large-4-1T-A52B-UD-IQ1_M-00003-of-00007.gguf":{"size":49215842624,"sha256":"c5dcbe863575e07f7c8b8a2639fac1145181c169fd479db389f40bc39a604606"},"UD-IQ1_M/Mistral-Large-4-1T-A52B-UD-IQ1_M-00004-of-00007.gguf":{"size":49169674880,"sha256":"2e2e32cae1eeaf49aa2ce5ed64792835a2c0830e0e4815a792b00ed9bf4f95b4"},"UD-IQ1_M/Mistral-Large-4-1T-A52B-UD-IQ1_M-00005-of-00007.gguf":{"size":49161175424,"sha256":"1bfedbfd652f54c60b563d51544409c3c92b299b685c65f12857eaa837bd5117"},"UD-IQ1_M/Mistral-Large-4-1T-A52B-UD-IQ1_M-00006-of-00007.gguf":{"size":49159641344,"sha256":"31c7880f376dc96885daad05d62d34244156e063ec4022ec96e9b90b0cbfc947"},"UD-IQ1_M/Mistral-Large-4-1T-A52B-UD-IQ1_M-00007-of-00007.gguf":{"size":13572936384,"sha256":"a9857d367c2e4d1546134a3640908b96c9655758e6690c8f4db7683b6d386c41"}}}
+MISTRAL_DRAFT = {"name":"dspark-Mistral-Large-4-1T-A52B-Q8_0.gguf","size":2245605984,"sha256":"e28eb475d307d9541842bfc2c15db3d19af16638b98228234824e2560a03e65f"}
 # MiniMax profiles are opt-in; existing auto selection is unchanged.
 # Checked 2026-10-24 against HF API, four remote GGUF headers, and upstream source.
 MINIMAX_PROFILES = (
@@ -534,6 +539,11 @@ def qwen_tier(g: GPU) -> str | None:
 def select(gpus: list[GPU], mode: str, gpu_count: int | None) -> tuple[str, list[GPU]]:
     if not gpus:
         raise Error('No CUDA-visible GPUs')
+    if mode == 'mistral-b300' or (mode == 'auto' and any(re.search(r'\bB300\b', g.name, re.I) for g in gpus)):
+        if len(gpus) != 1 or gpu_count not in (None, 1) or not is_b300(gpus[0]):
+            raise Error('Mistral B300 requires exactly one CUDA-visible full B300 (sm_103, >=250000 MiB). '
+                        'Mixed or multiple B300 allocations need an explicit CUDA_VISIBLE_DEVICES selection.')
+        return 'mistral-b300', gpus
     ampere48 = [g for g in gpus if is_ampere_48(g)]
     pro_blackwell = [g for g in gpus if pro6000(g)]
     if mode in ('auto', 'deepseek-auto'):
@@ -675,7 +685,7 @@ class Plan:
             for key in ('kv', 'cache_ram', 'batch', 'ubatch', 'cpu_moe_layers', 'gsq_split', 'gsq_engram_device', 'minimax_split', 'reserve_bytes'):
                 out.pop(key, None)
             out.update(experimental_runtime=False, memory_estimates_not_gpu_validation=True,
-                       runtime_version='0.1.52', control_version='0.1.53',
+                       runtime_version='0.1.54', control_version='0.1.53',
                        native_template_and_parser='deepseek41', hard_ram_limit=None)
             if self.spec == 'dspark':
                 out.update(draft_source=STRATA_DSPARK, dspark_block_limit=self.depth)
@@ -1416,7 +1426,8 @@ def install_dependencies(args, mode: str) -> None:
         env = dict(os.environ, DEBIAN_FRONTEND='noninteractive')
         run(['apt-get', 'update'], env=env)
         run(['apt-get', 'install', '-y', '--no-install-recommends', 'build-essential', 'cmake',
-             'git', 'python3-venv', 'pkg-config', 'libcurl4-openssl-dev', 'ca-certificates', 'util-linux'], env=env)
+             'git', 'python3-venv', 'pkg-config', 'libcurl4-openssl-dev', 'ca-certificates', 'util-linux']
+            + (['libseccomp2'] if mode == 'mistral-b300' else []), env=env)
     missing = [x for x in ('cmake', 'git', 'c++', 'make', 'nvcc') if not shutil.which(x)]
     if missing:
         raise Error('Missing build tools: ' + ', '.join(missing) + '. Use --install-deps.')
@@ -1707,6 +1718,10 @@ def build(plan: Plan, args, env: dict[str, str]) -> tuple[Path, str]:
         if plan.profile == 'flint':
             if not (src / 'src/models/flint.cpp').is_file():
                 raise Error('Pinned runtime does not contain upstream Flint implementation')
+        if plan.profile == 'mistral-b300':
+            needed += ['--spec-draft-p-min', '--reasoning-effort', '--load-mode', '--lazy-mode']
+            if not (src / 'src/models/mistral-large4.cpp').is_file():
+                raise Error('Pinned runtime does not contain upstream Mistral Large 4 implementation')
         if plan.profile == 'ornith':
             needed += ['--chat-template-file']
         if plan.spec != 'none':
@@ -1739,6 +1754,8 @@ def hub_python(args, env: dict[str, str]) -> Path:
     return python
 
 def draft_name(plan: Plan) -> str | None:
+    if plan.profile == 'mistral-b300':
+        return MISTRAL_DRAFT['name'] if plan.spec == 'dspark' else None
     if plan.profile.startswith('minimax-'):
         return None  # separately pinned Inco AI sidecar, prepared after main shards
     if plan.spec == 'none':
@@ -1780,6 +1797,14 @@ def validate_manifest(plan: Plan, data: dict[str, Any]) -> None:
         if (main[0].get('sha256') != pinned['sha256'] or
             main[0]['size'] != pinned['size']):
             raise Error('Flint model LFS hash/size differs from the first trusted publisher revision; refusing to launch')
+    elif plan.profile == 'mistral-b300':
+        expected = {name: (f['size'], f['sha256']) for name, f in MISTRAL_FILES[plan.quant].items()}
+        if {f['path']: (f['size'], f.get('sha256')) for f in main} != expected:
+            raise Error('Mistral requires the exact pinned target shards and SHA-256 hashes')
+        shard_sequence([f['path'] for f in main])
+        if drafts and [(f['path'], f['size'], f.get('sha256')) for f in drafts] != [
+                (MISTRAL_DRAFT['name'], MISTRAL_DRAFT['size'], MISTRAL_DRAFT['sha256'])]:
+            raise Error('Mistral DSpark does not match its pinned size and SHA-256')
     elif plan.profile.startswith('minimax-'):
         pinned = {name: (f['size'], f['sha256']) for name, f in MINIMAX_FILES.items()}
         observed = {f['path']: (f['size'], f.get('sha256')) for f in main}
@@ -2299,6 +2324,9 @@ def command_for(plan: Plan, binary: Path, model: Path, draft: Path | None, templ
             # Runtime N counts physical blocks; the first THREE have dense MLPs.
             cmd += ['--n-cpu-moe', str(plan.cpu_moe_layers + 3),
                     '--threads', str(args.cpu_threads)]
+    elif plan.profile == 'mistral-b300':
+        cmd += ['--load-mode', 'mmap', '--lazy-mode', 'off', '--temp', '1.0', '--top-p', '0.95',
+                '--top-k', '0', '--reasoning-effort', plan.effort]
     elif plan.profile == 'flint':
         cmd += ['--temp', '1.0', '--top-p', '0.95', '--top-k', '20']
     elif plan.profile == 'ornith':
@@ -2318,6 +2346,8 @@ def command_for(plan: Plan, binary: Path, model: Path, draft: Path | None, templ
                 '--spec-draft-ngl', 'all', '--spec-draft-n-max', str(plan.depth),
                 '--spec-draft-n-ubatch', str(min(plan.ubatch, 128)),
                 '--spec-draft-sampling', args.draft_sampling]
+        if plan.profile == 'mistral-b300':
+            cmd += ['--spec-draft-p-min', '0']  # This draft has no confidence head.
     else:
         cmd += ['--spec-type', 'none']
     return cmd
@@ -2962,9 +2992,19 @@ def smoke_full_context(args) -> int:
 
 
 def parser() -> argparse.ArgumentParser:
-    p=argparse.ArgumentParser(prog='start-remote-model.sh', description='DeepSeek/Strata rental-GPU launcher with explicit Flint, Qwen, Ornith and MiniMax profiles.',
+    p=argparse.ArgumentParser(prog='start-remote-model.sh', description='DeepSeek/Strata and single-B300 Mistral rental-GPU launcher.',
         formatter_class=argparse.RawDescriptionHelpFormatter, allow_abbrev=False,
-        epilog='''DeepSeek profiles now use official Strata 0.2.7.1 / signed CUDA engine 0.1.52.
+        epilog='''One full B300 (sm_103) defaults to Mistral Large 4: UD-IQ1_S, 512K context,
+q8_0 KV and three-token DSpark. Explicit profile: --profile mistral-b300.
+Use --prepare-only --install-deps on a CUDA DEVELOPMENT image (CUDA >=12.9).
+Normal serving verifies local files, performs no builds/downloads, and blocks outgoing
+connections. --ctxt 1M, --quant UD-IQ1_M and --kv f16/q4_0 are explicit alternatives.
+All memory figures are estimates. Failed GPU fit does not reduce context or precision.
+Mistral uses --spec dspark/none or --dspark 0..3; its draft confidence threshold is zero.
+Mixed or multiple B300 allocations require explicit CUDA_VISIBLE_DEVICES selection.
+
+DeepSeek profiles use official Strata 0.2.7.1 / signed CUDA engine 0.1.54 from 0.2.8.
+The older server avoids a quoted-tool parser regression in the 0.2.8 frontend.
 Auto selects DeepSeek on 1..40 physical sm_86/sm_89/sm_120 GPUs with >=11000 MiB each.
 The pinned engine does not cover H200/sm_90, B200/sm_100 or B300/sm_103.
 DeepSeek defaults to 1M context. Quant selection uses total VRAM, never current GPU load.
@@ -3007,7 +3047,7 @@ all visible GPUs; --gpu-count selects the first N. Unsupported selected GPUs fai
 The Qwen profile is Qwen3.8-27B. All API endpoints bind to 127.0.0.1, default 8897.
 ''')
     p.add_argument('--version',action='version',version=VERSION)
-    p.add_argument('--profile',choices=('auto','deepseek-auto','flint','qwen','ornith','deepseek',
+    p.add_argument('--profile',choices=('auto','mistral-b300','deepseek-auto','flint','qwen','ornith','deepseek',
                    'deepseek-h200-iq2','deepseek-h200-dual-iq3','deepseek-b300-iq3',
                    'deepseek-b200-iq2','deepseek-pro6000-quad-q8',
                    *MINIMAX_PROFILES,*GSQ_PROFILES,
@@ -3033,7 +3073,7 @@ The Qwen profile is Qwen3.8-27B. All API endpoints bind to 127.0.0.1, default 88
     p.add_argument('--dflash',dest='spec',action='store_const',const='dflash',default=argparse.SUPPRESS,
                    help='Enable target-specific DFlash: existing Qwen path or pinned MiniMax DFlash2 conversion')
     p.add_argument('--dspark',type=int,metavar='N',
-                   help='Strata DSpark block limit 1..64; 0 disables. Omit to use the native block limit.')
+                   help='Strata block limit 1..64; Mistral draft count 1..3 (default 3). 0 disables.')
     p.add_argument('--dspark-conf',type=float,help='Strata DSpark confidence threshold, 0..1 (default 0.65 when enabled)')
     p.add_argument('--layer-split',help='Strata layer counts per GPU, summing to 40, or auto; quad A40 defaults to 9,11,10,10')
     p.add_argument('--no-mtp','--no-dflash',dest='no_spec',action='store_true')
@@ -3141,7 +3181,7 @@ def gsq_config(args, mode: str, chosen: list[GPU]) -> dict[str, Any]:
 
 
 # Official Strata pins and bootstrap. Serving never updates these artifacts.
-STRATA_PINS = {'source_revision': '46c152a1310f77cd2f0ce2c7cd213962df14fe83', 'source_archive_url': 'https://api.github.com/repos/Niko1221/Strata/tarball/46c152a1310f77cd2f0ce2c7cd213962df14fe83', 'source_archive_sha256': 'fae7217a8c4239c3dc7e1cae5a6e813b2b87d556840d55579e5663371d566d2f', 'source_receipt_sha256': '2b517964fba0c633ba61dcfde1d8f12730fd83b072bcb18408b5d2c9da9feb73', 'control_version': '0.1.53', 'runtime': {'release_tag': 'v0.2.7', 'version': '0.1.52', 'archive_url': 'https://github.com/Niko1221/Strata/releases/download/v0.2.7/strata-dsv41-0.1.52-linux-x86_64-cuda-cuda13.tar.gz', 'archive_sha256': 'c1b3d0ca2a575655a395ab4a2d0afc5cd731d0e5d26fbcdb955f2359dbbc1a57', 'archive_size': 444709965, 'feed_url': 'https://github.com/Niko1221/Strata/releases/download/v0.2.7/strata-feed.json', 'manifest_sha256': 'dda8e2470c8cb96bd93b2f19fd0d23d24f7e328fea820c692e5ab7829a55db1a', 'binary_sha256': '5792fd39d3ea5ad2fd82fe4e88b5a4afd2edb15c051e87d05e1a01f17679692c', 'python_packages': ['jinja2==3.1.6', 'markupsafe==3.0.3', 'regex==2026.9.10', 'psutil==7.2.2']}}
+STRATA_PINS = {'source_revision': '46c152a1310f77cd2f0ce2c7cd213962df14fe83', 'source_archive_url': 'https://api.github.com/repos/Niko1221/Strata/tarball/46c152a1310f77cd2f0ce2c7cd213962df14fe83', 'source_archive_sha256': 'fae7217a8c4239c3dc7e1cae5a6e813b2b87d556840d55579e5663371d566d2f', 'source_receipt_sha256': '2b517964fba0c633ba61dcfde1d8f12730fd83b072bcb18408b5d2c9da9feb73', 'control_version': '0.1.53', 'runtime': {'release_tag': 'v0.2.8', 'version': '0.1.54', 'archive_url': 'https://github.com/Niko1221/Strata/releases/download/v0.2.8/strata-dsv41-0.1.54-linux-x86_64-cuda-cuda13.tar.gz', 'archive_sha256': '23f4f5f184cb540641631308832d60a771325d792a0ff2bd44b5d342c6fedd80', 'archive_size': 444775208, 'feed_url': 'https://github.com/Niko1221/Strata/releases/download/v0.2.8/strata-feed.json', 'manifest_sha256': '119ee653c1bbd54d083e3da69ec6c45f41f3edd9d4e19100d816dc102d5d9113', 'binary_sha256': '4fb265e184598d039fb2eecc47c531c69999662ac85f320a7eecfcaa76c71054', 'python_packages': ['jinja2==3.1.6', 'markupsafe==3.0.3', 'regex==2026.9.10', 'psutil==7.2.2']}}
 STRATA_INSTALL_CODE = r'''
 import argparse
 import hashlib
@@ -3514,7 +3554,8 @@ def strata_draft(args) -> None:
 
 def strata_paths(args) -> tuple[Path, Path, Path]:
     """Keep the official runtime separate from all llama.cpp builds."""
-    base = Path(args.root).expanduser().absolute() / 'runtimes' / ('strata-' + STRATA_PINS['source_revision'])
+    base = Path(args.root).expanduser().absolute() / 'runtimes' / (
+        'strata-' + STRATA_PINS['source_revision'] + '-engine-' + STRATA_PINS['runtime']['version'])
     return base, base / 'venv/bin/python', base / 'source'
 
 
@@ -3570,7 +3611,7 @@ def strata_gpu_compatibility(gpus: list[GPU]) -> None:
     unsupported = [f'{g.name} (sm_{g.cc}, {g.total} MiB)' for g in gpus
                    if g.cc not in (86, 89, 120) or g.total < 11000]
     if unsupported:
-        raise Error('Pinned Strata engine 0.1.52 supports verified sm_86/sm_89/sm_120 GPUs with at least '
+        raise Error('Pinned Strata engine 0.1.54 supports verified sm_86/sm_89/sm_120 GPUs with at least '
                     '11000 MiB. Unsupported selected hardware: ' + ', '.join(unsupported) +
                     '. H200/sm_90, B200/sm_100 and B300/sm_103 are blocked before preparation. '
                     'No source build or automatic model fallback is enabled.')
@@ -3771,7 +3812,7 @@ def strata_preflight(plan: Plan, args) -> None:
 def strata_settings(plan: Plan, args) -> dict[str, Any]:
     """Use the stock DeepSeek template, parser and native device ordinals."""
     base, python, source = strata_paths(args)
-    binary = base / 'engine-dsv41' / '0.1.52-linux-x86_64-cuda-cuda13/strata-dsv41'
+    binary = base / 'engine-dsv41' / '0.1.54-linux-x86_64-cuda-cuda13/strata-dsv41'
     pack = strata_pack_path(plan)
     ordinals = list(range(len(plan.gpus)))
     selected = ','.join('GPU-' + g.uuid[4:] for g in plan.gpus)
@@ -3946,6 +3987,170 @@ def strata_main(plan: Plan, args) -> int:
         return serve(command, plan, env)
 
 
+def mistral_plan(args, gpus: list[GPU]) -> Plan:
+    """Keep the B300 checkpoint and context explicit. Do not offload experts."""
+    select(gpus, 'mistral-b300', args.gpu_count)
+    unsupported = {'--reuse', '--variant', '--reuse-engram', '--ds-source', '--gsq-engram', '--engram-ram',
+                   '--layer-split', '--tensor-split', '--cpu-moe-layers', '--dspark-conf', '--prepare-assets-only',
+                   '--expert-ram-gb', '--gpu-expert-fraction', '--vram-reserve-mib', '--prefill-chunk',
+                   '--engram-cache-mib', '--engram-threads', '--thinking-budget', '--archive-build-only'}
+    used = sorted(unsupported.intersection(args.explicit_flags))
+    if used or args.ds_source is not None:
+        raise Error('Mistral B300 does not use DeepSeek/Strata controls: ' + ', '.join(used or ['DS_SOURCE']))
+    if args.install_deps and not args.prepare_only:
+        raise Error('Mistral --install-deps requires --prepare-only; serving never installs or builds')
+    quant = args.quant or os.environ.get('MISTRAL_QUANT', 'UD-IQ1_S')
+    context = args.context if args.context is not None else parse_context(os.environ.get('MISTRAL_CONTEXT', '524288'))
+    if quant not in MISTRAL_FILES or not 4096 <= context <= 1048576:
+        raise Error('Mistral supports pinned UD-IQ1_S/UD-IQ1_M and context 4096..1048576')
+    if args.spec not in (None, 'none', 'dspark'):
+        raise Error('Mistral supports --spec dspark/none; MTP and DFlash are not configured')
+    spec = args.spec or 'dspark'
+    depth = args.draft_depth if args.draft_depth is not None else 3
+    if args.dspark is not None:
+        if args.draft_depth is not None and args.draft_depth != args.dspark:
+            raise Error('--dspark and --draft-depth disagree')
+        requested = 'dspark' if args.dspark else 'none'
+        if args.spec is not None and args.spec != requested:
+            raise Error('--spec and --dspark disagree')
+        spec, depth = requested, args.dspark
+    if args.no_spec:
+        if args.spec == 'dspark' or (args.dspark is not None and args.dspark > 0):
+            raise Error('--no-mtp/--no-dflash conflicts with explicit DSpark')
+        spec = 'none'
+    if (spec == 'dspark' and not 1 <= depth <= 3) or (args.dspark is not None and not 0 <= args.dspark <= 3):
+        raise Error('Mistral DSpark supports 1..3 draft tokens; --dspark 0 disables it')
+    if spec == 'none' and args.draft_depth not in (None, 0):
+        raise Error('--draft-depth requires DSpark')
+    effort = args.reasoning_effort or 'high'
+    if effort not in ('low', 'medium', 'high'):
+        raise Error('Mistral reasoning effort must be low/medium/high')
+    if args.ubatch > 128 or args.batch > 512:
+        raise Error('Mistral planning allowance covers --ubatch <=128 and --batch <=512')
+    ident = 'mistral-large-4-1t-a52b-b300'
+    base = Path(args.root).expanduser().absolute()
+    root = Path(os.environ.get('MISTRAL_ROOT', str(base / (ident + '-' + quant.lower())))).expanduser().absolute()
+    return Plan('mistral-b300', ident, MISTRAL_REPO, MISTRAL_REV, quant, context, args.kv or 'q8_0',
+                spec, depth if spec == 'dspark' else 0, MISTRAL_RUNTIME, 'upstream-Mistral-Large-4-DSpark',
+                sum(f['size'] for f in MISTRAL_FILES[quant].values()), 0,
+                MISTRAL_DRAFT['size'] if spec == 'dspark' else 0, 8 * GIB, root, gpus, effort,
+                args.cache_ram, args.port, args.ubatch, args.batch,
+                Path(args.model_dir).expanduser().absolute() if args.model_dir else None)
+
+
+def mistral_budget(plan: Plan, data: dict) -> dict[str, Any]:
+    """Estimate full MLA and index caches from the pinned GGUF metadata."""
+    cells = math.ceil(plan.context / 256) * 256
+    block_bytes = {'f16': 64, 'q8_0': 34, 'q4_0': 18}[plan.kv]
+    main_kv = cells * 63 * (576 // 32) * block_bytes
+    index_kv = cells * 44 * (128 // 32) * block_bytes
+    required = plan.weight_bytes + plan.draft_bytes + main_kv + index_kv + plan.reserve_bytes
+    ram_required = max(32 * GIB, (plan.cache_ram + 16384) * MIB)
+    ram_available = available_ram()
+    folder = model_folder(plan)
+    disk_required = disk_needed(folder, data['files']) + 20 * GIB
+    disk_available = shutil.disk_usage(existing_parent(folder)).free
+    return {'main_kv_bytes': main_kv, 'index_kv_bytes': index_kv,
+            'buffer_and_draft_cache_allowance_bytes': plan.reserve_bytes,
+            'gpu_required_bytes': required, 'gpu_total_bytes': plan.gpus[0].total * MIB,
+            'gpu_free_bytes': plan.gpus[0].free * MIB,
+            'gpu_total_ready': required <= plan.gpus[0].total * MIB,
+            'gpu_free_ready': required <= plan.gpus[0].free * MIB,
+            'host_required_bytes': ram_required, 'host_available_bytes': ram_available,
+            'host_ready': ram_available >= ram_required, 'disk_required_bytes': disk_required,
+            'disk_available_bytes': disk_available, 'disk_ready': disk_available >= disk_required,
+            'qualification': 'Capacity estimate only. GPU inference, 1M context and draft speed are unvalidated. '
+                             'Existing file sizes are not SHA-256 verification. No automatic context/quant fallback.'}
+
+
+def mistral_main(plan: Plan, args) -> int:
+    """Prepare explicitly, then serve local verified files with outgoing sockets blocked."""
+    global LOG
+    pins = dict(MISTRAL_FILES[plan.quant])
+    if plan.spec == 'dspark':
+        pins[MISTRAL_DRAFT['name']] = MISTRAL_DRAFT
+    data = dict(repo=plan.repo, revision=plan.revision, quant=plan.quant, spec=plan.spec, official_files=[],
+                files=[dict(path=name, size=f['size'], sha256=f['sha256'],
+                            kind='draft' if name == MISTRAL_DRAFT['name'] else 'model')
+                       for name, f in sorted(pins.items())])
+    validate_manifest(plan, data)
+    common = Path(args.root).expanduser().absolute()
+    binary = common/'runtimes'/MISTRAL_RUNTIME/'build-sm103/bin/llama-server'
+    guard = plan.root/'network_guard.py'
+    guard_code = STRATA_NETWORK_GUARD.replace('Strata', 'Mistral')
+    target = model_folder(plan)/sorted(MISTRAL_FILES[plan.quant])[0]
+    draft = model_folder(plan)/MISTRAL_DRAFT['name'] if plan.spec == 'dspark' else None
+    command = [sys.executable, '-I', '-B', str(guard), *command_for(plan, binary, target, draft, None, args)]
+    budget = mistral_budget(plan, data)
+    print(json.dumps({'plan': plan.public(), 'budget': budget, 'command': command,
+                      'outgoing_network': 'blocked by inherited seccomp policy', 'modalities': 'text-only'}, indent=2), flush=True)
+    check_storage(model_folder(plan), args.allow_network_storage)
+    if args.show_config:
+        say('Read-only Mistral preview complete. No downloads, builds, writes or service changes.')
+        return 0
+    if platform.system() != 'Linux' or platform.machine() not in ('x86_64', 'AMD64'):
+        raise Error('Mistral B300 requires Linux x86_64')
+    if not budget['host_ready'] or not budget['disk_ready']:
+        raise Error('Mistral host RAM or disk budget failed. See the exact required/available bytes above.')
+    if not args.prepare_only:
+        if not budget['gpu_free_ready']:
+            raise Error(f'Mistral needs an estimated {budget["gpu_required_bytes"]/GIB:.2f} GiB free VRAM for this context. '
+                        'Free the GPU or explicitly change --ctxt/--kv. No automatic precision/context reduction.')
+        check_port(plan.port)
+    env = {k:v for k,v in os.environ.items() if not k.startswith(('LLAMA_ARG_', 'GGML_', 'LLAMA_DSV', 'STRATA_', 'MAYA_', 'DS4_'))
+           and k not in ('PYTHONPATH', 'PYTHONHOME')}
+    env.update(CUDA_VISIBLE_DEVICES='GPU-'+plan.gpus[0].uuid[4:], HF_HOME=str(common/'hf-home'),
+               HF_HUB_DISABLE_TELEMETRY='1', HF_XET_CHUNK_CACHE_SIZE_BYTES='0')
+    if args.prepare_only:
+        install_dependencies(args, plan.profile)
+    try:
+        ctypes.CDLL('libseccomp.so.2')
+    except OSError as exc:
+        raise Error('libseccomp2 is required. Use --prepare-only --install-deps; the server was not started.') from exc
+    plan.root.mkdir(parents=True, exist_ok=True)
+    with (common/('.mistral-prepare.lock' if args.prepare_only else f'.port-{plan.port}.lock')).open('a') as port_lock, (plan.root/'.launcher.lock').open('a') as lock:
+        try:
+            fcntl.flock(port_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise Error('Another preparation or server owns this Mistral profile/API port') from exc
+        receipt = plan.root/'mistral-runtime.json'
+        identity = {'runtime': MISTRAL_RUNTIME, 'architecture': 103, 'binary': str(binary)}
+        if guard.is_symlink() or receipt.is_symlink():
+            raise Error('Mistral guard and runtime receipt must not be links')
+        if args.prepare_only:
+            built, _ = build(plan, args, env)
+            if built != binary or binary.is_symlink():
+                raise Error('Unexpected Mistral runtime binary path')
+            guard.write_text(guard_code)
+            atomic_json(receipt, {**identity, 'sha256': file_sha256(binary)})
+        if (not binary.is_file() or binary.is_symlink() or not receipt.is_file()
+                or not guard.is_file() or guard.read_text() != guard_code):
+            raise Error('Mistral runtime/guard is not prepared. Run --prepare-only first.')
+        recorded = json.loads(receipt.read_text())
+        if any(recorded.get(k) != v for k, v in identity.items()) or recorded.get('sha256') != file_sha256(binary):
+            raise Error('Mistral runtime changed after preparation; refusing to start')
+        manifest_path = plan.root/f'manifest-{plan.quant}-{plan.spec}-{plan.revision[:12]}.json'
+        if args.prepare_only:
+            atomic_json(manifest_path, data)
+        missing = any(not (model_folder(plan)/f['path']).is_file()
+                      or (model_folder(plan)/f['path']).stat().st_size != f['size'] for f in data['files'])
+        if missing and not args.prepare_only:
+            raise Error('Pinned Mistral files are missing. Run --prepare-only; serving does not download.')
+        python = hub_python(args, env) if missing else Path(sys.executable)
+        download(python, plan, manifest_path, data, args, env)
+        atomic_json(plan.root/'last-launch.json', {'launcher': VERSION, **plan.public(), 'command': command,
+                    'budget': budget, 'qualification': 'No GPU inference or throughput validation'})
+        if args.prepare_only:
+            say('Mistral runtime and pinned GGUF files prepared. No server started.\n' + shlex.join(command))
+            return 0
+        LOG = (common/'start.log').open('a', buffering=1)
+        env['HF_HUB_OFFLINE'] = '1'
+        ssh_setup(args)
+        say(f'Mistral API: http://127.0.0.1:{plan.port}/v1; server log: {plan.root/"server.log"}')
+        return serve(command, plan, env)
+
+
 def main(argv=None) -> int:
     global LOG
     if sys.version_info < (3,10):
@@ -4002,6 +4207,8 @@ def main(argv=None) -> int:
         return 0
     gpus=visible_gpus(inventory(),cuda_inventory())
     mode,chosen=select(gpus,args.profile,args.gpu_count)
+    if mode == 'mistral-b300':
+        return mistral_main(mistral_plan(args, chosen), args)
     if mode=='flash-next-fp4':
         if args.show_config:
             print(json.dumps({'profile':mode,'status':'blocked','reason':FP4_BLOCK},indent=2))
