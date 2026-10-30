@@ -6,7 +6,7 @@
   "source_revision": "46c152a1310f77cd2f0ce2c7cd213962df14fe83",
   "context": 262144,
   "memory_limit": "64G",
-  "expert_ram_budget_gib": 36,
+  "expert_ram_budget_gib": 48,
   "swap_limit": 0,
   "dspark": {
     "name": "dspark-DeepSeek-V4.1-Flash-1017-Q8_0.gguf",

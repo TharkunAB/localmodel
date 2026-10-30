@@ -189,7 +189,7 @@ localmodel start deepseek --dry-run
 localmodel start deepseek
 ```
 
-The defaults are **256K context, a 64 GiB process cap, a 36 GiB resident expert
+The defaults are **256K context, a 64 GiB process cap, a 48 GiB resident expert
 budget, 4096-token prefill chunks, four CPU expert threads, and all six active
 experts**. DSpark is optional. Allow **at least 250 GiB free**
 on a fast Linux SSD: the weights and prepared pack use about 217 GiB.

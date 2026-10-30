@@ -13,7 +13,7 @@ SHA-256 values. The last shard contains the IQ4_NL Engram table.
 The complete download is 232,979,608,420 bytes, about 217 GiB.
 
 The default model profile has 256K context capacity, a hard 64 GiB RAM cap,
-a 36 GiB expert RAM cache, 4096-token prefill chunks, four CPU expert threads,
+a 48 GiB expert RAM cache, 4096-token prefill chunks, four CPU expert threads,
 and port 8899. Swap and routed-expert skipping are off. OMP and OpenCode
 send explicit `xhigh` requests. DSpark is optional. The launcher
 passes `--experts 6`. The five-expert Faster mode is off. These defaults
@@ -49,7 +49,7 @@ These controls apply to this backend:
 | --- | --- | --- |
 | `--context` | `256k` | Maximum context capacity |
 | `--mem` | `64` | Hard process-tree RAM cap in GiB; swap disabled |
-| `--expert-ram-gb` | `36` | Expert RAM cache in GiB, inside the hard cap |
+| `--expert-ram-gb` | `48` | Expert RAM cache in GiB, inside the hard cap |
 | `--cpu-threads` | `4` | CPU expert compute threads |
 | `--gpu-expert-fraction` | `1` | Fraction from 0 to 1 of the available GPU expert budget |
 | `--vram-reserve-mib` | `700` | VRAM reserve outside model allocations |
@@ -66,7 +66,10 @@ These controls apply to this backend:
 The old `--gpu-expert-cache-gb` flag is rejected. The stock engine takes a
 fraction rather than a GiB value. `--expert-ram-gb` still uses GiB. The
 launcher converts this value to the decimal GB unit of stock `--ssd-cache`.
-The 36 GiB default becomes `--ssd-cache 38.654705664`.
+The 48 GiB default becomes `--ssd-cache 51.539607552`.
+This leaves 16 GiB inside the process cap for other allocations.
+The IQ1_S measurements below used the previous 36 GiB cache.
+The 48 GiB cache has not been benchmarked with IQ1_S.
 
 Use `--expert-ram-gb N` to change the expert cache within the 64 GiB process cap.
 Do not set the expert cache equal to the process cap. The engine also needs

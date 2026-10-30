@@ -658,7 +658,7 @@ def serve(args: argparse.Namespace, item: dict[str, Any]) -> int:
             "kv_cache": args.kv_cache or item.get("kv_cache"),
             "kv_mean_center": str(args.kv_mean_center) if args.kv_mean_center else None,
             "reasoning_effort": (args.reasoning_effort or DEFAULT_REASONING_EFFORT) if item["runtime"] in ("prism", "strata", "strata-qwen") else None,
-            "expert_ram_gb": args.expert_ram_gb if args.expert_ram_gb is not None else 36 if item["runtime"] == "strata" else 32 if item["runtime"] == "strata-qwen" else None,
+            "expert_ram_gb": args.expert_ram_gb if args.expert_ram_gb is not None else 48 if item["runtime"] == "strata" else 32 if item["runtime"] == "strata-qwen" else None,
             "cpu_threads": args.cpu_threads if args.cpu_threads is not None else 4 if item["runtime"] == "strata" else None,
             "gpu_expert_cache_gb": args.gpu_expert_cache_gb,
             "gpu_expert_fraction": args.gpu_expert_fraction,
@@ -799,7 +799,7 @@ def main() -> int:
     start.add_argument("--port", type=int, default=8899)
     start.add_argument("--mem", type=memory_size,
                        help="Hard RAM cap for the model process and its children, including Linux file cache. Bare numbers use GiB, for example --mem 32. Swap is disabled for this process tree. Omit to keep the profile cap. This does not reduce --cache-ram automatically.")
-    start.add_argument("--expert-ram-gb", type=float, help="Strata expert RAM budget in GiB, inside --mem (DeepSeek: 36 with a 64 GiB cap; Qwen: 32 with a 64 GiB cap). Separate from llama.cpp --cache-ram.")
+    start.add_argument("--expert-ram-gb", type=float, help="Strata expert RAM budget in GiB, inside --mem (DeepSeek: 48 with a 64 GiB cap; Qwen: 32 with a 64 GiB cap). Separate from llama.cpp --cache-ram.")
     start.add_argument("--cpu-threads", type=int, help="DeepSeek Strata CPU expert compute threads (default: 4; 0 uses the stock automatic count). I/O threads are separate.")
     start.add_argument("--gpu-expert-cache-gb", type=float, help="Legacy control. Official Strata requires --gpu-expert-fraction instead.")
     start.add_argument("--gpu-expert-fraction", type=float, help="DeepSeek Strata GPU expert-cache fraction, from 0 to 1, of free VRAM after dense weights and the reserve (default: stock automatic).")
