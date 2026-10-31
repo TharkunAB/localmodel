@@ -153,7 +153,7 @@ def current(port: int | None = None) -> dict[str, Any]:
         result["profile"] = managed.get("profile")
         result["pid"] = managed.get("controller_pid")
         for key in ("cpu_offload_gb", "cpu_moe_layers", "moe_cache_mib", "batch_tokens", "ubatch_tokens", "command", "runtime", "rounds", "memory_limit",
-                    "expert_ram_gb", "cpu_threads", "gpu_expert_cache_gb", "gpu_expert_fraction", "prefill_chunk", "vram_reserve_mib", "engram_cache_mib", "engram_threads", "thinking_budget"):
+                    "expert_ram_gb", "cpu_threads", "gpu_expert_cache_gb", "gpu_expert_fraction", "prefill_chunk", "vram_reserve_mib", "engram_cache_mib", "engram_threads", "thinking_budget", "strata_slots", "strata_slot_directory"):
             result[key] = managed.get(key)
         if result["backend"] == "dory":
             result["rounds"] = managed.get("rounds")
@@ -617,13 +617,24 @@ def serve(args: argparse.Namespace, item: dict[str, Any]) -> int:
         except BlockingIOError:
             raise RuntimeError("Another localmodel server is running. Stop it before switching models.") from None
         check_free(args.port)
+        strata_config: dict[str, Any] = {}
         if item["runtime"] in ("strata", "strata-qwen"):
             if item["runtime"] == "strata":
                 deepseek_strata.check_ready(args.speculative)
             else:
                 qwen_strata.check_ready()
             config_name = "qwen-server.json" if item["runtime"] == "strata-qwen" else "deepseek-server.json"
-            (STATE / config_name).write_text(json.dumps(strata.settings(args, item), indent=2) + "\n")
+            strata_config = strata.settings(args, item)
+            if item["runtime"] == "strata" and strata_config["env"]["STRATA_DS4_SLOT_KEEP"] == "1":
+                slot_directory = Path(strata_config["env"]["STRATA_DS4_SLOT_DIR"])
+                for directory in (slot_directory.parent, slot_directory):
+                    directory.mkdir(mode=0o700, exist_ok=True)
+                    descriptor = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+                    try:
+                        os.fchmod(descriptor, 0o700)
+                    finally:
+                        os.close(descriptor)
+            (STATE / config_name).write_text(json.dumps(strata_config, indent=2) + "\n")
         process = subprocess.Popen(command, env=environment, start_new_session=True)
         active = STATE / "active.json"
         active.write_text(json.dumps({"pid": process.pid, "controller_pid": os.getpid(), "profile": args.model,
@@ -659,7 +670,9 @@ def serve(args: argparse.Namespace, item: dict[str, Any]) -> int:
             "kv_mean_center": str(args.kv_mean_center) if args.kv_mean_center else None,
             "reasoning_effort": (args.reasoning_effort or DEFAULT_REASONING_EFFORT) if item["runtime"] in ("prism", "strata", "strata-qwen") else None,
             "expert_ram_gb": args.expert_ram_gb if args.expert_ram_gb is not None else 48 if item["runtime"] == "strata" else 32 if item["runtime"] == "strata-qwen" else None,
-            "cpu_threads": args.cpu_threads if args.cpu_threads is not None else 4 if item["runtime"] == "strata" else None,
+            "cpu_threads": args.cpu_threads if args.cpu_threads is not None else 12 if item["runtime"] == "strata" else None,
+            "strata_slots": strata_config.get("env", {}).get("STRATA_DS4_SLOT_KEEP") == "1" if item["runtime"] == "strata" else None,
+            "strata_slot_directory": strata_config.get("env", {}).get("STRATA_DS4_SLOT_DIR"),
             "gpu_expert_cache_gb": args.gpu_expert_cache_gb,
             "gpu_expert_fraction": args.gpu_expert_fraction,
             "prefill_chunk": (args.prefill_chunk if args.prefill_chunk is not None else 4096) if item["runtime"] == "strata" else args.prefill_chunk if item["runtime"] == "strata-qwen" else None,
@@ -727,8 +740,14 @@ def stats_text() -> str:
             "Previous 48G code/recall pass; resume used fenced JSON (strict format fail). 40G/16 GiB: 609/46.34 tok/s, all checks pass.\n"
             "Source: results/strata-027-20261027/summary.md.\n\n"
             "deepseek: Unsloth Dynamic v3.1 UD-IQ1_S, 256K capacity, native 0.1.55.\n"
-            "Default: 48 GiB expert cache, 70G process cap, no draft.\n"
-            "Full 0.2.9, 2026-10-31, 64K OMP: 5.21 decode / 419.71 prefill tok/s; peak 59.16 GiB, no swap/OOM or cap events.\n"
+            "Default: 12 CPU workers, 4096-token chunks, retained conversation slots, 48 GiB expert cache, 70G cap, no draft.\n"
+            "0.2.9 tuning, 16K OMP: four workers 5.20 decode; twelve workers 8.51-8.80 tok/s.\n"
+            "Growing 16K/32K/64K repeat: 8.07/8.28/7.82 decode tok/s; all checks pass, no tool errors. Peak 63.97 GiB, no swap/OOM/cap events.\n"
+            "DSpark2 with twelve workers: 8.38 tok/s, 84.8% acceptance; remains optional.\n"
+            "Retained-prefix replay: resume prompt time 47.15 -> 26.19 s. Restart reused 66,165 tokens, reading one new token in 0.54 s.\n"
+            "One early growing-candidate checkpoint missed required test execution after approval rejections; code/recall/resume passed.\n"
+            "See docs/deepseek-029-tuning.md for full workflow results, retries, and measurement limits.\n"
+            "Earlier four-worker 0.2.9, 2026-10-31, 64K OMP: 5.21 decode / 419.71 prefill tok/s; peak 59.16 GiB, no swap/OOM or cap events.\n"
             "Repair, 100 assertions, recall and strict resume pass; no tool errors.\n"
             "Generated 527 tokens over 5 requests; repair+resume 302.29 s. No material throughput change from 0.1.54.\n"
             "Previous native 0.1.54, 64K OMP, both with a 70G cap: 48 GiB cache 5.22 decode / 423.04 prefill tok/s; 64 GiB cache 5.48 / 425.46.\n"
@@ -816,7 +835,9 @@ def main() -> int:
     start.add_argument("--mem", type=memory_size,
                        help="Hard RAM cap for the model process and its children, including Linux file cache. Bare numbers use GiB, for example --mem 32. Swap is disabled for this process tree. Omit to keep the profile cap. This does not reduce --cache-ram automatically.")
     start.add_argument("--expert-ram-gb", type=float, help="Strata expert RAM budget in GiB, inside --mem (DeepSeek: 48 with a 70 GiB cap; Qwen: 32 with a 64 GiB cap). Separate from llama.cpp --cache-ram.")
-    start.add_argument("--cpu-threads", type=int, help="DeepSeek Strata CPU expert compute threads (default: 4; 0 uses the stock automatic count). I/O threads are separate.")
+    start.add_argument("--cpu-threads", type=int, help="DeepSeek Strata CPU expert compute threads (default: 12; 0 uses the stock automatic count). The engine can cap this at the physical core count. I/O threads are separate.")
+    start.add_argument("--strata-slots", action=argparse.BooleanOptionalAction, default=None,
+                       help="Retain DeepSeek Strata conversation checkpoints (default: on). Keeps one saved conversation in RAM and a 2 GiB disk-cache budget per weights/runtime/context configuration.")
     start.add_argument("--gpu-expert-cache-gb", type=float, help="Legacy control. Official Strata requires --gpu-expert-fraction instead.")
     start.add_argument("--gpu-expert-fraction", type=float, help="DeepSeek Strata GPU expert-cache fraction, from 0 to 1, of free VRAM after dense weights and the reserve (default: stock automatic).")
     start.add_argument("--prefill-chunk", type=int, help="Strata prefill chunk tokens (DeepSeek: 4096, minimum effective 256; Qwen: automatic unless set).")
@@ -999,6 +1020,8 @@ def main() -> int:
         parser.error("--replay requires --speculative mtp.")
     if args.mtp_chain is not None and (models[args.model]["runtime"] != "prism" or args.speculative != "mtp"):
         parser.error("--mtp-chain and --no-mtp-chain require a Prism MTP decoder.")
+    if args.strata_slots is not None and models[args.model]["runtime"] != "strata":
+        parser.error("--strata-slots and --no-strata-slots require Strata DeepSeek.")
     if models[args.model]["runtime"] not in ("strata", "strata-qwen") and any(getattr(args, key) is not None for key in
             ("expert_ram_gb", "cpu_threads", "gpu_expert_cache_gb", "gpu_expert_fraction", "prefill_chunk", "vram_reserve_mib", "engram_cache_mib", "engram_threads", "thinking_budget")):
         parser.error("These expert-cache, CPU-lane, embedding, and thinking-budget flags require the Strata DeepSeek model.")

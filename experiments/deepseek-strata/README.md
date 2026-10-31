@@ -14,7 +14,7 @@ SHA-256 values. The last shard contains the IQ4_NL Engram table.
 The complete download is 232,979,608,420 bytes, about 217 GiB.
 
 The default model profile has 256K context capacity, a hard 70 GiB RAM cap,
-a 48 GiB expert RAM cache, 4096-token prefill chunks, four CPU expert threads,
+a 48 GiB expert RAM cache, 4096-token prefill chunks, twelve CPU expert threads,
 and port 8899. Swap and routed-expert skipping are off. OMP and OpenCode
 send explicit `xhigh` requests. DSpark is optional. The launcher
 passes `--experts 6`. The five-expert Faster mode is off. These defaults
@@ -51,7 +51,8 @@ These controls apply to this backend:
 | `--context` | `256k` | Maximum context capacity |
 | `--mem` | `70` | Hard process-tree RAM cap in GiB; swap disabled |
 | `--expert-ram-gb` | `48` | Expert RAM cache in GiB, inside the hard cap |
-| `--cpu-threads` | `4` | CPU expert compute threads |
+| `--cpu-threads` | `12` | CPU expert compute threads; native code can cap this at physical cores |
+| `--strata-slots` / `--no-strata-slots` | On | Retain conversation checkpoints in RAM and on disk |
 | `--gpu-expert-fraction` | `1` | Fraction from 0 to 1 of the available GPU expert budget |
 | `--vram-reserve-mib` | `700` | VRAM reserve outside model allocations |
 | `--engram-cache-mib` | `256` | Hashed-embedding row-cache budget; zero disables |
@@ -78,6 +79,31 @@ RAM for dense weights, buffers, and charged file cache. The hard cap includes
 child processes. The normal server does not monitor free Windows RAM.
 `--no-offload` cannot fit these weights on this GPU. Bonsai MTP, llama.cpp
 KV cache, and Flint expert-cache controls do not apply to this runtime.
+
+## CPU workers and conversation checkpoints, 2026-10-31
+
+The full 0.2.9 screen reached 8.51–8.80 decode tokens/s with twelve workers.
+Four workers reached 5.20. A request for sixteen workers still used twelve on
+this VM. DSpark, a smaller prefill chunk, and a larger Engram cache did not
+improve the measured combination. See the [complete tuning report](../../docs/deepseek-029-tuning.md).
+
+OMP can replace an old file-read result with a superseded marker. This changes
+an earlier part of the prompt. Retaining a conversation checkpoint reduced one
+replayed resume's prompt time from 47.15 to 26.19 seconds.
+
+The launcher retains one saved conversation in RAM. It sets a 2 GiB disk-cache
+budget for each configuration. The native engine can keep the newest file even
+if that file exceeds the budget. Saved slots contain inference state, including
+prompt tokens. They remain under `state/deepseek-slots/` after shutdown. Directory permissions are
+0700. The directory key includes pinned weight hashes, source and packer
+revisions, the native binary hash, and context capacity. The drafter has a
+separate key. These keys prevent incompatible configurations from sharing or
+deleting each other's saved slots.
+
+`localmodel status --json` reports `strata_slots` and `strata_slot_directory`.
+Use `--no-strata-slots` to disable loading and saving these checkpoints. Existing
+cache files remain. The model's 70 GiB cap also covers the RAM used by slots.
+The outgoing-connection guard remains enabled.
 
 ## Expert cache comparison, 2026-10-30
 

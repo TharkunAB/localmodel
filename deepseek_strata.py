@@ -274,7 +274,7 @@ def settings(args: argparse.Namespace, item: dict[str, Any]) -> dict[str, Any]:
     if args.gpu_expert_cache_gb is not None:
         raise RuntimeError("Official Strata uses --gpu-expert-fraction instead of --gpu-expert-cache-gb.")
     ram = args.expert_ram_gb if args.expert_ram_gb is not None else 48
-    threads = args.cpu_threads if args.cpu_threads is not None else 4
+    threads = args.cpu_threads if args.cpu_threads is not None else 12
     reserve = args.vram_reserve_mib if args.vram_reserve_mib is not None else 700
     engram = args.engram_cache_mib if args.engram_cache_mib is not None else 256
     readers = args.engram_threads if args.engram_threads is not None else 16
@@ -286,14 +286,27 @@ def settings(args: argparse.Namespace, item: dict[str, Any]) -> dict[str, Any]:
     chunk = args.prefill_chunk if args.prefill_chunk is not None else 4096
     if chunk is not None and chunk < 1:
         raise RuntimeError("Use a positive --prefill-chunk token count.")
+    slots = args.strata_slots if getattr(args, "strata_slots", None) is not None else True
     env = {"DS4_ENGRAM_CACHE_MB": str(engram), "DS4_ENGRAM_THREADS": str(readers),
-           "STRATA_DS4_DISK_SKIP_W": "0", "STRATA_DS4_SLOT_KEEP": "0"}
+           "STRATA_DS4_DISK_SKIP_W": "0", "STRATA_DS4_SLOT_KEEP": str(int(slots))}
     budget = args.thinking_budget if args.thinking_budget is not None else 32768
     if not 0 <= budget <= 1048576:
         raise RuntimeError("Use a thinking budget from 0 to 1048576 tokens.")
     context = args.context or item["context"]
     if not 1024 <= context <= 1048576:
         raise RuntimeError("Use 1024 to 1048576 context tokens for Strata.")
+    info = manifest()
+    if slots:
+        # Keep incompatible weights, packs, runtimes, and context limits in separate directories.
+        identity = {"weights": [file["sha256"] for file in info["files"]],
+                    "draft": info["dspark"]["sha256"] if args.speculative == "dspark" else None,
+                    "source": info["source_revision"],
+                    "packer": info.get("pack_source_revision", info["source_revision"]),
+                    "native": info["runtime"]["binary_sha256"],
+                    "context": context}
+        key = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()[:24]
+        env.update(STRATA_DS4_SLOT_CAP="1", STRATA_DS4_SLOT_GB="2",
+                   STRATA_DS4_SLOT_DIR=str(ROOT / "state/deepseek-slots" / key))
     native_args = ["--pack", str(pack), "--max-context", str(context),
                    "--ssd-cache", str(ram * 2**30 / 10**9), "--cpu-threads", str(threads),
                    "--reserve-mib", str(reserve), "--dspark", "on" if args.speculative == "dspark" else "none",
@@ -304,7 +317,7 @@ def settings(args: argparse.Namespace, item: dict[str, Any]) -> dict[str, Any]:
         native_args += ["--vram-experts", str(fraction)]
     if chunk is not None:
         native_args += ["--prefill-chunk", str(chunk)]
-    runtime = manifest()["runtime"]
+    runtime = info["runtime"]
     binary = Path(runtime["directory"]) / "engine-dsv41" / f"{runtime['version']}-linux-x86_64-cuda-cuda13/strata-dsv41"
     return {"exe": str(binary), "arch": "deepseek41", "args": native_args,
             "cwd": str(SOURCE), "tokenizer": str(pack / "tokenizer"),

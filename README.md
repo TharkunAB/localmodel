@@ -201,8 +201,8 @@ localmodel start deepseek
 ```
 
 The defaults are **256K context, a 70 GiB process cap, a 48 GiB resident expert
-budget, 4096-token prefill chunks, four CPU expert threads, and all six active
-experts**. DSpark is optional. Allow **at least 250 GiB free**
+budget, 4096-token prefill chunks, twelve CPU expert threads, and all six active
+experts**. Conversation checkpoints are retained. DSpark is optional. Allow **at least 250 GiB free**
 on a fast Linux SSD: the weights and prepared pack use about 217 GiB.
 The complete three-model collection uses about 300 GiB before toolchains,
 runtimes, caches, and spare working space.
@@ -213,9 +213,25 @@ A 64 GiB cache gained only 5.1%
 decode and 0.6% prefill throughput, so the default retains more RAM headroom.
 Use `--expert-ram-gb 64` to select the larger cache. This does not test filled
 256K context. See the [64K comparison](experiments/deepseek-strata/README.md#64k-follow-up).
-The full 0.2.9 repeat reached 5.21 decode and 419.71 prefill tokens/s, with
+The earlier four-thread 0.2.9 repeat reached 5.21 decode and 419.71 prefill tokens/s, with
 59.16 GiB peak RAM. All quality checks passed. This single repeat shows no
 material throughput change. See the [update measurements](docs/strata-0.2.9-review.md#local-measurements).
+
+The 0.2.9 tuning screen reached 8.51–8.80 decode tokens/s with twelve CPU
+workers, compared with 5.20 with four. A growing 16K, 32K, and 64K OMP repeat
+passed all checks at 7.82–8.28 decode tokens/s. One earlier checkpoint missed
+required test execution after OMP rejected compound commands. Both attempts
+remain in the report. Retaining checkpoints reduced one
+replayed OMP resume's prompt time from 47.15 to 26.19 seconds. See the
+[tuning measurements and limits](docs/deepseek-029-tuning.md).
+
+Strata keeps one saved conversation in RAM. It uses a 2 GiB disk-cache budget
+per weights/runtime/context configuration under `state/deepseek-slots/`.
+The newest slot can exceed that disk budget. Cache directories are private.
+The cache contains local inference state, including prompt tokens.
+It survives a server restart.
+Use `--no-strata-slots` to disable retention. This does not delete saved files.
+Use `--cpu-threads 8` to leave more CPU capacity for other programs.
 
 Example with less RAM and context:
 
