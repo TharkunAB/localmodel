@@ -156,9 +156,20 @@ localmodel start qwen3.8
 
 Fetch also prepares the Qwen engine and MTP artifacts. The defaults are
 **256K context, a 64 GiB process cap, 32 GiB resident expert budget, INT8 KV,
-three draft tokens, and a 700 MiB VRAM reserve**. Strata's native speculation
+three draft tokens, and a 768 MiB VRAM reserve**. Strata's native speculation
 value includes the accepted token, so the launcher maps three drafts to four.
 Vision, suffix drafting, and routing priors are disabled.
+The stock 0.2.9 API enables the Linux CUDA GDN defaults through
+`STRATA_GDN_TC=1` and `STRATA_GDN_CONVL2=2`. The tensor-core path needs about
+57.5 MiB of extra GPU scratch space. See the
+[kernel review](docs/strata-0.2.9-review.md#qwen-linux-cuda-gdn-defaults).
+
+The full 0.2.9 release reached 47.95 decode and 431.28 prefill tokens/s on a
+16K OMP workload with these defaults. Code, 100 assertions, recall, and strict
+JSON resume passed. One edit request used invalid syntax and was retried.
+An earlier run with the older API failed strict formatting. These are single
+runs, not a quality guarantee or a filled-256K test. See the
+[comparison](docs/strata-0.2.9-review.md#local-measurements).
 
 The prepared model uses about **71.25 GiB**. Allow **at least 90 GiB free**
 for an initial fetch, preparation, and runtimes. The RAM cap includes more than
@@ -196,11 +207,15 @@ on a fast Linux SSD: the weights and prepared pack use about 217 GiB.
 The complete three-model collection uses about 300 GiB before toolchains,
 runtimes, caches, and spare working space.
 
-The default cache passed a 64K OMP workload at 5.22 decode and 423.04 prefill
-tokens/s. Peak process memory was 61.72 GiB. A 64 GiB cache gained only 5.1%
+On engine 0.1.54, the default cache passed a 64K OMP workload at 5.22 decode
+and 423.04 prefill tokens/s. Peak process memory was 61.72 GiB.
+A 64 GiB cache gained only 5.1%
 decode and 0.6% prefill throughput, so the default retains more RAM headroom.
 Use `--expert-ram-gb 64` to select the larger cache. This does not test filled
 256K context. See the [64K comparison](experiments/deepseek-strata/README.md#64k-follow-up).
+The full 0.2.9 repeat reached 5.21 decode and 419.71 prefill tokens/s, with
+59.16 GiB peak RAM. All quality checks passed. This single repeat shows no
+material throughput change. See the [update measurements](docs/strata-0.2.9-review.md#local-measurements).
 
 Example with less RAM and context:
 
@@ -226,11 +241,11 @@ Use `--speculative none` to unload the drafter.
 Use `localmodel remove deepseek --speculative dspark` to remove only the
 draft weights and their pack. This keeps the main model.
 
-Both Strata profiles use pinned control source **0.2.7.1** and signed native
-engines **0.1.54** from Strata 0.2.8. The server remains on 0.2.7.1 because
-the 0.2.8 parser can treat a quoted tool example as a tool call.
-See the [update review](docs/strata-0.2.8-review.md).
-The DeepSeek packer uses the same pinned 0.2.7.1 source.
+Both Strata profiles use pinned source, API, and packer **0.2.9**, Control
+**0.1.55**, and signed native engines **0.1.55**. A crafted parser example
+can still turn quoted text into a tool call. This has not been observed in
+the OMP workloads. The client must still enforce tool permissions.
+See the [update review](docs/strata-0.2.9-review.md).
 No native compilation is required for Strata.
 Its server and children cannot open outgoing connections; fetch and installation
 remain network-enabled. The local profile defaults to **262144** context

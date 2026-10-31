@@ -9,16 +9,16 @@ The legacy `qwen` profile serves
 Qwen3.8-27B; the local harness uses a separate Qwen3.8-Flash-Next profile.
 
 All remote DeepSeek profiles now use the unmodified official Strata source
-`46c152a1310f77cd2f0ce2c7cd213962df14fe83` (0.2.7.1), Control 0.1.53, and signed
-CUDA 13 engine 0.1.54 from Strata 0.2.8. The older server avoids a tool-parser
-regression. See the [update review](strata-0.2.8-review.md).
+`c62d5e3a15b40ea51c96aae9e8d36928965f53ab` (0.2.9), Control 0.1.55, and signed
+CUDA 13 engine 0.1.55. This includes the official API server and GGUF packer.
+See the [update review](strata-0.2.9-review.md) for checks and known parser behavior.
 The standalone file embeds the artifact pins, signature
 verification, and the same outgoing-network restriction as the local harness.
 Qwen, Flint, Ornith, and MiniMax keep their explicit llama.cpp paths.
 
 The original `start-qwen.sh` attachment has SHA-256
 `955915e9fc13bc9ba44a580285cd21a70a0c183c2fafb514e3e1c274326b8d3a`.
-The current embedded version is `2026-10-30-deepseek-v31-1`.
+The current embedded version is `2026-10-31-strata-029-2`.
 Packaging checks do not establish remote GPU inference or throughput.
 
 ## Migrate an existing DeepSeek Pod
@@ -42,20 +42,32 @@ bash /workspace/start-remote-model.sh --profile deepseek-a40-quad \
 
 The new five-file checkpoint needs 250.4 GB of disk space. Preparation verifies
 every file against its pinned SHA-256. It does not remove the old GSQ weights
-or restart a server. The script retains the previous parser and outgoing-network
-restriction. Mistral on one B300 still defaults to 512K.
-If the current 0.1.54 runtime is already prepared, use
+or restart a server. The script uses the official 0.2.9 parser and retains the
+outgoing-network restriction. Mistral on one B300 still defaults to 512K.
+If the full 0.2.9 runtime is already prepared, use
 `--prepare-only --prepare-assets-only` instead of `--prepare-only --install-deps`
 to stage the new weights while the old server runs. Stop it before the launch step.
 The default new weight directory is
 `/opt/qwen/deepseek-v4.1-1017-a40-quad-v31-iq1m/models/8a6ec9cf118e785a362ea94ee123c61c70553be6`.
 
-### Previous GSQ profile and rollback
+### Update an existing Strata installation
 
-Copy the updated script onto the Pod. To install engine 0.1.54, stop the old
+Copy the updated script onto the Pod. To install Strata 0.2.9, stop the old
 server and run `--prepare-only --install-deps` with the same profile and root.
 Then start it with the same command without those two preparation flags.
 `--prepare-assets-only` does not update the runtime.
+
+The source revision and native version select a separate runtime directory.
+Preparation verifies the official source, signed native files, and Python packages.
+It reuses existing verified GGUF files and the DSpark draft for the same profile
+and root. It creates a small pack index in a directory named for the new source
+revision. It does not download the weights again, requantize them, or modify the
+old pack's receipt. The previous runtime and pack remain on disk.
+
+Run preparation once after this update, even if engine 0.1.55 was already
+installed with an older API server. Serving requires the new runtime and pack.
+
+### Previous GSQ profile
 
 The explicit `deepseek-gsq-a40-quad` profile defaults to
 **IQ2_XS, 1M context, DSpark on, and layer counts 9,11,10,10**. It still selects
@@ -94,11 +106,11 @@ It is pinned to 7,976,914,240 bytes and SHA-256
 `6ba6ac1b331c540691a209e7fc97dec2a24e295acb1e755c84c7d24a4373927a`.
 
 The stock `tools/dsv41/pack_gguf.py` creates
-`strata-pack-iq2_xs-dspark` with `--dspark-gguf`, noise token 128799, and Markov
+`strata-pack-iq2_xs-dspark-<source-revision>` with `--dspark-gguf`, noise token 128799, and Markov
 rank 256. The pack receipt includes every generated index/tokenizer asset and
 the draft identity. Unknown pack entries are rejected. The pack references
 verified GGUF files; it does not copy or requantize weights. The existing
-ordinary pack remains available for rollback.
+ordinary pack remains unchanged.
 
 After you stop the previous server, start the prepared profile:
 
@@ -486,7 +498,7 @@ With `--root /workspace/remote-models`, the script uses:
 | `gsq-models/<revision>/` | Shared GSQ model files |
 | `runtimes/` | Pinned native Strata files or llama.cpp GPU-specific builds |
 | `<model-id>/strata-engine.log`, `strata-server.json` | Native DeepSeek log and API configuration |
-| `<model-directory>/strata-pack-<quant>/` | Native DeepSeek index, tokenizer, and pack receipt |
+| `<model-directory>/strata-pack-<quant>[-dspark]-<source-revision>/` | Native DeepSeek index, tokenizer, and pack receipt |
 | `download-venv-1.0.1/`, `hf-home/` | Download environment and metadata |
 | `/workspace/archive/` | Default compiled executable archives; configurable with `--archive-dir` |
 

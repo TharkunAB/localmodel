@@ -1,12 +1,13 @@
 # DeepSeek 1017 UD-IQ1_S on SSD
 
 The active backend uses official [Strata](https://github.com/Niko1221/Strata).
-The API source is pinned to the 0.2.7.1 tag, commit
-`46c152a1310f77cd2f0ce2c7cd213962df14fe83` (Control 0.1.53).
-The native engine is the signed Linux CUDA 13 package `strata-dsv41` 0.1.54.
+The API and packer source is pinned to the 0.2.9 tag, commit
+`c62d5e3a15b40ea51c96aae9e8d36928965f53ab` (Control 0.1.55).
+The native engine is the signed Linux CUDA 13 package `strata-dsv41` 0.1.55.
 The API and engine use upstream
-code without local inference patches. The older server avoids the
-[0.2.8 parser regression](../../docs/strata-0.2.8-review.md).
+code without local inference patches. The
+[update review](../../docs/strata-0.2.9-review.md) records the remaining crafted
+parser counterexample and the workload measurements.
 The weights are Unsloth Dynamic V3.1 UD-IQ1_S at revision
 `8a6ec9cf118e785a362ea94ee123c61c70553be6`. All five files have pinned
 SHA-256 values. The last shard contains the IQ4_NL Engram table.
@@ -245,10 +246,10 @@ activity and sampling enabled. They do not establish a general slowdown or
 measure a filled 256K context. Automatic compaction was disabled.
 Keep local DeepSeek drafting optional on this evidence.
 
-Both local and remote native engine pins matched the current Strata 0.2.8
-release during the requested recheck. The 0.2.7.1 frontend remains pinned
+Both local and remote native engine pins matched Strata 0.2.8
+on 2026-10-30. The 0.2.7.1 frontend remained pinned
 because the [parser regression](../../docs/strata-0.2.8-review.md) still
-reproduces in the current release. No dependency changed for the repeat.
+reproduced in that release. No dependency changed for that repeat.
 
 The local, untracked [report](../../results/deepseek-iq1s-dspark-omp-20261030/summary.md)
 contains per-request timings, context reuse, memory events, and cleanup
