@@ -663,7 +663,7 @@ def serve(args: argparse.Namespace, item: dict[str, Any]) -> int:
             "gpu_expert_cache_gb": args.gpu_expert_cache_gb,
             "gpu_expert_fraction": args.gpu_expert_fraction,
             "prefill_chunk": (args.prefill_chunk if args.prefill_chunk is not None else 4096) if item["runtime"] == "strata" else args.prefill_chunk if item["runtime"] == "strata-qwen" else None,
-            "vram_reserve_mib": (args.vram_reserve_mib if args.vram_reserve_mib is not None else 700) if item["runtime"] in ("strata", "strata-qwen") else None,
+            "vram_reserve_mib": (args.vram_reserve_mib if args.vram_reserve_mib is not None else (768 if item["runtime"] == "strata-qwen" else 700)) if item["runtime"] in ("strata", "strata-qwen") else None,
             "engram_cache_mib": (args.engram_cache_mib if args.engram_cache_mib is not None else 256) if item["runtime"] == "strata" else None,
             "engram_threads": (args.engram_threads if args.engram_threads is not None else 16) if item["runtime"] == "strata" else None,
             "thinking_budget": (args.thinking_budget if args.thinking_budget is not None else 32768) if item["runtime"] in ("strata", "strata-qwen") else None,
@@ -715,15 +715,23 @@ def stop() -> None:
 
 def stats_text() -> str:
     """Show recorded measurements without starting a model."""
-    return ("qwen3.8: IQ2_XS + MTP3, 256K capacity, 64G cap/32 GiB resident budget.\n"
-            "256K/64G, 16K OMP: 520.1 prompt / 35.49 decode tok/s; all benchmark checks pass.\n"
+    return ("qwen3.8: IQ2_XS + MTP3, native 0.1.55, 256K capacity, 64G cap/32 GiB resident budget, 768 MiB VRAM reserve.\n"
+            "Full 0.2.9, 2026-10-31, 16K OMP: 431.28 prefill / 47.95 decode tok/s; peak 64 GiB, no swap/OOM, file-cache reclaim at the cap.\n"
+            "Repair, 100 assertions, recall and strict JSON resume pass. One edit-format error recovered. No low-VRAM warning.\n"
+            "Earlier native-only update with API 0.2.7.1: 768 MiB reserve 443.07 prefill / 49.08 decode; strict resume used fenced JSON (fail).\n"
+            "That earlier API with 700 MiB reserve: 549.00 prefill / 47.19 decode; all quality checks pass, but only 468 MiB VRAM free.\n"
+            "Single passes; see docs/strata-0.2.9-review.md and results/strata-029-20261031/.\n"
+            "Previous native 0.1.52, 256K/64G, 16K OMP: 520.1 prompt / 35.49 decode tok/s; all benchmark checks pass.\n"
             "Peak 64 GiB; no swap/OOM. Linux memory monitoring only. Source: results/strata-0271-linux-guard-20261028/summary.md.\n"
             "Previous 128K capacity / 48G cap: 16K OMP 1396 prompt / 61.68 decode tok/s.\n"
             "Previous 48G code/recall pass; resume used fenced JSON (strict format fail). 40G/16 GiB: 609/46.34 tok/s, all checks pass.\n"
             "Source: results/strata-027-20261027/summary.md.\n\n"
-            "deepseek: Unsloth Dynamic v3.1 UD-IQ1_S, 256K capacity, native 0.1.54.\n"
+            "deepseek: Unsloth Dynamic v3.1 UD-IQ1_S, 256K capacity, native 0.1.55.\n"
             "Default: 48 GiB expert cache, 70G process cap, no draft.\n"
-            "64K OMP, both with a 70G cap: 48 GiB cache 5.22 decode / 423.04 prefill tok/s; 64 GiB cache 5.48 / 425.46.\n"
+            "Full 0.2.9, 2026-10-31, 64K OMP: 5.21 decode / 419.71 prefill tok/s; peak 59.16 GiB, no swap/OOM or cap events.\n"
+            "Repair, 100 assertions, recall and strict resume pass; no tool errors.\n"
+            "Generated 527 tokens over 5 requests; repair+resume 302.29 s. No material throughput change from 0.1.54.\n"
+            "Previous native 0.1.54, 64K OMP, both with a 70G cap: 48 GiB cache 5.22 decode / 423.04 prefill tok/s; 64 GiB cache 5.48 / 425.46.\n"
             "Peak RAM 61.72/70.00 GiB. Both pass repair, 100 assertions, recall and resume; no swap/OOM.\n"
             "The larger cache gained 5.1% decode and 0.6% prefill. The default uses 48 GiB to retain RAM headroom.\n"
             "16K OMP cache comparison: 48 GiB/64G cap 5.24 decode / 278.80 prefill tok/s; 64 GiB/70G cap 5.49 / 292.14.\n"
@@ -812,7 +820,7 @@ def main() -> int:
     start.add_argument("--gpu-expert-cache-gb", type=float, help="Legacy control. Official Strata requires --gpu-expert-fraction instead.")
     start.add_argument("--gpu-expert-fraction", type=float, help="DeepSeek Strata GPU expert-cache fraction, from 0 to 1, of free VRAM after dense weights and the reserve (default: stock automatic).")
     start.add_argument("--prefill-chunk", type=int, help="Strata prefill chunk tokens (DeepSeek: 4096, minimum effective 256; Qwen: automatic unless set).")
-    start.add_argument("--vram-reserve-mib", type=int, help="Strata VRAM reserve for CUDA and desktop use, in MiB (default: 700).")
+    start.add_argument("--vram-reserve-mib", type=int, help="Strata VRAM reserve for CUDA and desktop use, in MiB (DeepSeek: 700; Qwen: 768).")
     start.add_argument("--engram-cache-mib", type=int, help="DeepSeek Strata hashed-embedding row-cache budget in MiB (default: 256; 0 disables).")
     start.add_argument("--engram-threads", type=int, help="DeepSeek Strata hashed-embedding SSD read threads (default: 16).")
     start.add_argument("--thinking-budget", type=int, help="Strata chat-template thinking budget in tokens (default: 32768). Client requests can turn thinking off.")

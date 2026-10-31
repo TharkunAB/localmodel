@@ -47,7 +47,7 @@ import urllib.request
 import uuid
 from typing import Any
 
-VERSION = '2026-10-30-deepseek-v31-1'
+VERSION = '2026-10-31-strata-029-2'
 GIB, MIB = 1024**3, 1024**2
 SOURCE = 'https://github.com/ggml-org/llama.cpp.git'
 STABLE = '620d2225cc436ab0b001e3200e590e3b286ef9ab'  # released v0.7.0
@@ -690,7 +690,7 @@ class Plan:
             for key in ('kv', 'cache_ram', 'batch', 'ubatch', 'cpu_moe_layers', 'gsq_split', 'gsq_engram_device', 'minimax_split', 'reserve_bytes'):
                 out.pop(key, None)
             out.update(experimental_runtime=False, memory_estimates_not_gpu_validation=True,
-                       runtime_version='0.1.54', control_version='0.1.53',
+                       runtime_version=STRATA_PINS['runtime']['version'], control_version=STRATA_PINS['control_version'],
                        native_template_and_parser='deepseek41', hard_ram_limit=None)
             if self.spec == 'dspark':
                 out.update(draft_source=STRATA_DSPARK, dspark_block_limit=self.depth)
@@ -3010,8 +3010,8 @@ All memory figures are estimates. Failed GPU fit does not reduce context or prec
 Mistral uses --spec dspark/none or --dspark 0..3; its draft confidence threshold is zero.
 Mixed or multiple B300 allocations require explicit CUDA_VISIBLE_DEVICES selection.
 
-DeepSeek profiles use official Strata 0.2.7.1 / signed CUDA engine 0.1.54 from 0.2.8.
-The older server avoids a quoted-tool parser regression in the 0.2.8 frontend.
+DeepSeek profiles use official Strata 0.2.9 / Control 0.1.55 / signed CUDA engine 0.1.55.
+Preparation reuses verified GGUFs and builds a separate index for the pinned source.
 Auto selects DeepSeek on 1..40 physical sm_86/sm_89/sm_120 GPUs with >=11000 MiB each.
 The pinned engine does not cover H200/sm_90, B200/sm_100 or B300/sm_103.
 DeepSeek defaults to 1M context. Quant selection uses total VRAM, never current GPU load.
@@ -3192,7 +3192,7 @@ def gsq_config(args, mode: str, chosen: list[GPU]) -> dict[str, Any]:
 
 
 # Official Strata pins and bootstrap. Serving never updates these artifacts.
-STRATA_PINS = {'source_revision': '46c152a1310f77cd2f0ce2c7cd213962df14fe83', 'source_archive_url': 'https://api.github.com/repos/Niko1221/Strata/tarball/46c152a1310f77cd2f0ce2c7cd213962df14fe83', 'source_archive_sha256': 'fae7217a8c4239c3dc7e1cae5a6e813b2b87d556840d55579e5663371d566d2f', 'source_receipt_sha256': '2b517964fba0c633ba61dcfde1d8f12730fd83b072bcb18408b5d2c9da9feb73', 'control_version': '0.1.53', 'runtime': {'release_tag': 'v0.2.8', 'version': '0.1.54', 'archive_url': 'https://github.com/Niko1221/Strata/releases/download/v0.2.8/strata-dsv41-0.1.54-linux-x86_64-cuda-cuda13.tar.gz', 'archive_sha256': '23f4f5f184cb540641631308832d60a771325d792a0ff2bd44b5d342c6fedd80', 'archive_size': 444775208, 'feed_url': 'https://github.com/Niko1221/Strata/releases/download/v0.2.8/strata-feed.json', 'manifest_sha256': '119ee653c1bbd54d083e3da69ec6c45f41f3edd9d4e19100d816dc102d5d9113', 'binary_sha256': '4fb265e184598d039fb2eecc47c531c69999662ac85f320a7eecfcaa76c71054', 'python_packages': ['jinja2==3.1.6', 'markupsafe==3.0.3', 'regex==2026.9.10', 'psutil==7.2.2']}}
+STRATA_PINS = {'source_revision': 'c62d5e3a15b40ea51c96aae9e8d36928965f53ab', 'source_archive_url': 'https://api.github.com/repos/Niko1221/Strata/tarball/c62d5e3a15b40ea51c96aae9e8d36928965f53ab', 'source_archive_sha256': 'fdcc76747d0b14ae8fa4bedcda55c0e5ec9188b457a6f2e9490dff130c8c3fa4', 'source_receipt_sha256': 'd85b79920108fa9bc778358aa1411f0b1e20d7d3182fd6ee7d32c58d6d4a54a4', 'control_version': '0.1.55', 'runtime': {'release_tag': 'v0.2.9', 'version': '0.1.55', 'archive_url': 'https://github.com/Niko1221/Strata/releases/download/v0.2.9/strata-dsv41-0.1.55-linux-x86_64-cuda-cuda13.tar.gz', 'archive_sha256': '8eed51bf333bc3bc381bc3cc4daa7dbca51d612647732e6f2a63c63be4c66124', 'archive_size': 444779692, 'feed_url': 'https://github.com/Niko1221/Strata/releases/download/v0.2.9/strata-feed.json', 'manifest_sha256': 'fdaba9967a5102679c5982216ff0d756fb8507e708926fe2246200919a75c7b0', 'binary_sha256': '7e5338cee17fa9031e25220b1a28b529b2599e5757bdddd8581206d45b88df40', 'python_packages': ['jinja2==3.1.6', 'markupsafe==3.0.3', 'regex==2026.9.10', 'psutil==7.2.2']}}
 STRATA_INSTALL_CODE = r'''
 import argparse
 import hashlib
@@ -3516,8 +3516,9 @@ def strata_reusable_gsq(args, quant: str) -> bool:
 
 
 def strata_pack_path(plan: Plan) -> Path:
-    """Keep the DSpark pack separate from the ordinary decoding pack."""
-    return model_folder(plan)/('strata-pack-'+plan.quant.lower()+('-dspark' if plan.spec == 'dspark' else ''))
+    """Keep packs separate by source revision and draft setting."""
+    return model_folder(plan)/('strata-pack-'+plan.quant.lower()+('-dspark' if plan.spec == 'dspark' else '')
+                               +'-'+STRATA_PINS['source_revision'])
 
 
 def strata_draft_path(args) -> Path:
@@ -3625,7 +3626,7 @@ def strata_gpu_compatibility(gpus: list[GPU]) -> None:
     unsupported = [f'{g.name} (sm_{g.cc}, {g.total} MiB)' for g in gpus
                    if g.cc not in (86, 89, 120) or g.total < 11000]
     if unsupported:
-        raise Error('Pinned Strata engine 0.1.54 supports verified sm_86/sm_89/sm_120 GPUs with at least '
+        raise Error(f"Pinned Strata engine {STRATA_PINS['runtime']['version']} supports verified sm_86/sm_89/sm_120 GPUs with at least "
                     '11000 MiB. Unsupported selected hardware: ' + ', '.join(unsupported) +
                     '. H200/sm_90, B200/sm_100 and B300/sm_103 are blocked before preparation. '
                     'No source build or automatic model fallback is enabled.')
@@ -3794,7 +3795,7 @@ def strata_plan(args, mode: str, gpus: list[GPU]) -> Plan:
         raise Error('Strata configuration effort must be none/low/medium/high. API requests may send xhigh/max; no numeric llama.cpp default is retained.')
     plan = Plan(mode, ident, repo, revision, quant, context, 'native', spec,
                 (args.dspark or 0) if spec == 'dspark' else 0, STRATA_PINS['source_revision'],
-                'official-Strata-v0.2.7.1', weights, table, STRATA_DSPARK['size'] if spec == 'dspark' else 0,
+                'official-Strata-v0.2.9', weights, table, STRATA_DSPARK['size'] if spec == 'dspark' else 0,
                 0, root, gpus, effort, 0, args.port, 0, 0,
                 Path(args.model_dir).expanduser().absolute() if args.model_dir else model_dir, engine='strata')
     if 'policy_exception' in args.strata_budget:
@@ -3830,7 +3831,7 @@ def strata_preflight(plan: Plan, args) -> None:
 def strata_settings(plan: Plan, args) -> dict[str, Any]:
     """Use the stock DeepSeek template, parser and native device ordinals."""
     base, python, source = strata_paths(args)
-    binary = base / 'engine-dsv41' / '0.1.54-linux-x86_64-cuda-cuda13/strata-dsv41'
+    binary = base / 'engine-dsv41' / f"{STRATA_PINS['runtime']['version']}-linux-x86_64-cuda-cuda13/strata-dsv41"
     pack = strata_pack_path(plan)
     ordinals = list(range(len(plan.gpus)))
     selected = ','.join('GPU-' + g.uuid[4:] for g in plan.gpus)
