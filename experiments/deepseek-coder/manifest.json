@@ -3,7 +3,7 @@
   "model_revision": "54229d38d588a66d1c6cff08af7b281b9326c656",
   "model_directory": "/home/tritlo/Code/local-models/models/deepseek41-1017-gsq-rco-coder-iq2-xxs",
   "context": 262144,
-  "memory_limit": "70G",
+  "memory_limit": "64G",
   "expert_memory": "resident",
   "expert_ram_budget_gib": 48,
   "swap_limit": 0,

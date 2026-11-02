@@ -1,7 +1,10 @@
 # DeepSeek Coder comparison on Strata 0.2.9
 
 2026-11-02. The selected `deepseek` default is ISTA GSQ-RCO Coder IQ2_XXS
-with resident expert copies and a 70 GiB process cap. The larger profile
+with resident expert copies and a 64 GiB process cap. This retains more RAM
+for other programs; the paired 70 GiB run improved decode speed by only 2%.
+Some experts remain file-backed at 64 GiB. Use `--mem 70G` for the measured
+full-residency configuration. The larger profile
 remains available as `deepseek-full`. Coder passed the OMP workload at 16K,
 32K, and 64K input. At the matched 64 GiB demand-cache settings, it decoded
 37.7% faster than the full Unsloth UD-IQ1_S control.
@@ -9,7 +12,7 @@ remains available as `deepseek-full`. Coder passed the OMP workload at 16K,
 The 70 GiB resident run held all 7,680 routed experts across RAM and VRAM.
 It decoded 13.32 tokens/s with a routing profile collected from this workload.
 The default does not install that benchmark profile. A normal cold-start
-check also achieved full residency and passed an actual `omp-local` read
+check at 70 GiB also achieved full residency and passed an actual `omp-local` read
 and strict JSON response. The Engram table remains on SSD. These results select
 a practical default; they do not establish an optimum for every workload.
 
@@ -233,7 +236,7 @@ Local raw evidence is under `results/deepseek-coder-20261102/`:
 - `cache_io.py`: read-only collector for the case artifacts.
   `cache-io-comparison.json` contains all six completed cases.
 
-The installed-default smoke used the commands in `default-smoke/command.json`
+The original 70 GiB installed-default smoke used the commands in `default-smoke/command.json`
 and `default-smoke/omp-command.json`. Startup took 44.65 seconds without an
 existing routing profile. It confirmed the 70 GiB cap, zero swap allowance,
 256K context, resident mode, retained slots, and outgoing-connection guard.

@@ -200,9 +200,10 @@ localmodel start deepseek --dry-run
 localmodel start deepseek
 ```
 
-The defaults are **256K context, a 70 GiB process cap, resident CPU experts,
+The defaults are **256K context, a 64 GiB process cap, resident CPU experts,
 4096-token prefill chunks, twelve CPU workers, and all six selected experts**.
-The measured 70 GiB configuration kept all 7,680 routed experts in RAM or VRAM.
+Some experts remain file-backed at this cap. The measured 70 GiB configuration
+kept all 7,680 routed experts in RAM or VRAM.
 Engram remains SSD-backed. Native RAM sizing retains an 8 GiB allowance for
 other process data. Less available RAM can leave some experts file-backed.
 Conversation checkpoints are retained. Coder currently runs without DSpark.
@@ -219,7 +220,8 @@ all repair, recall, and resume checks, with one recovered tool error. This run
 reused a routing profile from the earlier workload. No benchmark profile is
 installed as a default. The same resident test at 64 GiB reached **13.06 tokens/s**.
 The extra 6 GiB increased decode speed by about 2% and completed expert residency.
-Use `--mem 64G` to retain resident mode with some file-backed experts.
+The default keeps the 64 GiB cap to leave more RAM for other programs.
+Use `--mem 70G` to select the measured full-residency configuration.
 
 The matched 64 GiB demand-cache comparison averaged **11.24 decode tokens/s** for
 Coder and **8.16** for Unsloth UD-IQ1_S under the same 64 GiB cap. Coder prefill
