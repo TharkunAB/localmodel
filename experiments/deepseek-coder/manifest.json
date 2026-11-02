@@ -1,0 +1,51 @@
+{
+  "model_repository": "ISTA-DASLab/DeepSeek-V4.1-Flash-1017-GSQ-RCO-Coder-GGUF",
+  "model_revision": "54229d38d588a66d1c6cff08af7b281b9326c656",
+  "model_directory": "/home/tritlo/Code/local-models/models/deepseek41-1017-gsq-rco-coder-iq2-xxs",
+  "context": 262144,
+  "memory_limit": "70G",
+  "expert_memory": "resident",
+  "expert_ram_budget_gib": 48,
+  "swap_limit": 0,
+  "expert_count": 192,
+  "layer_count": 40,
+  "files": [
+    {
+      "name": "DeepSeek-V4.1-Flash-1017-GSQ-RCO-Coder-IQ2_XXS-00001-of-00006.gguf",
+      "size": 5780704,
+      "sha256": "108e63d27240da2d99846250727a7b282e05a7fdf2448435e81904b9a98d8a4a",
+      "url": "https://huggingface.co/ISTA-DASLab/DeepSeek-V4.1-Flash-1017-GSQ-RCO-Coder-GGUF/resolve/54229d38d588a66d1c6cff08af7b281b9326c656/IQ2_XXS/DeepSeek-V4.1-Flash-1017-GSQ-RCO-Coder-IQ2_XXS-00001-of-00006.gguf"
+    },
+    {
+      "name": "DeepSeek-V4.1-Flash-1017-GSQ-RCO-Coder-IQ2_XXS-00002-of-00006.gguf",
+      "size": 19776064960,
+      "sha256": "75079999eb3a492ad695f3466fd6a068a1cf1920980eac1c7f51406363fadf7a",
+      "url": "https://huggingface.co/ISTA-DASLab/DeepSeek-V4.1-Flash-1017-GSQ-RCO-Coder-GGUF/resolve/54229d38d588a66d1c6cff08af7b281b9326c656/IQ2_XXS/DeepSeek-V4.1-Flash-1017-GSQ-RCO-Coder-IQ2_XXS-00002-of-00006.gguf"
+    },
+    {
+      "name": "DeepSeek-V4.1-Flash-1017-GSQ-RCO-Coder-IQ2_XXS-00003-of-00006.gguf",
+      "size": 19939989696,
+      "sha256": "ea964e525922f36d3b984299c1a5bb8d896f50b9c2942364cd221c37863331f2",
+      "url": "https://huggingface.co/ISTA-DASLab/DeepSeek-V4.1-Flash-1017-GSQ-RCO-Coder-GGUF/resolve/54229d38d588a66d1c6cff08af7b281b9326c656/IQ2_XXS/DeepSeek-V4.1-Flash-1017-GSQ-RCO-Coder-IQ2_XXS-00003-of-00006.gguf"
+    },
+    {
+      "name": "DeepSeek-V4.1-Flash-1017-GSQ-RCO-Coder-IQ2_XXS-00004-of-00006.gguf",
+      "size": 19682533472,
+      "sha256": "2d95806d186597cb0ea32635c92f0b66a9a6afae1a399ff74b13aebaa4ac7a52",
+      "url": "https://huggingface.co/ISTA-DASLab/DeepSeek-V4.1-Flash-1017-GSQ-RCO-Coder-GGUF/resolve/54229d38d588a66d1c6cff08af7b281b9326c656/IQ2_XXS/DeepSeek-V4.1-Flash-1017-GSQ-RCO-Coder-IQ2_XXS-00004-of-00006.gguf"
+    },
+    {
+      "name": "DeepSeek-V4.1-Flash-1017-GSQ-RCO-Coder-IQ2_XXS-00005-of-00006.gguf",
+      "size": 12719198624,
+      "sha256": "3665b48c3bd46330780caf286ee40a087ac11499e5b7df8c943b098d10f426d4",
+      "url": "https://huggingface.co/ISTA-DASLab/DeepSeek-V4.1-Flash-1017-GSQ-RCO-Coder-GGUF/resolve/54229d38d588a66d1c6cff08af7b281b9326c656/IQ2_XXS/DeepSeek-V4.1-Flash-1017-GSQ-RCO-Coder-IQ2_XXS-00005-of-00006.gguf"
+    },
+    {
+      "name": "DeepSeek-V4.1-Flash-1017-UD-IQ1_S-00005-of-00005.gguf",
+      "size": 110595290592,
+      "sha256": "771805301e695d72d268151dfc43043581ba904298574aa879d4349cbe67b020",
+      "url": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF/resolve/8a6ec9cf118e785a362ea94ee123c61c70553be6/UD-IQ1_S/DeepSeek-V4.1-Flash-1017-UD-IQ1_S-00005-of-00005.gguf"
+    }
+  ],
+  "shared_engram_note": "The original Unsloth shard supplies the same Engram tensor payload. Its header and whole-file hash differ from the Coder release. See compatibility proof."
+}

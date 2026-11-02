@@ -190,6 +190,11 @@
     "runtime": "strata",
     "context": 262144
   },
+  "deepseek-v4.1-1017-coder-iq2-xxs": {
+    "alias": "deepseek-v4.1-1017-coder-iq2-xxs",
+    "runtime": "strata",
+    "context": 262144
+  },
   "qwen3.8": {
     "alias": "qwen3.8",
     "runtime": "strata-qwen",

@@ -30,7 +30,8 @@ STATE = ROOT / "state"
 CAPPED = ROOT / "libexec/capped"
 ALIASES = {"bonsai": "bonsai2-27b", "bonsai2": "bonsai2-27b", "bonsai-ptq2": "bonsai-pq2",
            "groot": "groot-19b", "lfm": "lfm3-1.7b", "lfm3": "lfm3-1.7b",
-           "deepseek": deepseek_strata.NAME, "deepseek-iq1-s": deepseek_strata.NAME, "strata": deepseek_strata.NAME}
+           "deepseek": deepseek_strata.CODER_NAME, "deepseek-full": deepseek_strata.NAME,
+           "deepseek-coder": deepseek_strata.CODER_NAME, "deepseek-iq1-s": deepseek_strata.NAME, "strata": deepseek_strata.CODER_NAME}
 DEFAULT_CACHE_RAM_MIB = 32768
 DEFAULT_REASONING_EFFORT = "xhigh"
 DEFAULT_START_MODEL = "27b-256k-optimized"
@@ -110,7 +111,7 @@ def endpoint(port: int) -> dict[str, Any]:
     model = str(info["id"])
     context = info.get("max_model_len")
     backend = "dory" if context is not None and "dory" in str(info.get("root", model)).lower() else "llamacpp"
-    if model in (deepseek_strata.NAME, qwen_strata.NAME):
+    if model in (*deepseek_strata.NAMES, qwen_strata.NAME):
         backend = "strata"
     if context is None:
         props = request(port, "/props")
@@ -153,7 +154,7 @@ def current(port: int | None = None) -> dict[str, Any]:
         result["profile"] = managed.get("profile")
         result["pid"] = managed.get("controller_pid")
         for key in ("cpu_offload_gb", "cpu_moe_layers", "moe_cache_mib", "batch_tokens", "ubatch_tokens", "command", "runtime", "rounds", "memory_limit",
-                    "expert_ram_gb", "cpu_threads", "gpu_expert_cache_gb", "gpu_expert_fraction", "prefill_chunk", "vram_reserve_mib", "engram_cache_mib", "engram_threads", "thinking_budget", "strata_slots", "strata_slot_directory"):
+                    "expert_memory", "expert_ram_gb", "cpu_threads", "gpu_expert_cache_gb", "gpu_expert_fraction", "prefill_chunk", "vram_reserve_mib", "engram_cache_mib", "engram_threads", "thinking_budget", "strata_slots", "strata_slot_directory"):
             result[key] = managed.get(key)
         if result["backend"] == "dory":
             result["rounds"] = managed.get("rounds")
@@ -169,7 +170,7 @@ def installed(name: str, item: dict[str, Any]) -> bool:
     if item.get("runtime") == "strata-qwen":
         return qwen_strata.installed()
     if item.get("runtime") == "strata":
-        return deepseek_strata.installed()
+        return deepseek_strata.installed(model=name)
     if name == "dory":
         snapshots = ROOT / "dory/.cache/huggingface/hub/models--nvidia--NVIDIA-Nemotron-Labs-Dory1.0-4B-NVFP4/snapshots"
         return any(snapshots.glob("*/*.safetensors"))
@@ -217,7 +218,7 @@ def fetch(name: str, item: dict[str, Any], speculative: str = "none", mtp_head: 
         qwen_strata.fetch()
         return
     if item["runtime"] == "strata":
-        deepseek_strata.fetch(speculative)
+        deepseek_strata.fetch(speculative, model=name)
         return
     if name == "dory":
         with (STATE / "models-dory.lock").open("w") as lock:
@@ -276,8 +277,8 @@ def remove(name: str, speculative: str = "none", dry_run: bool = False, mtp_head
     if name == qwen_strata.NAME:
         qwen_strata.remove(dry_run)
         return
-    if name == deepseek_strata.NAME:
-        deepseek_strata.remove(dry_run, speculative)
+    if name in deepseek_strata.NAMES:
+        deepseek_strata.remove(dry_run, speculative, model=name)
         return
     if name == "dory":
         hub = ROOT / "dory/.cache/huggingface/hub"
@@ -620,7 +621,7 @@ def serve(args: argparse.Namespace, item: dict[str, Any]) -> int:
         strata_config: dict[str, Any] = {}
         if item["runtime"] in ("strata", "strata-qwen"):
             if item["runtime"] == "strata":
-                deepseek_strata.check_ready(args.speculative)
+                deepseek_strata.check_ready(args.speculative, model=args.model)
             else:
                 qwen_strata.check_ready()
             config_name = "qwen-server.json" if item["runtime"] == "strata-qwen" else "deepseek-server.json"
@@ -669,7 +670,8 @@ def serve(args: argparse.Namespace, item: dict[str, Any]) -> int:
             "kv_cache": args.kv_cache or item.get("kv_cache"),
             "kv_mean_center": str(args.kv_mean_center) if args.kv_mean_center else None,
             "reasoning_effort": (args.reasoning_effort or DEFAULT_REASONING_EFFORT) if item["runtime"] in ("prism", "strata", "strata-qwen") else None,
-            "expert_ram_gb": args.expert_ram_gb if args.expert_ram_gb is not None else 48 if item["runtime"] == "strata" else 32 if item["runtime"] == "strata-qwen" else None,
+            "expert_memory": strata_config.get("expert_memory") if item["runtime"] == "strata" else None,
+            "expert_ram_gb": strata_config.get("expert_ram_gb") if item["runtime"] == "strata" else args.expert_ram_gb if args.expert_ram_gb is not None else 32 if item["runtime"] == "strata-qwen" else None,
             "cpu_threads": args.cpu_threads if args.cpu_threads is not None else 12 if item["runtime"] == "strata" else None,
             "strata_slots": strata_config.get("env", {}).get("STRATA_DS4_SLOT_KEEP") == "1" if item["runtime"] == "strata" else None,
             "strata_slot_directory": strata_config.get("env", {}).get("STRATA_DS4_SLOT_DIR"),
@@ -739,7 +741,21 @@ def stats_text() -> str:
             "Previous 128K capacity / 48G cap: 16K OMP 1396 prompt / 61.68 decode tok/s.\n"
             "Previous 48G code/recall pass; resume used fenced JSON (strict format fail). 40G/16 GiB: 609/46.34 tok/s, all checks pass.\n"
             "Source: results/strata-027-20261027/summary.md.\n\n"
-            "deepseek: Unsloth Dynamic v3.1 UD-IQ1_S, 256K capacity, native 0.1.55.\n"
+            "deepseek / deepseek-coder: ISTA GSQ-RCO Coder IQ2_XXS, 256K capacity, native 0.1.55.\n"
+            "Default: 70G cap, resident experts, 12 workers, 4096-token chunks, retained slots, no draft.\n"
+            "70G resident: all 7680 experts in RAM/VRAM; Engram stays on SSD. Weighted decode 13.32 tok/s.\n"
+            "Prefill 497.1/669.6/767.0 and decode 13.37/13.21/13.34 tok/s at 16K/32K/64K.\n"
+            "All checks pass; one recovered tool error. Peak 70 GiB with reclaim, no swap/OOM.\n"
+            "This run reused a workload routing profile; no benchmark profile is installed by default.\n"
+            "Paired resident64G: 13.06 tok/s, 6902/7438 CPU experts in RAM; resident70G: all 7438. Extra 6G gives +2% decode.\n"
+            "2026-11-02, matched growing 16K/32K/64K OMP, 64G cap, 48 GiB expert cache, 12 workers, no draft.\n"
+            "Coder prefill 377.8/513.0/589.9 and decode 10.90/11.54/11.41 tok/s.\n"
+            "Full Unsloth control: prefill 259.9/356.0/427.5 and decode 8.04/8.25/8.23 tok/s.\n"
+            "Weighted decode 11.24 vs 8.16 tok/s; repair+resume 372.4 vs 503.5 s; generated tokens 1959 vs 1942.\n"
+            "Both passed every code/tool/recall/resume check with no tool errors. Both reached 64 GiB with reclaim, no swap/OOM.\n"
+            "Cold routing profiles and fresh slots; single sampled trajectories. No filled-256K or automatic-compaction test.\n"
+            "See docs/deepseek-coder-comparison.md for methods, memory modes, and quality limits.\n\n"
+            "deepseek-full: Unsloth Dynamic v3.1 UD-IQ1_S, 256K capacity, native 0.1.55.\n"
             "Default: 12 CPU workers, 4096-token chunks, retained conversation slots, 48 GiB expert cache, 70G cap, no draft.\n"
             "0.2.9 tuning, 16K OMP: four workers 5.20 decode; twelve workers 8.51-8.80 tok/s.\n"
             "Growing 16K/32K/64K repeat: 8.07/8.28/7.82 decode tok/s; all checks pass, no tool errors. Peak 63.97 GiB, no swap/OOM/cap events.\n"
@@ -788,7 +804,7 @@ def stats_text() -> str:
 def main() -> int:
     """Parse model management and discovery commands."""
     help_tail = (f"Start defaults to {DEFAULT_START_MODEL}. Explicit flags override preset settings.\n"
-                 "Models: bonsai2-27b, bonsai2-9b, qwen3.8, deepseek, flint, groot, lfm, dory, dory-gguf.\n"
+                 "Models: bonsai2-27b, bonsai2-9b, qwen3.8, deepseek, deepseek-coder, deepseek-full, flint, groot, lfm, dory, dory-gguf.\n"
                  "Use localmodel list for installed profiles and localmodel presets for named settings.\n"
                  "Use localmodel start --help for flags and localmodel start MODEL --dry-run to preview a launch.\n"
                  "Use localmodel --stats for recorded measurements and their limitations.")
@@ -834,7 +850,10 @@ def main() -> int:
     start.add_argument("--port", type=int, default=8899)
     start.add_argument("--mem", type=memory_size,
                        help="Hard RAM cap for the model process and its children, including Linux file cache. Bare numbers use GiB, for example --mem 32. Swap is disabled for this process tree. Omit to keep the profile cap. This does not reduce --cache-ram automatically.")
-    start.add_argument("--expert-ram-gb", type=float, help="Strata expert RAM budget in GiB, inside --mem (DeepSeek: 48 with a 70 GiB cap; Qwen: 32 with a 64 GiB cap). Separate from llama.cpp --cache-ram.")
+    start.add_argument("--expert-memory", choices=("cache", "resident"),
+                       help="DeepSeek CPU expert storage (default: profile). cache uses --expert-ram-gb. resident copies variable-size experts within the native RAM allowance, with an 8 GiB margin. Remaining experts and Engram can still use SSD.")
+    start.add_argument("--expert-ram-gb", type=float,
+                       help="Strata expert demand-cache budget in GiB, inside --mem (DeepSeek: 48; Qwen: 32). With --expert-memory resident, omit this flag or use 0. Separate from llama.cpp --cache-ram.")
     start.add_argument("--cpu-threads", type=int, help="DeepSeek Strata CPU expert compute threads (default: 12; 0 uses the stock automatic count). The engine can cap this at the physical core count. I/O threads are separate.")
     start.add_argument("--strata-slots", action=argparse.BooleanOptionalAction, default=None,
                        help="Retain DeepSeek Strata conversation checkpoints (default: on). Keeps one saved conversation in RAM and a 2 GiB disk-cache budget per weights/runtime/context configuration.")
@@ -881,7 +900,7 @@ def main() -> int:
     start.add_argument("--mma-decode-min-kv", type=int,
                        help="Added native Bonsai wide-GQA MMA dispatch threshold (0 disables this override). Other MMA kernels remain available. Requires --runtime bonsai-native.")
     start.add_argument("--speculative", choices=("none", "mtp", "dflash", "dspark"), default="none",
-                       help="Optional draft decoder (default: none; Qwen: mtp). DSpark requires Strata DeepSeek.")
+                       help="Optional draft decoder (default: none; Qwen: mtp). DSpark requires deepseek-full.")
     start.add_argument("--draft-tokens", type=int, default=2, help="Maximum neural draft tokens per step (default: 2; Qwen: 3; DeepSeek DSpark: 5).")
     start.add_argument("--dspark-conf", type=float, help="DSpark confidence threshold, 0 to 1 (default: 0.65). Requires --speculative dspark.")
     start.add_argument("--mtp-chain", action=argparse.BooleanOptionalAction, default=None,
@@ -950,9 +969,9 @@ def main() -> int:
     if args.model not in models:
         parser.error("Unknown model. Use localmodel list.")
     if getattr(args, "speculative", "none") == "dspark" and args.model != deepseek_strata.NAME:
-        parser.error("DSpark requires the Strata DeepSeek model.")
+        parser.error("DSpark currently requires deepseek-full. It is not enabled for DeepSeek Coder.")
     if getattr(args, "dspark_conf", None) is not None and (args.model != deepseek_strata.NAME or args.speculative != "dspark"):
-        parser.error("--dspark-conf requires Strata DeepSeek with --speculative dspark.")
+        parser.error("--dspark-conf requires deepseek-full with --speculative dspark.")
     if args.model == deepseek_strata.NAME and args.action in ("start", "serve") and args.speculative == "dspark":
         if not any(arg.split("=", 1)[0] == "--draft-tokens" for arg in sys.argv[2:]):
             args.draft_tokens = 5
@@ -1020,6 +1039,8 @@ def main() -> int:
         parser.error("--replay requires --speculative mtp.")
     if args.mtp_chain is not None and (models[args.model]["runtime"] != "prism" or args.speculative != "mtp"):
         parser.error("--mtp-chain and --no-mtp-chain require a Prism MTP decoder.")
+    if args.expert_memory is not None and models[args.model]["runtime"] != "strata":
+        parser.error("--expert-memory requires Strata DeepSeek.")
     if args.strata_slots is not None and models[args.model]["runtime"] != "strata":
         parser.error("--strata-slots and --no-strata-slots require Strata DeepSeek.")
     if models[args.model]["runtime"] not in ("strata", "strata-qwen") and any(getattr(args, key) is not None for key in

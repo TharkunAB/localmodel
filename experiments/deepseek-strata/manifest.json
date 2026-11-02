@@ -6,6 +6,7 @@
   "source_revision": "c62d5e3a15b40ea51c96aae9e8d36928965f53ab",
   "context": 262144,
   "memory_limit": "70G",
+  "expert_memory": "cache",
   "expert_ram_budget_gib": 48,
   "swap_limit": 0,
   "dspark": {
