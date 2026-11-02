@@ -1,5 +1,9 @@
 # DeepSeek 1017 UD-IQ1_S on SSD
 
+This guide covers `deepseek-full`, the larger Unsloth profile. Since 2026-11-02,
+`deepseek` selects the pruned Coder profile. See the
+[Coder comparison](../../docs/deepseek-coder-comparison.md).
+
 The active backend uses official [Strata](https://github.com/Niko1221/Strata).
 The API and packer source is pinned to the 0.2.9 tag, commit
 `c62d5e3a15b40ea51c96aae9e8d36928965f53ab` (Control 0.1.55).
@@ -33,8 +37,8 @@ The advertised 1M context has not been tested here.
 Run these commands from the existing installation:
 
 ```sh
-localmodel fetch deepseek
-localmodel start deepseek
+localmodel fetch deepseek-full
+localmodel start deepseek-full
 ```
 
 Keep SearXNG running. Start `omp-local --mem 8` from the project where you
@@ -43,7 +47,7 @@ separate from the model cap. `opencode-local` can use the same API.
 Use `localmodel status --json` to inspect the current settings.
 Use `localmodel stop` when you finish or before you switch models.
 
-`localmodel start deepseek --dry-run` prints the command and configuration.
+`localmodel start deepseek-full --dry-run` prints the command and configuration.
 These controls apply to this backend:
 
 | Flag | Default | Function |
@@ -173,7 +177,7 @@ file cache. Recorded memory stalls totaled about 0.076 seconds. The 48 GiB
 cache recorded no cap events. Neither run swapped or recorded an OOM.
 The benchmark stopped both servers and all OMP workers.
 
-`localmodel start deepseek` now selects the 48 GiB expert cache.
+`localmodel start deepseek-full` now selects the 48 GiB expert cache.
 It retains the 70 GiB cap for other allocations. Use `--expert-ram-gb 64`
 to select the larger cache.
 These are single passes with sampling enabled. Different generated text and
@@ -184,18 +188,19 @@ Raw evidence is in `results/deepseek-iq1s-cache-64k-20261030/`.
 ## Optional DSpark drafter
 
 ```sh
-localmodel fetch deepseek --speculative dspark
-localmodel start deepseek --speculative dspark --draft-tokens 5
+localmodel fetch deepseek-full --speculative dspark
+localmodel start deepseek-full --speculative dspark --draft-tokens 5
 # Start without draft allocations:
-localmodel start deepseek --speculative none
+localmodel start deepseek-full --speculative none
 # Remove only the draft weights and their pack:
-localmodel remove deepseek --speculative dspark --dry-run
-localmodel remove deepseek --speculative dspark
+localmodel remove deepseek-full --speculative dspark --dry-run
+localmodel remove deepseek-full --speculative dspark
 ```
 
 The Q8_0 drafter uses 7,976,914,240 bytes on disk. Its SHA-256 is pinned.
 The draft pack has a separate receipt and does not copy the main weights.
-The normal `localmodel remove deepseek` command removes both variants.
+The normal `localmodel remove deepseek-full` command removes the full profile
+and its optional draft files. It preserves any Engram hard link held by Coder.
 
 Strata allocates draft experts before main-model experts. Some draft experts
 can remain in RAM. They remain subject to the 70 GiB process cap, but are
@@ -348,7 +353,7 @@ A policy failure prevents startup. There is no unrestricted fallback.
 The host already has libseccomp. No new Python package is required.
 File access and listening sockets are not restricted by this guard.
 
-`localmodel fetch deepseek` is a separate network operation. It downloads
+`localmodel fetch deepseek-full` is a separate network operation. It downloads
 the pinned weights and runtime. These serving restrictions do not apply to
 OMP or OpenCode tools. Those tools still need your project files and SearXNG.
 The review covers the selected source paths and package checks. It does not
@@ -386,7 +391,7 @@ The packer reads those files without changing or requantizing their weights.
 It reads the Engram metadata directly. It does not use the former
 Abyss BF16 conversion pack or `--dense-override` and `--skip-tensors`.
 
-`localmodel fetch deepseek` installs the pinned runtime, resumes missing
+`localmodel fetch deepseek-full` installs the pinned runtime, resumes missing
 weight downloads, and verifies each completed file's size and SHA-256 value.
 A file-identity receipt avoids repeated full reads while verified files stay
 unchanged. The download does not execute code from Hugging Face.
@@ -396,14 +401,14 @@ Preview model deletion before you run it:
 
 ```sh
 localmodel stop
-localmodel remove deepseek --dry-run
-localmodel remove deepseek
+localmodel remove deepseek-full --dry-run
+localmodel remove deepseek-full
 ```
 
 Removal deletes the five model files and generated pack. It keeps the
 runtime, configuration, and benchmark evidence. It rejects active use,
 unknown files, and symbolic links in the managed directory.
-Run `localmodel fetch deepseek` to restore the files.
+Run `localmodel fetch deepseek-full` to restore the files.
 
 ## Strata 0.2.6: 48 GiB and 64 GiB benchmarks
 

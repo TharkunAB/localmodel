@@ -1,5 +1,9 @@
 # DeepSeek tuning on Strata 0.2.9
 
+This report describes the full Unsloth profile, now selected with `deepseek-full`.
+Since 2026-11-02, `deepseek` selects [Coder](deepseek-coder-comparison.md).
+Historical command records below retain the names used during these runs.
+
 2026-10-31. The selected default uses 12 CPU workers and retained conversation
 checkpoints. A growing 16K, 32K, and 64K OMP repeat passed every check. One earlier
 checkpoint failed its required tool-execution check; it remains in this report.
@@ -190,7 +194,7 @@ The normal cache namespace is empty for the next launch. No weights were removed
 
 ## Selected defaults
 
-`localmodel start deepseek` now uses 12 CPU workers and retained conversation
+`localmodel start deepseek-full` uses 12 CPU workers and retained conversation
 checkpoints. It keeps 256K capacity, the 48 GiB expert cache, 70 GiB process cap,
 4096-token prefill chunks, 256 MiB Engram cache, and all six routed experts.
 DSpark remains optional because the measured draft settings did not improve

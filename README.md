@@ -188,10 +188,10 @@ examples, not claims that they outperform the defaults.
 
 ## Set up DeepSeek V4.1 Flash 1017
 
-`deepseek` selects Unsloth **Dynamic V3.1 UD-IQ1_S** with an **IQ4_NL Engram**
-table, pinned to revision `8a6ec9cf118e785a362ea94ee123c61c70553be6`.
-Strata keeps selected experts in RAM and reads other
-weights from SSD. This is how the larger model runs on the 12 GiB card.
+`deepseek` and `deepseek-coder` select **ISTA GSQ-RCO Coder IQ2_XXS**,
+pinned to revision `54229d38d588a66d1c6cff08af7b281b9326c656`.
+It retains 192 of the original 384 routed experts per layer. Strata keeps
+selected experts in VRAM and RAM and reads other weights from SSD.
 
 ```bash
 bin/setup-localmodel --strata --run
@@ -200,30 +200,50 @@ localmodel start deepseek --dry-run
 localmodel start deepseek
 ```
 
-The defaults are **256K context, a 70 GiB process cap, a 48 GiB resident expert
-budget, 4096-token prefill chunks, twelve CPU expert threads, and all six active
-experts**. Conversation checkpoints are retained. DSpark is optional. Allow **at least 250 GiB free**
-on a fast Linux SSD: the weights and prepared pack use about 217 GiB.
-The complete three-model collection uses about 300 GiB before toolchains,
-runtimes, caches, and spare working space.
+The defaults are **256K context, a 70 GiB process cap, resident CPU experts,
+4096-token prefill chunks, twelve CPU workers, and all six selected experts**.
+The measured 70 GiB configuration kept all 7,680 routed experts in RAM or VRAM.
+Engram remains SSD-backed. Native RAM sizing retains an 8 GiB allowance for
+other process data. Less available RAM can leave some experts file-backed.
+Conversation checkpoints are retained. Coder currently runs without DSpark.
+`omp-local` discovers its identity and context from the running server.
 
-On engine 0.1.54, the default cache passed a 64K OMP workload at 5.22 decode
-and 423.04 prefill tokens/s. Peak process memory was 61.72 GiB.
-A 64 GiB cache gained only 5.1%
-decode and 0.6% prefill throughput, so the default retains more RAM headroom.
-Use `--expert-ram-gb 64` to select the larger cache. This does not test filled
-256K context. See the [64K comparison](experiments/deepseek-strata/README.md#64k-follow-up).
-The earlier four-thread 0.2.9 repeat reached 5.21 decode and 419.71 prefill tokens/s, with
-59.16 GiB peak RAM. All quality checks passed. This single repeat shows no
-material throughput change. See the [update measurements](docs/strata-0.2.9-review.md#local-measurements).
+Allow **200 GiB free** on a fast Linux SSD for a new installation. Coder uses
+about 170.2 GiB, including the 103 GiB Engram file. If the full profile already
+has that verified Engram file, fetch reuses it through a hard link. The new
+transformer files need 67.2 GiB plus the downloader's 10 GiB reserve.
 
-The 0.2.9 tuning screen reached 8.51–8.80 decode tokens/s with twelve CPU
-workers, compared with 5.20 with four. A growing 16K, 32K, and 64K OMP repeat
-passed all checks at 7.82–8.28 decode tokens/s. One earlier checkpoint missed
-required test execution after OMP rejected compound commands. Both attempts
-remain in the report. Retaining checkpoints reduced one
-replayed OMP resume's prompt time from 47.15 to 26.19 seconds. See the
-[tuning measurements and limits](docs/deepseek-029-tuning.md).
+The 70 GiB resident run averaged **13.32 decode tokens/s**, with prefill at
+**497/670/767 tokens/s** across growing 16K/32K/64K OMP conversations. It passed
+all repair, recall, and resume checks, with one recovered tool error. This run
+reused a routing profile from the earlier workload. No benchmark profile is
+installed as a default. The same resident test at 64 GiB reached **13.06 tokens/s**.
+The extra 6 GiB increased decode speed by about 2% and completed expert residency.
+Use `--mem 64G` to retain resident mode with some file-backed experts.
+
+The matched 64 GiB demand-cache comparison averaged **11.24 decode tokens/s** for
+Coder and **8.16** for Unsloth UD-IQ1_S under the same 64 GiB cap. Coder prefill
+was **378/513/590 tokens/s**, versus **260/356/427**. Both passed every code,
+tool, recall, and resume check. Both reached the memory cap with reclaim but
+without OOM or swap use. These tests do not fill 256K or test automatic compaction.
+See the [comparison and quality limits](docs/deepseek-coder-comparison.md).
+
+The larger Unsloth **Dynamic V3.1 UD-IQ1_S** profile remains available as
+`deepseek-full` or `deepseek-iq1-s`. Its default cap is 70 GiB and its expert
+cache is 48 GiB. Its transformer shards need about 114 GiB in addition to
+the shared Engram. Stop the running server before switching.
+
+```bash
+localmodel fetch deepseek-full
+localmodel start deepseek-full
+```
+
+If there is not enough disk space, first use `localmodel remove deepseek-coder`.
+This preserves an Engram link in the full profile when that link exists.
+The downloader requires the remaining download size plus 10 GiB free.
+The optional full-profile DSpark files can be removed separately to recover
+another 7.43 GiB. Original tuning results remain in the
+[full-profile report](docs/deepseek-029-tuning.md).
 
 Strata keeps one saved conversation in RAM. It uses a 2 GiB disk-cache budget
 per weights/runtime/context configuration under `state/deepseek-slots/`.
@@ -233,17 +253,22 @@ It survives a server restart.
 Use `--no-strata-slots` to disable retention. This does not delete saved files.
 Use `--cpu-threads 8` to leave more CPU capacity for other programs.
 
+`--mem` sets the hard process-tree cap and disables swap.
+`--expert-memory resident` uses bounded copies of variable-size experts.
+`--expert-memory cache` uses the separate `--expert-ram-gb` demand-cache budget.
+The cache-mode default is 48 GiB. Omit `--expert-ram-gb` in resident mode.
+
 Example with less RAM and context:
 
 ```bash
-localmodel start deepseek --context 64k --mem 48G --expert-ram-gb 36
+localmodel start deepseek --context 64k --mem 48G --expert-memory cache --expert-ram-gb 36
 ```
 
-Fetch and enable the optional DSpark drafter:
+Fetch and enable the optional DSpark drafter for the full profile:
 
 ```bash
-localmodel fetch deepseek --speculative dspark
-localmodel start deepseek --speculative dspark --draft-tokens 5
+localmodel fetch deepseek-full --speculative dspark
+localmodel start deepseek-full --speculative dspark --draft-tokens 5
 ```
 
 The drafter adds about **7.43 GiB** on disk. Strata can keep draft experts
@@ -254,10 +279,10 @@ Depth 5 is the default when DSpark is selected. A 16K OMP comparison reached
 100 assertions, recall, and resume checks. DSpark remains optional.
 See the [measurements and limits](experiments/deepseek-strata/README.md#16k-omp-comparison-2026-10-30).
 Use `--speculative none` to unload the drafter.
-Use `localmodel remove deepseek --speculative dspark` to remove only the
+Use `localmodel remove deepseek-full --speculative dspark` to remove only the
 draft weights and their pack. This keeps the main model.
 
-Both Strata profiles use pinned source, API, and packer **0.2.9**, Control
+All Strata profiles use pinned source, API, and packer **0.2.9**, Control
 **0.1.55**, and signed native engines **0.1.55**. A crafted parser example
 can still turn quoted text into a tool call. This has not been observed in
 the OMP workloads. The client must still enforce tool permissions.
