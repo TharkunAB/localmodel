@@ -259,6 +259,9 @@ Use `--cpu-threads 8` to leave more CPU capacity for other programs.
 `--expert-memory resident` uses bounded copies of variable-size experts.
 `--expert-memory cache` uses the separate `--expert-ram-gb` demand-cache budget.
 The cache-mode default is 48 GiB. Omit `--expert-ram-gb` in resident mode.
+Use `--expert-memory cache --expert-ram-gb 0` to let Linux cache and reclaim
+CPU expert file pages. The [memory-sharing test](docs/coder-elastic-memory.md)
+measures the throughput cost, reclaim under pressure, and recovery.
 
 Example with less RAM and context:
 
