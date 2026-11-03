@@ -224,6 +224,10 @@ The file-backed test at 70 GiB averaged **12.80 tokens/s** when quiet and
 **9.08** and **9.14**, respectively. The default keeps the existing 64 GiB cap;
 these sharing measurements used 70 GiB. See the [memory-sharing comparison](docs/coder-elastic-memory.md).
 
+The local [Strata release watch](docs/strata-watch.md) checks for stable releases
+every six hours. It queues updates and guarded Coder measurements when resources
+are available. It does not interrupt a running model or deploy to a remote server.
+
 Every final code, recall, and resume check passed. Output lengths and recovered
 tool errors differed, so this does not establish faster completed coding tasks.
 No run used swap or hit OOM. These tests do not fill 256K or test automatic
