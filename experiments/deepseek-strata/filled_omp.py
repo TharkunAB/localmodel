@@ -295,6 +295,7 @@ class Benchmark:
         cmd = [str(PYTHON), str(HELPERS / 'launcher.py'), '--mem', '4G', '--mode', 'json', '-p',
             '--resume', str(session), '--session-dir', str(self.session.parent), '--cwd', str(self.workspace),
             '--tools', 'read,edit,bash', '--thinking', 'xhigh', '--no-skills', '--no-rules', '--no-extensions',
+            '--trusted-extension', str(HELPERS / 'workspace_guard.ts'),
             '--no-lsp', '--no-title', '--no-pty', '--no-prewalk', '--max-time', str(self.timeout), prompt]
         started = time.monotonic()
         with prefix.with_suffix('.stdout.jsonl').open('w') as out, prefix.with_suffix('.stderr.log').open('w') as err:
