@@ -1,11 +1,13 @@
 # DeepSeek Coder comparison on Strata 0.2.9
 
 For the current runtime, see the [Strata 0.2.10 remeasurement](strata-0.2.10-coder.md).
+The later [memory-sharing comparison](coder-elastic-memory.md) changed the
+default to zero private expert cache with the same 64 GiB process cap.
 
-2026-11-02. The selected `deepseek` default is ISTA GSQ-RCO Coder IQ2_XXS
-with resident expert copies and a 64 GiB process cap. This retains more RAM
+2026-11-02. The selected `deepseek` default at the time was ISTA GSQ-RCO Coder IQ2_XXS
+with resident expert copies and a 64 GiB process cap. This retained more RAM
 for other programs; the paired 70 GiB run improved decode speed by only 2%.
-Some experts remain file-backed at 64 GiB. Use `--mem 70G` for the measured
+Some experts remained file-backed at 64 GiB. Use `--expert-memory resident --mem 70G` for the measured
 full-residency configuration. The larger profile
 remains available as `deepseek-full`. Coder passed the OMP workload at 16K,
 32K, and 64K input. At the matched 64 GiB demand-cache settings, it decoded

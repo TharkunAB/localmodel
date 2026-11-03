@@ -117,8 +117,10 @@ Exact expert-cache misses and per-process disk bytes are unavailable on this
 WSL kernel. Shared block-device reads include Engram and other processes.
 Full expert residency does not imply zero SSD traffic.
 
-The installed default remains 64 GiB resident mode. Use
-`localmodel start deepseek --mem 70G` for the measured full-residency option.
+The later [memory-sharing comparison](coder-elastic-memory.md) changed the
+default to a 64 GiB cap with zero private expert cache. Use
+`localmodel start deepseek --expert-memory resident --mem 70G` for the
+full-residency option measured here.
 All benchmark servers, workers, guards, and observers stopped after the runs.
 
 

@@ -742,11 +742,11 @@ def stats_text() -> str:
             "Previous 48G code/recall pass; resume used fenced JSON (strict format fail). 40G/16 GiB: 609/46.34 tok/s, all checks pass.\n"
             "Source: results/strata-027-20261027/summary.md.\n\n"
             "deepseek / deepseek-coder: ISTA GSQ-RCO Coder IQ2_XXS, Strata 0.2.10 / native 0.1.56.\n"
-            "Default: 256K capacity, 64G cap, resident experts, 12 workers, 4096-token chunks, retained slots, no draft.\n"
-            "2026-11-03, growing 16K/32K/64K OMP: weighted decode 13.80 tok/s at 64G versus 13.25 on 0.2.9 (+4.2%).\n"
+            "Default: 256K capacity, 64G cap, file-backed experts with zero private cache, 12 workers, 4096-token chunks, retained slots, no draft.\n"
+            "2026-11-03 resident comparison, growing 16K/32K/64K OMP: weighted decode 13.80 tok/s at 64G versus 13.25 on 0.2.9 (+4.2%).\n"
             "New prefill 482.7/618.3/756.5 tok/s; old control 498.5/639.6/768.3. GPU expert count rose from 242 to 353.\n"
             "New 64G: 6900/7327 CPU experts in RAM, 427 file-backed. New 70G: all 7327 in RAM, 14.04 tok/s (+1.7%).\n"
-            "Use --mem 70G for measured full expert residency. Engram stays on SSD. Prefill was unchanged from new 64G.\n"
+            "Use --expert-memory resident --mem 70G for measured full expert residency. Engram stays on SSD. Prefill was unchanged from new 64G.\n"
             "Old64/new64/new70: generated 2080/2902/2372 tokens; repair+resume 331.85/391.89/342.01 s.\n"
             "All final checks passed; recovered tool errors 1/1/2. Peaks reached their caps; no OOM or swap.\n"
             "Same frozen routing profile, fresh slots, single sampled trajectories. Output lengths differ; no end-to-end speed claim.\n"
@@ -754,7 +754,10 @@ def stats_text() -> str:
             "File-backed sharing test, 70G and CPU weight 10: --expert-memory cache --expert-ram-gb 0.\n"
             "Quiet 16K/32K/64K: 12.80 decode tok/s; prefill 397.5/515.7/599.3. About 8.8% lower decode than resident70G.\n"
             "Controlled 32 GiB competitor: file cache 64.12 -> 42.36 GiB, 16K decode 6.40 tok/s; recovery 11.49 tok/s and 54.74 GiB cache.\n"
-            "All five checkpoints pass; no OOM/swap; minimum Linux headroom 59.48 GiB. CPU weight was experiment-only. Defaults unchanged.\n"
+            "All five checkpoints pass; no OOM/swap; minimum Linux headroom 59.48 GiB. CPU weight was experiment-only. Default cap remains 64G.\n"
+            "32 GiB demand cache, same 70G cap/CPU weight: quiet 9.08, pressure 9.14, recovery 8.77 decode tok/s.\n"
+            "Guarded retry: all five checkpoints pass; peak 53.30 GiB, no OOM/swap, minimum Linux headroom 31.27 GiB.\n"
+            "An initial OMP attempt failed; its unintended approval-config edit was restored. Future fixture runs enforce workspace boundaries.\n"
             "Single passes with different output lengths and prefix reuse. See docs/coder-elastic-memory.md.\n"
             "Historical native 0.1.55 model comparison, same 64G/48 GiB demand cache: Coder 11.24 vs full Unsloth 8.16 tok/s.\n"
             "See docs/deepseek-coder-comparison.md for those earlier measurements and quality limits.\n"
@@ -857,7 +860,7 @@ def main() -> int:
     start.add_argument("--expert-memory", choices=("cache", "resident"),
                        help="DeepSeek CPU expert storage (default: profile). cache uses --expert-ram-gb. resident copies variable-size experts within the native RAM allowance, with an 8 GiB margin. Remaining experts and Engram can still use SSD.")
     start.add_argument("--expert-ram-gb", type=float,
-                       help="Strata expert demand-cache budget in GiB, inside --mem (DeepSeek: 48; Qwen: 32). With --expert-memory resident, omit this flag or use 0. Separate from llama.cpp --cache-ram.")
+                       help="Strata expert demand-cache budget in GiB, inside --mem (Coder: 0; deepseek-full: 48; Qwen: 32). Zero leaves CPU expert caching to Linux. With --expert-memory resident, omit this flag or use 0. Separate from llama.cpp --cache-ram.")
     start.add_argument("--cpu-threads", type=int, help="DeepSeek Strata CPU expert compute threads (default: 12; 0 uses the stock automatic count). The engine can cap this at the physical core count. I/O threads are separate.")
     start.add_argument("--strata-slots", action=argparse.BooleanOptionalAction, default=None,
                        help="Retain DeepSeek Strata conversation checkpoints (default: on). Keeps one saved conversation in RAM and a 2 GiB disk-cache budget per weights/runtime/context configuration.")

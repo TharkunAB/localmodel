@@ -200,12 +200,12 @@ localmodel start deepseek --dry-run
 localmodel start deepseek
 ```
 
-The defaults are **256K context, a 64 GiB process cap, resident CPU experts,
+The defaults are **256K context, a 64 GiB process cap, zero private expert cache,
 4096-token prefill chunks, twelve CPU workers, and all six selected experts**.
-Some experts remain file-backed at this cap. The measured 70 GiB configuration
-kept all 7,680 routed experts in RAM or VRAM.
-Engram remains SSD-backed. Native RAM sizing retains an 8 GiB allowance for
-other process data. Less available RAM can leave some experts file-backed.
+CPU experts remain file-backed. Linux uses spare RAM to cache their pages and
+can reclaim those pages for other programs. GPU allocations stay in VRAM.
+Engram remains SSD-backed. `--expert-ram-gb 32` selects a dedicated 32 GiB
+expert cache. It is separate from the total process cap.
 Conversation checkpoints are retained. Coder currently runs without DSpark.
 `omp-local` discovers its identity and context from the running server.
 
@@ -214,11 +214,15 @@ about 170.2 GiB, including the 103 GiB Engram file. If the full profile already
 has that verified Engram file, fetch reuses it through a hard link. The new
 transformer files need 67.2 GiB plus the downloader's 10 GiB reserve.
 
-The Strata 0.2.10 repeat at 64 GiB averaged **13.80 decode tokens/s**, versus
+The earlier Strata 0.2.10 resident repeat at 64 GiB averaged **13.80 decode tokens/s**, versus
 **13.25** on 0.2.9. Prefill was **483/618/757 tokens/s** at growing 16K/32K/64K
 input. The 70 GiB follow-up averaged **14.04 tokens/s** and kept all routed
 experts in RAM or VRAM. That was only a 1.7% decode gain over 64 GiB.
-Use `--mem 70G` to select the measured full-residency configuration.
+Use `--expert-memory resident --mem 70G` to select that full-residency configuration.
+The file-backed test at 70 GiB averaged **12.80 tokens/s** when quiet and
+**6.40** under controlled memory pressure. A 32 GiB private cache averaged
+**9.08** and **9.14**, respectively. The default keeps the existing 64 GiB cap;
+these sharing measurements used 70 GiB. See the [memory-sharing comparison](docs/coder-elastic-memory.md).
 
 Every final code, recall, and resume check passed. Output lengths and recovered
 tool errors differed, so this does not establish faster completed coding tasks.
@@ -258,7 +262,8 @@ Use `--cpu-threads 8` to leave more CPU capacity for other programs.
 `--mem` sets the hard process-tree cap and disables swap.
 `--expert-memory resident` uses bounded copies of variable-size experts.
 `--expert-memory cache` uses the separate `--expert-ram-gb` demand-cache budget.
-The cache-mode default is 48 GiB. Omit `--expert-ram-gb` in resident mode.
+The cache-mode default is zero for Coder and 48 GiB for `deepseek-full`.
+Omit `--expert-ram-gb` in resident mode.
 Use `--expert-memory cache --expert-ram-gb 0` to let Linux cache and reclaim
 CPU expert file pages. The [memory-sharing test](docs/coder-elastic-memory.md)
 measures the throughput cost, reclaim under pressure, and recovery.
