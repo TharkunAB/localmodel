@@ -1,5 +1,7 @@
 # DeepSeek Coder comparison on Strata 0.2.9
 
+For the current runtime, see the [Strata 0.2.10 remeasurement](strata-0.2.10-coder.md).
+
 2026-11-02. The selected `deepseek` default is ISTA GSQ-RCO Coder IQ2_XXS
 with resident expert copies and a 64 GiB process cap. This retains more RAM
 for other programs; the paired 70 GiB run improved decode speed by only 2%.

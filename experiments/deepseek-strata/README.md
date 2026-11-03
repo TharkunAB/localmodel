@@ -5,13 +5,14 @@ This guide covers `deepseek-full`, the larger Unsloth profile. Since 2026-11-02,
 [Coder comparison](../../docs/deepseek-coder-comparison.md).
 
 The active backend uses official [Strata](https://github.com/Niko1221/Strata).
-The API and packer source is pinned to the 0.2.9 tag, commit
-`c62d5e3a15b40ea51c96aae9e8d36928965f53ab` (Control 0.1.55).
-The native engine is the signed Linux CUDA 13 package `strata-dsv41` 0.1.55.
+The local DeepSeek API and packer source is pinned to the 0.2.10 tag, commit
+`ffa80d73133ea5c548aefe57889a16e8085a938f` (Control 0.1.56).
+The native engine is the signed Linux CUDA 13 package `strata-dsv41` 0.1.56.
 The API and engine use upstream
-code without local inference patches. The
-[update review](../../docs/strata-0.2.9-review.md) records the remaining crafted
-parser counterexample and the workload measurements.
+code without local inference patches. Qwen remains on 0.2.9 / 0.1.55.
+This update does not change the remote script. The
+[Coder update and comparison](../../docs/strata-0.2.10-coder.md) records the
+review and benchmark method. The crafted parser counterexample remains.
 The weights are Unsloth Dynamic V3.1 UD-IQ1_S at revision
 `8a6ec9cf118e785a362ea94ee123c61c70553be6`. All five files have pinned
 SHA-256 values. The last shard contains the IQ4_NL Engram table.

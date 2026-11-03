@@ -214,21 +214,21 @@ about 170.2 GiB, including the 103 GiB Engram file. If the full profile already
 has that verified Engram file, fetch reuses it through a hard link. The new
 transformer files need 67.2 GiB plus the downloader's 10 GiB reserve.
 
-The 70 GiB resident run averaged **13.32 decode tokens/s**, with prefill at
-**497/670/767 tokens/s** across growing 16K/32K/64K OMP conversations. It passed
-all repair, recall, and resume checks, with one recovered tool error. This run
-reused a routing profile from the earlier workload. No benchmark profile is
-installed as a default. The same resident test at 64 GiB reached **13.06 tokens/s**.
-The extra 6 GiB increased decode speed by about 2% and completed expert residency.
-The default keeps the 64 GiB cap to leave more RAM for other programs.
+The Strata 0.2.10 repeat at 64 GiB averaged **13.80 decode tokens/s**, versus
+**13.25** on 0.2.9. Prefill was **483/618/757 tokens/s** at growing 16K/32K/64K
+input. The 70 GiB follow-up averaged **14.04 tokens/s** and kept all routed
+experts in RAM or VRAM. That was only a 1.7% decode gain over 64 GiB.
 Use `--mem 70G` to select the measured full-residency configuration.
 
-The matched 64 GiB demand-cache comparison averaged **11.24 decode tokens/s** for
-Coder and **8.16** for Unsloth UD-IQ1_S under the same 64 GiB cap. Coder prefill
-was **378/513/590 tokens/s**, versus **260/356/427**. Both passed every code,
-tool, recall, and resume check. Both reached the memory cap with reclaim but
-without OOM or swap use. These tests do not fill 256K or test automatic compaction.
-See the [comparison and quality limits](docs/deepseek-coder-comparison.md).
+Every final code, recall, and resume check passed. Output lengths and recovered
+tool errors differed, so this does not establish faster completed coding tasks.
+No run used swap or hit OOM. These tests do not fill 256K or test automatic
+compaction. See the [current comparison](docs/strata-0.2.10-coder.md).
+
+The original matched comparison used native 0.1.55 and the same 64 GiB cap
+and 48 GiB demand cache. Coder averaged **11.24 decode tokens/s** against
+**8.16** for full Unsloth UD-IQ1_S. See the
+[model comparison and quality limits](docs/deepseek-coder-comparison.md).
 
 The larger Unsloth **Dynamic V3.1 UD-IQ1_S** profile remains available as
 `deepseek-full` or `deepseek-iq1-s`. Its default cap is 70 GiB and its expert
@@ -284,11 +284,12 @@ Use `--speculative none` to unload the drafter.
 Use `localmodel remove deepseek-full --speculative dspark` to remove only the
 draft weights and their pack. This keeps the main model.
 
-All Strata profiles use pinned source, API, and packer **0.2.9**, Control
-**0.1.55**, and signed native engines **0.1.55**. A crafted parser example
-can still turn quoted text into a tool call. This has not been observed in
-the OMP workloads. The client must still enforce tool permissions.
-See the [update review](docs/strata-0.2.9-review.md).
+Local DeepSeek uses pinned source, API, and packer **0.2.10**, Control
+**0.1.56**, and signed native engine **0.1.56**. Qwen remains on
+**0.2.9 / 0.1.55**. This local update does not change the remote script.
+A crafted parser example can still turn quoted text into a tool call.
+This has not been observed in the OMP workloads. The client must still
+enforce tool permissions. See the [Coder update and comparison](docs/strata-0.2.10-coder.md).
 No native compilation is required for Strata.
 Its server and children cannot open outgoing connections; fetch and installation
 remain network-enabled. The local profile defaults to **262144** context
