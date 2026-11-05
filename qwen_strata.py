@@ -180,7 +180,7 @@ def settings(args: argparse.Namespace, item: dict[str, Any]) -> dict[str, Any]:
                    "--mtp", info["mtp_directory"],
                    "--max-context", str(context), "--kv", "int8",
                    "--resident-budget-gib", str(ram), "--vram-reserve-mib", str(reserve)]
-    return {"exe": str(binary), "arch": "qwen4exp", "args": native_args,
+    return {"exe": str(binary), "arch": "qwen4exp", "drafting": "mtp", "args": native_args,
             "cwd": str(source), "tokenizer": str(Path(info["pack_directory"]) / "tokenizer"),
             "model_name": item["alias"], "gpu": [0], "log": str(ROOT / "state/qwen-engine.log"),
             "env": {"STRATA_ROUTE_PRIOR": "0"}, "lib_dirs": [str(binary.parent)],

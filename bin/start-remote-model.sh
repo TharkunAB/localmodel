@@ -47,7 +47,7 @@ import urllib.request
 import uuid
 from typing import Any
 
-VERSION = '2026-10-31-strata-029-2'
+VERSION = '2026-11-05-strata-0211-1'
 GIB, MIB = 1024**3, 1024**2
 SOURCE = 'https://github.com/ggml-org/llama.cpp.git'
 STABLE = '620d2225cc436ab0b001e3200e590e3b286ef9ab'  # released v0.7.0
@@ -3010,7 +3010,7 @@ All memory figures are estimates. Failed GPU fit does not reduce context or prec
 Mistral uses --spec dspark/none or --dspark 0..3; its draft confidence threshold is zero.
 Mixed or multiple B300 allocations require explicit CUDA_VISIBLE_DEVICES selection.
 
-DeepSeek profiles use official Strata 0.2.9 / Control 0.1.55 / signed CUDA engine 0.1.55.
+DeepSeek profiles use official Strata 0.2.11 / Control 0.1.57 / signed CUDA engine 0.1.57.
 Preparation reuses verified GGUFs and builds a separate index for the pinned source.
 Auto selects DeepSeek on 1..40 physical sm_86/sm_89/sm_120 GPUs with >=11000 MiB each.
 The pinned engine does not cover H200/sm_90, B200/sm_100 or B300/sm_103.
@@ -3192,7 +3192,7 @@ def gsq_config(args, mode: str, chosen: list[GPU]) -> dict[str, Any]:
 
 
 # Official Strata pins and bootstrap. Serving never updates these artifacts.
-STRATA_PINS = {'source_revision': 'c62d5e3a15b40ea51c96aae9e8d36928965f53ab', 'source_archive_url': 'https://api.github.com/repos/Niko1221/Strata/tarball/c62d5e3a15b40ea51c96aae9e8d36928965f53ab', 'source_archive_sha256': 'fdcc76747d0b14ae8fa4bedcda55c0e5ec9188b457a6f2e9490dff130c8c3fa4', 'source_receipt_sha256': 'd85b79920108fa9bc778358aa1411f0b1e20d7d3182fd6ee7d32c58d6d4a54a4', 'control_version': '0.1.55', 'runtime': {'release_tag': 'v0.2.9', 'version': '0.1.55', 'archive_url': 'https://github.com/Niko1221/Strata/releases/download/v0.2.9/strata-dsv41-0.1.55-linux-x86_64-cuda-cuda13.tar.gz', 'archive_sha256': '8eed51bf333bc3bc381bc3cc4daa7dbca51d612647732e6f2a63c63be4c66124', 'archive_size': 444779692, 'feed_url': 'https://github.com/Niko1221/Strata/releases/download/v0.2.9/strata-feed.json', 'manifest_sha256': 'fdaba9967a5102679c5982216ff0d756fb8507e708926fe2246200919a75c7b0', 'binary_sha256': '7e5338cee17fa9031e25220b1a28b529b2599e5757bdddd8581206d45b88df40', 'python_packages': ['jinja2==3.1.6', 'markupsafe==3.0.3', 'regex==2026.9.10', 'psutil==7.2.2']}}
+STRATA_PINS = {'source_revision': 'c3b3f5035506f3e966f1b4b7b188aeaabae92f1d', 'source_archive_url': 'https://api.github.com/repos/Niko1221/Strata/tarball/c3b3f5035506f3e966f1b4b7b188aeaabae92f1d', 'source_archive_sha256': '85aa74cc4203ecdfcf17e2e325b0806ef388d6b216da202f7bd3a48a8c234cce', 'source_receipt_sha256': 'c5b34616ae55dee4b18c82fc5d909c2bff6d789a31eae84560b331e1f483b81a', 'control_version': '0.1.57', 'runtime': {'release_tag': 'v0.2.11', 'version': '0.1.57', 'archive_url': 'https://github.com/Niko1221/Strata/releases/download/v0.2.11/strata-dsv41-0.1.57-linux-x86_64-cuda-cuda13.tar.gz', 'archive_sha256': '4a1da42f87640d4d155f47f8b8e64f7d18f5b424c74b50f92e3c545c6617123e', 'archive_size': 445182916, 'feed_url': 'https://github.com/Niko1221/Strata/releases/download/v0.2.11/strata-feed.json', 'manifest_sha256': '5450f8bcf6cc86a25274b82f5643b2c46b127eece15bb922dfac21c8de6450aa', 'binary_sha256': '05edad3a3c6aa9447d418a71b58aef38821f747f1df0cf7fa13ead16f2666f1f', 'python_packages': ['jinja2==3.1.6', 'markupsafe==3.0.3', 'regex==2026.9.10', 'psutil==7.2.2']}}
 STRATA_INSTALL_CODE = r'''
 import argparse
 import hashlib
@@ -3795,7 +3795,7 @@ def strata_plan(args, mode: str, gpus: list[GPU]) -> Plan:
         raise Error('Strata configuration effort must be none/low/medium/high. API requests may send xhigh/max; no numeric llama.cpp default is retained.')
     plan = Plan(mode, ident, repo, revision, quant, context, 'native', spec,
                 (args.dspark or 0) if spec == 'dspark' else 0, STRATA_PINS['source_revision'],
-                'official-Strata-v0.2.9', weights, table, STRATA_DSPARK['size'] if spec == 'dspark' else 0,
+                'official-Strata-v0.2.11', weights, table, STRATA_DSPARK['size'] if spec == 'dspark' else 0,
                 0, root, gpus, effort, 0, args.port, 0, 0,
                 Path(args.model_dir).expanduser().absolute() if args.model_dir else model_dir, engine='strata')
     if 'policy_exception' in args.strata_budget:

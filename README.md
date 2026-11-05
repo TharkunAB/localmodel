@@ -298,9 +298,10 @@ Use `--speculative none` to unload the drafter.
 Use `localmodel remove deepseek-full --speculative dspark` to remove only the
 draft weights and their pack. This keeps the main model.
 
-Local DeepSeek uses pinned source, API, and packer **0.2.10**, Control
-**0.1.56**, and signed native engine **0.1.56**. Qwen remains on
-**0.2.9 / 0.1.55**. This local update does not change the remote script.
+Local DeepSeek, Qwen, and remote DeepSeek use pinned source, API, and packer
+**0.2.11**, Control **0.1.57**, and signed native engine **0.1.57**.
+Qwen keeps MTP with three draft tokens. Coder keeps zero private expert cache.
+See the [runtime verification](docs/strata-0.2.11-review.md).
 A crafted parser example can still turn quoted text into a tool call.
 This has not been observed in the OMP workloads. The client must still
 enforce tool permissions. See the [Coder update and comparison](docs/strata-0.2.10-coder.md).
