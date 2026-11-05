@@ -143,14 +143,16 @@ def settings(args: argparse.Namespace, item: dict[str, Any]) -> dict[str, Any]:
     """Build Qwen engine settings from the supported launcher controls."""
     if args.no_offload:
         raise RuntimeError("Qwen IQ2_XS needs system RAM for experts on this GPU. --no-offload cannot fit its weights.")
-    if args.runtime != "stock" or args.speculative != "mtp" or args.prompt_lookup:
+    if args.runtime != "stock" or args.speculative != "mtp":
         raise RuntimeError("This Qwen profile requires its pinned Strata runtime with MTP. Use a verify window of 2 or more tokens.")
-    unsupported = ("cpu_threads", "gpu_expert_cache_gb", "gpu_expert_fraction", "engram_cache_mib",
+    if args.lookup_type != "ngram-simple" or args.lookup_min_tokens is not None:
+        raise RuntimeError("Qwen uses native suffix lookup. --lookup-type ngram-mod and --lookup-min-tokens are llama.cpp controls.")
+    unsupported = ("gpu_expert_cache_gb", "gpu_expert_fraction", "engram_cache_mib",
                    "engram_threads", "cpu_moe_layers", "moe_cache_mib", "batch_tokens", "draft_window",
-                   "kv_vram_cells", "mma_decode_min_kv", "cache_ram", "checkpoint_every", "slot_save_path")
+                   "mma_decode_min_kv", "cache_ram", "checkpoint_every", "slot_save_path")
     if any(getattr(args, key, None) is not None for key in unsupported) or any(
             getattr(args, key, None) for key in ("kv_cache", "kv_mean_center", "cpu_offload_gb", "kv_offload_gb")):
-        raise RuntimeError("Use --expert-ram-gb, --vram-reserve-mib, and --prefill-chunk for Qwen. DeepSeek and llama.cpp tuning flags do not apply.")
+        raise RuntimeError("These DeepSeek or llama.cpp controls do not apply to Qwen. Use the Qwen controls described by localmodel start --help.")
     if args.replay or args.gdn_mma is not None:
         raise RuntimeError("Replay and GDN MMA controls require a Bonsai runtime.")
     ram = args.expert_ram_gb if args.expert_ram_gb is not None else 32
@@ -165,6 +167,14 @@ def settings(args: argparse.Namespace, item: dict[str, Any]) -> dict[str, Any]:
         raise RuntimeError("Use 1024 to 262144 context tokens for this Qwen profile.")
     if not 1 <= drafts <= 7:
         raise RuntimeError("Use 1 to 7 draft tokens for Qwen MTP.")
+    if args.prompt_lookup and not 2 <= args.lookup_tokens <= 16:
+        raise RuntimeError("Use 2 to 16 tokens for the Qwen lookup verification window.")
+    if args.prompt_lookup and args.lookup_tokens < drafts + 1:
+        raise RuntimeError("The Qwen lookup window must hold the MTP drafts plus one accepted token.")
+    if args.cpu_threads is not None and not 0 <= args.cpu_threads <= 64:
+        raise RuntimeError("Use 0 to 64 Qwen CPU workers; 0 selects the automatic count.")
+    if args.kv_vram_cells is not None and not 1024 <= args.kv_vram_cells <= context:
+        raise RuntimeError("Use 1024 to the target context length for Qwen --kv-vram-cells.")
     if chunk is not None and chunk < 1:
         raise RuntimeError("Use a positive --prefill-chunk token count.")
     if not 0 <= budget <= 1048576:
@@ -176,10 +186,16 @@ def settings(args: argparse.Namespace, item: dict[str, Any]) -> dict[str, Any]:
                    "--ple-gguf", info["ple_shard"],
                    "--expert-profile", str(source / "data/expert-profile.bin"), "--expert-cache", "auto",
                    "--prefill", "auto" if chunk is None else str(chunk),
-                   "--spec", str(drafts + 1), "--spec-min-p", "0.5", "--suffix-draft", "0",
+                   "--spec", str(drafts + 1), "--spec-min-p", "0.5", "--suffix-draft", "3" if args.prompt_lookup else "0",
                    "--mtp", info["mtp_directory"],
                    "--max-context", str(context), "--kv", "int8",
                    "--resident-budget-gib", str(ram), "--vram-reserve-mib", str(reserve)]
+    if args.prompt_lookup:
+        native_args += ["--lookup-max-t", str(args.lookup_tokens)]
+    if args.cpu_threads is not None:
+        native_args += ["--pool-workers", str(args.cpu_threads)]
+    if args.kv_vram_cells is not None:
+        native_args += ["--kv-resident", str(args.kv_vram_cells)]
     return {"exe": str(binary), "arch": "qwen4exp", "drafting": "mtp", "args": native_args,
             "cwd": str(source), "tokenizer": str(Path(info["pack_directory"]) / "tokenizer"),
             "model_name": item["alias"], "gpu": [0], "log": str(ROOT / "state/qwen-engine.log"),

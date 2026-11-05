@@ -661,8 +661,8 @@ def serve(args: argparse.Namespace, item: dict[str, Any]) -> int:
             "gdn_mma": "GGML_CUDA_GDN_MMA_DISABLE" not in environment if args.runtime == "bonsai-next" else None,
             "slot_save_path": str(args.slot_save_path.resolve()) if args.slot_save_path else None,
             "draft_kv_cache": args.draft_kv_cache, "prompt_lookup": args.prompt_lookup,
-            "lookup_type": args.lookup_type if args.prompt_lookup else None,
-            "lookup_tokens": args.lookup_tokens if args.prompt_lookup and args.lookup_type == "ngram-mod" else None,
+            "lookup_type": ("suffix" if item["runtime"] == "strata-qwen" else args.lookup_type) if args.prompt_lookup else None,
+            "lookup_tokens": args.lookup_tokens if args.prompt_lookup and (item["runtime"] == "strata-qwen" or args.lookup_type == "ngram-mod") else None,
             "lookup_min_tokens": args.lookup_min_tokens if args.prompt_lookup and args.lookup_type == "ngram-mod" else None,
             "draft_window": args.draft_window, "kv_vram_cells": args.kv_vram_cells,
             "mma_decode_min_kv": args.mma_decode_min_kv,
@@ -869,7 +869,7 @@ def main() -> int:
                        help="DeepSeek CPU expert storage (default: profile). cache uses --expert-ram-gb. resident copies variable-size experts within the native RAM allowance, with an 8 GiB margin. Remaining experts and Engram can still use SSD.")
     start.add_argument("--expert-ram-gb", type=float,
                        help="Strata expert demand-cache budget in GiB, inside --mem (Coder: 0; deepseek-full: 48; Qwen: 32). Zero leaves CPU expert caching to Linux. With --expert-memory resident, omit this flag or use 0. Separate from llama.cpp --cache-ram.")
-    start.add_argument("--cpu-threads", type=int, help="DeepSeek Strata CPU expert compute threads (default: 12; 0 uses the stock automatic count). The engine can cap this at the physical core count. I/O threads are separate.")
+    start.add_argument("--cpu-threads", type=int, help="Strata CPU expert workers, 0-64 (DeepSeek default: 12; Qwen: automatic). 0 selects the automatic count. Qwen also uses the host thread. I/O threads are separate.")
     start.add_argument("--strata-slots", action=argparse.BooleanOptionalAction, default=None,
                        help="Retain DeepSeek Strata conversation checkpoints (default: on). Keeps one saved conversation in RAM and a 2 GiB disk-cache budget per weights/runtime/context configuration.")
     start.add_argument("--gpu-expert-cache-gb", type=float, help="Legacy control. Official Strata requires --gpu-expert-fraction instead.")
@@ -901,17 +901,17 @@ def main() -> int:
     start.add_argument("--cache-ram", type=int,
                        help=f"llama.cpp prompt snapshot cache in MiB (default: {DEFAULT_CACHE_RAM_MIB}; Groot: 8192; LFM3: 4096; 0 disables). This differs from active KV spill.")
     start.add_argument("--prompt-lookup", action=argparse.BooleanOptionalAction, default=None,
-                       help="Bonsai, Flint, Groot, or LFM3 prompt lookup speculation. No draft weights required. Explicit Flint flags override LLAMA_ARG_SPEC_TYPE; omission preserves it.")
+                       help="Enable prompt lookup for Bonsai, Flint, Groot, LFM3, or Qwen. Qwen uses a three-token suffix match alongside MTP. Explicit Flint flags override LLAMA_ARG_SPEC_TYPE; omission preserves it.")
     start.add_argument("--lookup-type", choices=("ngram-simple", "ngram-mod"), default="ngram-simple",
-                       help="Prompt lookup algorithm (default: ngram-simple). Requires --prompt-lookup.")
+                       help="llama.cpp prompt lookup algorithm (default: ngram-simple). Requires --prompt-lookup. Qwen uses its native suffix algorithm.")
     start.add_argument("--lookup-tokens", type=int, default=32,
-                       help="Independent ngram-mod lookup limit (default: 32). Neural depth still uses --draft-tokens.")
+                       help="ngram-mod lookup limit (default: 32), or Qwen verification window including the accepted token (2-16; default: 12). Neural depth still uses --draft-tokens.")
     start.add_argument("--lookup-min-tokens", type=int,
                        help="Minimum ngram-mod draft length (0 to --lookup-tokens). Requires prompt lookup with ngram-mod. Flint default: min(8, maximum); Bonsai keeps its runtime default unless set.")
     start.add_argument("--draft-window", type=tokens,
                        help="Native Bonsai MTP context window. Omit to use the full target context. Requires a native Bonsai runtime.")
     start.add_argument("--kv-vram-cells", type=int,
-                       help="Native Bonsai active KV positions kept in VRAM. Remaining KV uses RAM. Requires --runtime bonsai-native.")
+                       help="Active KV positions kept in VRAM; remaining KV uses RAM. Native Bonsai or Qwen Strata. Qwen range: 1024 to context capacity; omission keeps full KV in VRAM.")
     start.add_argument("--mma-decode-min-kv", type=int,
                        help="Added native Bonsai wide-GQA MMA dispatch threshold (0 disables this override). Other MMA kernels remain available. Requires --runtime bonsai-native.")
     start.add_argument("--speculative", choices=("none", "mtp", "dflash", "dspark"), default="none",
@@ -996,6 +996,8 @@ def main() -> int:
             args.speculative = "mtp"
         if "--draft-tokens" not in explicit_flags:
             args.draft_tokens = 3
+        if "--lookup-tokens" not in explicit_flags:
+            args.lookup_tokens = 12
     if getattr(args, "mtp_head", "teacher") == "procreations" and (args.speculative != "mtp" or "mtp_procreations" not in models[args.model]):
         parser.error("The ProCreations head requires a supported model and --speculative mtp.")
     if args.action == "calibrate":
