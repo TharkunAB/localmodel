@@ -170,6 +170,8 @@ JSON resume passed. One edit request used invalid syntax and was retried.
 An earlier run with the older API failed strict formatting. These are single
 runs, not a quality guarantee or a filled-256K test. See the
 [comparison](docs/strata-0.2.9-review.md#local-measurements).
+The installed 0.2.11 runtime preserves MTP3 and the prepared weights.
+Qwen inference has not been remeasured on that release.
 
 The prepared model uses about **71.25 GiB**. Allow **at least 90 GiB free**
 for an initial fetch, preparation, and runtimes. The RAM cap includes more than
@@ -214,6 +216,12 @@ about 170.2 GiB, including the 103 GiB Engram file. If the full profile already
 has that verified Engram file, fetch reuses it through a hard link. The new
 transformer files need 67.2 GiB plus the downloader's 10 GiB reserve.
 
+The 2026-11-05 comparison uses these defaults and growing 16K/32K/64K OMP input.
+Strata 0.2.11 averaged **12.46 decode tokens/s**, versus **12.50** on 0.2.10.
+Repair and resume took **372 seconds** in each run. All quality checks passed.
+Both reached the 64 GiB cap without OOM or model swap. This single pair shows
+no material throughput change. See the [report](docs/strata-0.2.11-coder.md).
+
 The earlier Strata 0.2.10 resident repeat at 64 GiB averaged **13.80 decode tokens/s**, versus
 **13.25** on 0.2.9. Prefill was **483/618/757 tokens/s** at growing 16K/32K/64K
 input. The 70 GiB follow-up averaged **14.04 tokens/s** and kept all routed
@@ -233,7 +241,7 @@ configuration and measurements stay out of the search request.
 Every final code, recall, and resume check passed. Output lengths and recovered
 tool errors differed, so this does not establish faster completed coding tasks.
 No run used swap or hit OOM. These tests do not fill 256K or test automatic
-compaction. See the [current comparison](docs/strata-0.2.10-coder.md).
+compaction. See the [earlier resident comparison](docs/strata-0.2.10-coder.md).
 
 The original matched comparison used native 0.1.55 and the same 64 GiB cap
 and 48 GiB demand cache. Coder averaged **11.24 decode tokens/s** against
@@ -304,7 +312,7 @@ Qwen keeps MTP with three draft tokens. Coder keeps zero private expert cache.
 See the [runtime verification](docs/strata-0.2.11-review.md).
 A crafted parser example can still turn quoted text into a tool call.
 This has not been observed in the OMP workloads. The client must still
-enforce tool permissions. See the [Coder update and comparison](docs/strata-0.2.10-coder.md).
+enforce tool permissions. See the [Coder update and comparison](docs/strata-0.2.11-coder.md).
 No native compilation is required for Strata.
 Its server and children cannot open outgoing connections; fetch and installation
 remain network-enabled. The local profile defaults to **262144** context
