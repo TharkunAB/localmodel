@@ -164,14 +164,23 @@ The stock 0.2.9 API enables the Linux CUDA GDN defaults through
 57.5 MiB of extra GPU scratch space. See the
 [kernel review](docs/strata-0.2.9-review.md#qwen-linux-cuda-gdn-defaults).
 
-The full 0.2.9 release reached 47.95 decode and 431.28 prefill tokens/s on a
-16K OMP workload with these defaults. Code, 100 assertions, recall, and strict
-JSON resume passed. One edit request used invalid syntax and was retried.
-An earlier run with the older API failed strict formatting. These are single
-runs, not a quality guarantee or a filled-256K test. See the
-[comparison](docs/strata-0.2.9-review.md#local-measurements).
-The installed 0.2.11 runtime preserves MTP3 and the prepared weights.
-Qwen inference has not been remeasured on that release.
+The 2026-11-05 matched retest found 2.25 to 2.82 times faster prefill on 0.2.11
+than 0.2.9, with approximately unchanged decode. A longer default run reached
+53.10 decode and 1548.20 new-suffix prefill tokens/s at about 128K actual input.
+All coding, recall, and strict JSON resume checks passed.
+
+An optional 64K GPU KV window averaged 70.05 decode tokens/s across 16K to 128K
+input. It keeps full 256K capacity and stores the larger KV cache in RAM:
+
+```bash
+localmodel start qwen3.8 --kv-vram-cells 65536
+```
+
+That run passed coding and recall, but its four resume answers used Markdown
+fences around otherwise correct JSON. The strict format checks failed. Defaults
+remain unchanged. See the [measurements and controls](docs/qwen-0.2.11-tuning.md)
+for memory use, MTP depth, suffix lookup, CPU workers, and benchmark limits.
+The [older 0.2.9 results](docs/strata-0.2.9-review.md#local-measurements) remain available.
 
 The prepared model uses about **71.25 GiB**. Allow **at least 90 GiB free**
 for an initial fetch, preparation, and runtimes. The RAM cap includes more than

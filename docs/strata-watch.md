@@ -61,11 +61,19 @@ official updates under the procedure below.
    later explicit user changes. Use `~/Code/heavy-management` for capped serial
    jobs. Do not increase queue concurrency. Stop below 8 GiB available Linux
    memory. Do not monitor Windows memory for these benchmark runs.
+   Verify the guard's stop path before inference. A wrapper that calls
+   `localmodel.main` must include the real `localmodel.py` path in its process
+   arguments for `localmodel stop` to recognize it. Changing Python `sys.argv`
+   alone does not change those process arguments.
 5. Establish a matched old-runtime baseline at those settings when no suitable
    result exists. Older zero-cache results used a 70 GiB cap; they are not a
    matched 64 GiB baseline. Use the guarded OMP fixture at 16K, 32K, and 64K filled
    input. Keep the fixture, routing profile, sampling, and settings fixed. Do not
    reuse a frozen driver after changing its recorded source hashes.
+   The workspace guard accepts replacement edits. Set `PI_EDIT_VARIANT=replace`
+   for the benchmark's OMP processes and check the captured edit schema before
+   generation. OMP otherwise selects different edit formats for different
+   model families. Keep this override out of normal OMP settings.
 6. Measure the new runtime. Record prefill and decode throughput, task time,
    tool errors, repair and recall checks, peak RAM and VRAM, disk reads, and
    expert-cache counters where available. Distinguish context capacity from
