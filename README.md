@@ -227,6 +227,8 @@ these sharing measurements used 70 GiB. See the [memory-sharing comparison](docs
 The local [Strata release watch](docs/strata-watch.md) checks for stable releases
 every six hours. It queues updates and guarded Coder measurements when resources
 are available. It does not interrupt a running model or deploy to a remote server.
+A daily Grok search checks public X reports for useful optimizations. Local
+configuration and measurements stay out of the search request.
 
 Every final code, recall, and resume check passed. Output lengths and recovered
 tool errors differed, so this does not establish faster completed coding tasks.

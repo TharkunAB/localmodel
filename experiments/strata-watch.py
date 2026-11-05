@@ -2,6 +2,7 @@
 """Queue Strata release maintenance when the local machine has capacity."""
 
 import argparse
+from datetime import datetime
 import fcntl
 import json
 import os
@@ -12,6 +13,7 @@ import subprocess
 import time
 from typing import Any, cast
 from urllib.request import Request, urlopen
+from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parents[1]
 STATE = ROOT / "state/strata-watch.json"
@@ -62,6 +64,62 @@ def busy_reason() -> str | None:
     return None
 
 
+def queue_message(thread: str, codex: str, message: str) -> None:
+    """Send work to the existing daemon without starting another daemon."""
+    daemon = json.loads(subprocess.run(
+        [codex, "app-server", "daemon", "version"],
+        check=True, capture_output=True, text=True, timeout=15,
+    ).stdout)
+    if daemon.get("status") != "running":
+        raise RuntimeError("Codex daemon is unavailable; leave the work pending")
+    endpoint = "unix://" + str(daemon["socketPath"])
+    subprocess.run(
+        [codex, "queue", "--remote", endpoint, "--thread", thread, "--message", message],
+        check=True, timeout=60,
+    )
+
+
+def save_state(state: dict[str, Any]) -> None:
+    """Replace the state file after a successful queue operation."""
+    temporary = STATE.with_suffix(".tmp")
+    temporary.write_text(json.dumps(state, indent=2) + "\n")
+    temporary.replace(STATE)
+
+
+def research(thread: str, codex: str, check_only: bool) -> None:
+    """Queue one public-source Grok search per Stockholm calendar day."""
+    today = datetime.now(ZoneInfo("Europe/Stockholm")).date().isoformat()
+    state = read_json(STATE) if STATE.exists() else {}
+    if state.get("research_date") == today:
+        print(f"Public research already requested for {today}.")
+        return
+    if check_only:
+        print(f"Public Grok research due for {today}. No work queued.")
+        return
+    message = (
+        "Scheduled public-source research authorized by Matti. Use the council's ask_grok tool "
+        "to search public X/Twitter posts from the last seven days about Strata, "
+        "DeepSeek-V4.1-Flash-1017 GSQ-RCO Coder, Qwen3.8-Flash-Next and Bonsai2 27B. "
+        "Look for reproducible MTP/DFlash optimizations, expert-cache and SSD-offload improvements, "
+        "long-context prefill, and coding-agent fixes. Send Grok only these public project names "
+        "and general research topics. Do not send local hardware, memory limits, settings, "
+        "benchmark results, paths, code, credentials or remote-deployment details. "
+        "Tell Grok to use public web/X search only and not inspect local files or tools, post, "
+        "contact people, install software or run benchmarks. Request at most five findings, "
+        "each with an original post URL, date, the experimenter's stated hardware and quant, "
+        "measurements, limitations and upstream PR/commit/release status. If search is unavailable, "
+        "report that rather than inventing results. Afterward, verify the primary sources yourself "
+        "and compare with installed settings locally. Read docs/strata-watch.md. "
+        "Report useful new findings or corrections here; avoid repeating unchanged claims. "
+        "Do not install hacks, alter defaults, modify firmware or run inference from this research task. "
+        "Official release updates and guarded measurements are handled by the separate release watch."
+    )
+    queue_message(thread, codex, message)
+    state.update(research_date=today, research_queued_at=time.time())
+    save_state(state)
+    print(f"Queued public Grok research for {today} into thread {thread}.")
+
+
 def check(thread: str, codex: str, check_only: bool) -> None:
     """Check the release and queue at most one reminder per day."""
     request = Request(API, headers={"Accept": "application/vnd.github+json", "User-Agent": "localmodel-strata-watch"})
@@ -95,21 +153,9 @@ def check(thread: str, codex: str, check_only: bool) -> None:
         f"When measurements and cleanup are complete, set completed_tag to {tag!r} in {STATE} "
         "and report results here. If work is deferred or incomplete, leave completed_tag unchanged."
     )
-    daemon = json.loads(subprocess.run(
-        [codex, "app-server", "daemon", "version"],
-        check=True, capture_output=True, text=True, timeout=15,
-    ).stdout)
-    if daemon.get("status") != "running":
-        raise RuntimeError("Codex daemon is unavailable; leave the release pending")
-    endpoint = "unix://" + str(daemon["socketPath"])
-    subprocess.run(
-        [codex, "queue", "--remote", endpoint, "--thread", thread, "--message", message],
-        check=True, timeout=60,
-    )
+    queue_message(thread, codex, message)
     state.update(pending_tag=tag, queued_at=time.time())
-    temporary = STATE.with_suffix(".tmp")
-    temporary.write_text(json.dumps(state, indent=2) + "\n")
-    temporary.replace(STATE)
+    save_state(state)
     print(f"Queued {tag} into thread {thread}.")
 
 
@@ -118,11 +164,15 @@ def main() -> None:
     parser.add_argument("--thread", required=True, help="Existing Codex conversation UUID")
     parser.add_argument("--codex", default="codex", help="Path to the installed Codex CLI")
     parser.add_argument("--check-only", action="store_true", help="Check releases without queuing work")
+    parser.add_argument("--research", action="store_true", help="Queue the daily public-source Grok search instead")
     args = parser.parse_args()
     STATE.parent.mkdir(parents=True, exist_ok=True)
     with STATE.with_suffix(".lock").open("w") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        check(args.thread, args.codex, args.check_only)
+        if args.research:
+            research(args.thread, args.codex, args.check_only)
+        else:
+            check(args.thread, args.codex, args.check_only)
 
 
 if __name__ == "__main__":

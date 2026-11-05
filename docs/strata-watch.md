@@ -18,6 +18,30 @@ The watch state is `state/strata-watch.json`. A queued release is retried after
 whose pins changed before its measurements finished. A completed but rejected
 release is not installed again by the watch.
 
+## Daily public research
+
+`strata-research.timer` requests a Grok search each day at 09:00 Europe/Stockholm,
+with up to five minutes of delay. It uses the same conversation and daemon.
+The timer requests research even when the GPU is busy. It does not start inference.
+`research_date` in the watch state prevents duplicate requests on the same local
+calendar day. A failed queue operation does not record that day.
+
+Grok receives public project names and general research topics only. Do not send
+local hardware details, configuration, measurements, paths, code, credentials,
+or remote deployment details. Ask for original X posts and linked primary
+sources. Grok must not read local files, change settings, post messages, or run
+commands. Compare its public findings with the local setup in this conversation.
+
+Require reported hardware, quantization, measurements, and limitations. Check
+whether a patch is released, merged, experimental, or only proposed. Keep
+community claims separate from local measurements. Preserve useful source links
+in the project notes. Report new findings and corrections. Do not repeatedly
+report unchanged claims. Search failures must be reported as failures.
+
+This task does not install community patches, change defaults, flash firmware,
+download weights, or run benchmarks. The release watch continues to handle
+official updates under the procedure below.
+
 ## Update and measurement procedure
 
 1. Read the current repository instructions and check the worktree. Pull before
@@ -61,8 +85,11 @@ release is not installed again by the watch.
 
 ```sh
 systemctl --user list-timers strata-watch.timer
+systemctl --user list-timers strata-research.timer
 journalctl --user -u strata-watch.service -n 30 --no-pager
+journalctl --user -u strata-research.service -n 30 --no-pager
 systemctl --user disable --now strata-watch.timer
+systemctl --user disable --now strata-research.timer
 ```
 
 Stopping the timer prevents future checks. It does not cancel work already
@@ -70,5 +97,5 @@ queued into Codex. Cancel that work in its conversation if required.
 
 The installed service calls `experiments/strata-watch.py` with the conversation
 UUID and the absolute Codex path. It runs at low CPU priority with a 256 MiB cap.
-Only the release check runs in that service. Benchmark jobs run through the
+Only the release check or research queue operation runs in these services. Benchmark jobs run through the
 existing conversation and keep their separate 64 GiB cap.
