@@ -155,33 +155,30 @@ localmodel start qwen3.8
 ```
 
 Fetch also prepares the Qwen engine and MTP artifacts. The defaults are
-**256K context, a 64 GiB process cap, 32 GiB resident expert budget, INT8 KV,
-three draft tokens, and a 768 MiB VRAM reserve**. Strata's native speculation
-value includes the accepted token, so the launcher maps three drafts to four.
-Vision, suffix drafting, and routing priors are disabled.
+**192K context, a 64K GPU KV window, a 64 GiB process cap, 32 GiB resident
+expert budget, INT8 KV, four draft tokens, and a 768 MiB VRAM reserve**.
+The rest of the KV cache uses RAM. Strata's native speculation value includes
+the accepted token, so the launcher maps four drafts to five.
+Vision, suffix drafting, routing priors, and expert tail skipping are disabled.
+The PLE embedding table uses direct file reads.
 The pinned Strata 0.2.11 API enables the Linux CUDA GDN defaults through
 `STRATA_GDN_TC=1` and `STRATA_GDN_CONVL2=2`. The tensor-core path needs about
 57.5 MiB of extra GPU scratch space. See the
 [kernel review](docs/strata-0.2.9-review.md#qwen-linux-cuda-gdn-defaults).
 
-The following measurements used the previous ISTA IQ2_XS weights.
-They do not measure the Unsloth replacement. The 2026-11-05 matched retest found 2.25 to 2.82 times faster prefill on 0.2.11
-than 0.2.9, with approximately unchanged decode. A longer default run reached
-53.10 decode and 1548.20 new-suffix prefill tokens/s at about 128K actual input.
-All coding, recall, and strict JSON resume checks passed.
+The 2026-11-06 OMP run reached **185,151 input tokens** and averaged
+**55.25 decode tokens/s**. All four code, recall, and strict JSON resume checks
+passed. At the final checkpoint, decode was 56.27 tokens/s and new-suffix
+prefill was 1783 tokens/s. There were no tool errors, OOM events, or model swap.
+The smaller GPU KV window made room for MTP and the expert cache. The 32 GiB
+RAM budget covered the remaining experts; increasing it to 36 GiB added no
+residency. See the [measurements and limits](docs/qwen-unsloth-192k.md).
 
-An optional 64K GPU KV window averaged 70.05 decode tokens/s across 16K to 128K
-input. It keeps full 256K capacity and stores the larger KV cache in RAM:
-
-```bash
-localmodel start qwen3.8 --kv-vram-cells 65536
-```
-
-That run passed coding and recall, but its four resume answers used Markdown
-fences around otherwise correct JSON. The strict format checks failed. Defaults
-remain unchanged. See the [measurements and controls](docs/qwen-0.2.11-tuning.md)
-for memory use, MTP depth, suffix lookup, CPU workers, and benchmark limits.
-The [older 0.2.9 results](docs/strata-0.2.9-review.md#local-measurements) remain available.
+OMP discovers the 192K capacity and normally compacts near 157K input.
+The benchmark disabled automatic compaction to test the larger input directly.
+The [previous ISTA measurements](docs/qwen-0.2.11-tuning.md) remain available.
+They are not a matched quantization comparison after the VM move and changes
+in desktop VRAM use.
 
 The Unsloth shards total **68.01 GB** before the prepared index and MTP files.
 Preparation uses upstream `--compat-bf16` for small projections. The CUDA engine
@@ -197,6 +194,7 @@ Example overrides:
 ```bash
 localmodel start qwen3.8 --context 128k --mem 48G --expert-ram-gb 24
 localmodel start qwen3.8 --context 256k --draft-tokens 2 --prefill-chunk 4096
+localmodel start qwen3.8 --ple-io mmap
 ```
 
 Stop the first server before starting another. These overrides are tuning
@@ -322,15 +320,15 @@ draft weights and their pack. This keeps the main model.
 
 Local DeepSeek, Qwen, and remote DeepSeek use pinned source, API, and packer
 **0.2.11**, Control **0.1.57**, and signed native engine **0.1.57**.
-Qwen keeps MTP with three draft tokens. Coder keeps zero private expert cache.
+Qwen uses four MTP draft tokens. Coder keeps zero private expert cache.
 See the [runtime verification](docs/strata-0.2.11-review.md).
 A crafted parser example can still turn quoted text into a tool call.
 This has not been observed in the OMP workloads. The client must still
 enforce tool permissions. See the [Coder update and comparison](docs/strata-0.2.11-coder.md).
 No native compilation is required for Strata.
 Its server and children cannot open outgoing connections; fetch and installation
-remain network-enabled. The local profile defaults to **262144** context
-tokens. A remote model's advertised 1M capacity is handled separately.
+remain network-enabled. Each local profile has the context default listed
+above. Remote context capacity is discovered separately.
 
 ## Start the whole local setup
 

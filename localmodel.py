@@ -154,7 +154,7 @@ def current(port: int | None = None) -> dict[str, Any]:
         result["profile"] = managed.get("profile")
         result["pid"] = managed.get("controller_pid")
         for key in ("cpu_offload_gb", "cpu_moe_layers", "moe_cache_mib", "batch_tokens", "ubatch_tokens", "command", "runtime", "rounds", "memory_limit",
-                    "expert_memory", "expert_ram_gb", "cpu_threads", "gpu_expert_cache_gb", "gpu_expert_fraction", "prefill_chunk", "vram_reserve_mib", "engram_cache_mib", "engram_threads", "thinking_budget", "strata_slots", "strata_slot_directory"):
+                    "expert_memory", "expert_ram_gb", "cpu_threads", "gpu_expert_cache_gb", "gpu_expert_fraction", "prefill_chunk", "vram_reserve_mib", "engram_cache_mib", "engram_threads", "thinking_budget", "strata_slots", "strata_slot_directory", "ple_io", "expert_tail_skip"):
             result[key] = managed.get(key)
         if result["backend"] == "dory":
             result["rounds"] = managed.get("rounds")
@@ -672,6 +672,8 @@ def serve(args: argparse.Namespace, item: dict[str, Any]) -> int:
             "reasoning_effort": (args.reasoning_effort or DEFAULT_REASONING_EFFORT) if item["runtime"] in ("prism", "strata", "strata-qwen") else None,
             "expert_memory": strata_config.get("expert_memory") if item["runtime"] == "strata" else None,
             "expert_ram_gb": strata_config.get("expert_ram_gb") if item["runtime"] == "strata" else args.expert_ram_gb if args.expert_ram_gb is not None else 32 if item["runtime"] == "strata-qwen" else None,
+            "ple_io": args.ple_io if item["runtime"] == "strata-qwen" else None,
+            "expert_tail_skip": int(strata_config["env"]["STRATA_ROUTE_TAIL_SKIP"]) if item["runtime"] == "strata-qwen" else None,
             "cpu_threads": args.cpu_threads if args.cpu_threads is not None else 12 if item["runtime"] == "strata" else None,
             "strata_slots": strata_config.get("env", {}).get("STRATA_DS4_SLOT_KEEP") == "1" if item["runtime"] == "strata" else None,
             "strata_slot_directory": strata_config.get("env", {}).get("STRATA_DS4_SLOT_DIR"),
@@ -730,16 +732,19 @@ def stop() -> None:
 
 def stats_text() -> str:
     """Show recorded measurements without starting a model."""
-    return ("qwen3.8: IQ2_XS + MTP3, Strata 0.2.11 / native 0.1.57, 256K capacity, 64G cap/32 GiB resident budget, 768 MiB VRAM reserve.\n"
-            "2026-11-05 matched 16K/32K/64K OMP: 0.2.9 -> 0.2.11 weighted decode 51.65 -> 51.38 tok/s; first prefill improves 2.25-2.82x.\n"
-            "Long default through 128K actual input: 53.36 weighted decode; final checkpoint 1548.20 new-suffix prefill / 53.10 decode tok/s. All checks pass.\n"
-            "Optional --kv-vram-cells 65536: 70.05 weighted decode (+31.28%); at 128K 1930.00 prefill / 69.63 decode. Full 256K capacity retained.\n"
-            "KV-only API span 124.14 s vs default 137.65 s; generated 2991 vs 2121 tokens. Single sampled trajectories, not fixed-output timings.\n"
-            "Streaming code/recall pass, but all four strict resumes fail from fenced correct JSON. Default passes 4/4. Defaults remain unchanged.\n"
-            "MTP3 beat tested MTP2/MTP5; lookup gave no clear gain. Optional --prompt-lookup --lookup-tokens 12 and --cpu-threads are available.\n"
-            "All cases peak at 64 GiB, no model swap/OOM. Long KV-only: 11190 MiB sampled VRAM, minimum Linux available 58.32 GiB, zero decode file expert blobs.\n"
-            "Prefill still reports file blobs and PLE remains file-backed; these counters are not physical SSD traffic. No filled-256K or automatic-compaction test.\n"
-            "See docs/qwen-0.2.11-tuning.md and results/qwen-0211-20261105/. Historical results follow.\n"
+    return ("qwen3.8: Unsloth UD-IQ1_M v3.1 + MTP4, Strata 0.2.11 / native 0.1.57.\n"
+            "Default: 192K capacity, 64K GPU KV window, 64G cap, 32 GiB expert budget, direct PLE reads, 768 MiB VRAM reserve. Expert tail skipping and suffix lookup are off.\n"
+            "2026-11-06 growing 16K/64K/128K/180K OMP: 3290 tokens / 59.5461 decode seconds = 55.25 tok/s.\n"
+            "Decode by checkpoint: 54.65/57.62/52.66/56.27; first-request new-suffix prefill: 1548/1920/1883/1783 tok/s. Later requests reuse prefixes.\n"
+            "Last input 185151 tokens. All four code/recall/strict-resume checkpoints pass, 3118 assertions, zero tool errors. Draft acceptance 2270/2992 (75.87%).\n"
+            "Peak 64 GiB, no OOM/model swap; 31.89 GiB expert RAM, 2.93 GiB GPU expert cache, 11.72 GiB whole-device VRAM peak.\n"
+            "Zero logical expert file blobs during requests; PLE stays file-backed. Shared guest disk counters include other processes and do not measure host SSD activity.\n"
+            "Short full-expert MTP2/3/4: 53.50/53.91/55.63 tok/s. mmap and lookup did not improve; 36 GiB expert budget added no residency.\n"
+            "The 256K full-GPU-KV control disabled MTP for lack of VRAM and averaged 35.54 tok/s through 128K.\n"
+            "Across 17 checkpoints, code/recall pass 17/17 and strict resume 12/17; five earlier short answers used fenced correct JSON. No automatic-compaction test.\n"
+            "See docs/qwen-unsloth-192k.md and results/qwen-unsloth-20261106/final-results.json.\n"
+            "Historical ISTA IQ2_XS, 2026-11-05: 53.36 default / 70.05 with 64K GPU KV through 128K. Different VM storage, desktop VRAM use and expert-skipping policy prevent a matched quant comparison.\n"
+            "Historical release comparison: 0.2.9 -> 0.2.11 decode 51.65 -> 51.38; prefill improved 2.25-2.82x. See docs/qwen-0.2.11-tuning.md.\n"
             "Full 0.2.9, 2026-10-31, 16K OMP: 431.28 prefill / 47.95 decode tok/s; peak 64 GiB, no swap/OOM, file-cache reclaim at the cap.\n"
             "Repair, 100 assertions, recall and strict JSON resume pass. One edit-format error recovered. No low-VRAM warning.\n"
             "Earlier native-only update with API 0.2.7.1: 768 MiB reserve 443.07 prefill / 49.08 decode; strict resume used fenced JSON (fail).\n"
@@ -886,6 +891,8 @@ def main() -> int:
     start.add_argument("--vram-reserve-mib", type=int, help="Strata VRAM reserve for CUDA and desktop use, in MiB (DeepSeek: 700; Qwen: 768).")
     start.add_argument("--engram-cache-mib", type=int, help="DeepSeek Strata hashed-embedding row-cache budget in MiB (default: 256; 0 disables).")
     start.add_argument("--engram-threads", type=int, help="DeepSeek Strata hashed-embedding SSD read threads (default: 16).")
+    start.add_argument("--ple-io", choices=("direct", "mmap", "ram"),
+                       help="Qwen embedding-table reads: direct (default), mmap (reclaimable page cache), or ram (full RAM copy; needs more memory).")
     start.add_argument("--thinking-budget", type=int, help="Strata chat-template thinking budget in tokens (default: 32768). Client requests can turn thinking off.")
     start.add_argument("--runtime", choices=("stock", "bonsai-native", "bonsai-next"), default="stock",
                        help="Bonsai runtime (default: selected preset; stock for base model names). bonsai-next adds reviewed checkpoint and replay patches in a separate build.")
@@ -919,12 +926,12 @@ def main() -> int:
     start.add_argument("--draft-window", type=tokens,
                        help="Native Bonsai MTP context window. Omit to use the full target context. Requires a native Bonsai runtime.")
     start.add_argument("--kv-vram-cells", type=int,
-                       help="Active KV positions kept in VRAM; remaining KV uses RAM. Native Bonsai or Qwen Strata. Qwen range: 1024 to context capacity; omission keeps full KV in VRAM.")
+                       help="Active KV positions kept in VRAM; remaining KV uses RAM. Native Bonsai or Qwen Strata. Qwen default: 65536, capped by context. Pass the context capacity to keep full KV in VRAM.")
     start.add_argument("--mma-decode-min-kv", type=int,
                        help="Added native Bonsai wide-GQA MMA dispatch threshold (0 disables this override). Other MMA kernels remain available. Requires --runtime bonsai-native.")
     start.add_argument("--speculative", choices=("none", "mtp", "dflash", "dspark"), default="none",
                        help="Optional draft decoder (default: none; Qwen: mtp). DSpark requires deepseek-full.")
-    start.add_argument("--draft-tokens", type=int, default=2, help="Maximum neural draft tokens per step (default: 2; Qwen: 3; DeepSeek DSpark: 5).")
+    start.add_argument("--draft-tokens", type=int, default=2, help="Maximum neural draft tokens per step (default: 2; Qwen: 4; DeepSeek DSpark: 5).")
     start.add_argument("--dspark-conf", type=float, help="DSpark confidence threshold, 0 to 1 (default: 0.65). Requires --speculative dspark.")
     start.add_argument("--mtp-chain", action=argparse.BooleanOptionalAction, default=None,
                        help="Prism MTP chained drafting (default: on). Preset settings override LLAMA_MTP_CHAIN=0/1. Explicit flags take priority.")
@@ -1003,9 +1010,14 @@ def main() -> int:
         if "--speculative" not in explicit_flags:
             args.speculative = "mtp"
         if "--draft-tokens" not in explicit_flags:
-            args.draft_tokens = 3
+            args.draft_tokens = models[args.model].get("draft_tokens", 3)
         if "--lookup-tokens" not in explicit_flags:
             args.lookup_tokens = 12
+        if args.kv_vram_cells is None:
+            context = args.context or models[args.model]["context"]
+            args.kv_vram_cells = min(models[args.model].get("kv_vram_cells", context), context)
+        if args.ple_io is None:
+            args.ple_io = models[args.model].get("ple_io", "direct")
     if getattr(args, "mtp_head", "teacher") == "procreations" and (args.speculative != "mtp" or "mtp_procreations" not in models[args.model]):
         parser.error("The ProCreations head requires a supported model and --speculative mtp.")
     if args.action == "calibrate":
@@ -1068,6 +1080,8 @@ def main() -> int:
         parser.error("--expert-memory requires Strata DeepSeek.")
     if args.strata_slots is not None and models[args.model]["runtime"] != "strata":
         parser.error("--strata-slots and --no-strata-slots require Strata DeepSeek.")
+    if args.ple_io is not None and models[args.model]["runtime"] != "strata-qwen":
+        parser.error("--ple-io requires Strata Qwen.")
     if models[args.model]["runtime"] not in ("strata", "strata-qwen") and any(getattr(args, key) is not None for key in
             ("expert_ram_gb", "cpu_threads", "gpu_expert_cache_gb", "gpu_expert_fraction", "prefill_chunk", "vram_reserve_mib", "engram_cache_mib", "engram_threads", "thinking_budget")):
         parser.error("These expert-cache, CPU-lane, embedding, and thinking-budget flags require the Strata DeepSeek model.")

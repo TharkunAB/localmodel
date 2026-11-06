@@ -158,7 +158,13 @@ def settings(args: argparse.Namespace, item: dict[str, Any]) -> dict[str, Any]:
     ram = args.expert_ram_gb if args.expert_ram_gb is not None else 32
     reserve = args.vram_reserve_mib if args.vram_reserve_mib is not None else 768
     context = args.context or item["context"]
-    drafts = args.draft_tokens if args.draft_tokens is not None else 3
+    drafts = args.draft_tokens if args.draft_tokens is not None else item.get("draft_tokens", 3)
+    kv_cells = args.kv_vram_cells
+    if kv_cells is None:
+        kv_cells = min(item.get("kv_vram_cells", context), context)
+    ple_io = getattr(args, "ple_io", None)
+    if ple_io is None:
+        ple_io = item.get("ple_io", "direct")
     chunk = args.prefill_chunk
     budget = args.thinking_budget if args.thinking_budget is not None else 32768
     if not 0 < ram <= 128 or not 0 <= reserve <= 12288:
@@ -173,8 +179,10 @@ def settings(args: argparse.Namespace, item: dict[str, Any]) -> dict[str, Any]:
         raise RuntimeError("The Qwen lookup window must hold the MTP drafts plus one accepted token.")
     if args.cpu_threads is not None and not 0 <= args.cpu_threads <= 64:
         raise RuntimeError("Use 0 to 64 Qwen CPU workers; 0 selects the automatic count.")
-    if args.kv_vram_cells is not None and not 1024 <= args.kv_vram_cells <= context:
+    if not 1024 <= kv_cells <= context:
         raise RuntimeError("Use 1024 to the target context length for Qwen --kv-vram-cells.")
+    if ple_io not in ("direct", "mmap", "ram"):
+        raise RuntimeError("Use direct, mmap, or ram for Qwen --ple-io.")
     if chunk is not None and chunk < 1:
         raise RuntimeError("Use a positive --prefill-chunk token count.")
     if not 0 <= budget <= 1048576:
@@ -194,12 +202,12 @@ def settings(args: argparse.Namespace, item: dict[str, Any]) -> dict[str, Any]:
         native_args += ["--lookup-max-t", str(args.lookup_tokens)]
     if args.cpu_threads is not None:
         native_args += ["--pool-workers", str(args.cpu_threads)]
-    if args.kv_vram_cells is not None:
-        native_args += ["--kv-resident", str(args.kv_vram_cells)]
+    native_args += ["--kv-resident", str(kv_cells), "--ple-io", ple_io]
     return {"exe": str(binary), "arch": "qwen4exp", "drafting": "mtp", "args": native_args,
             "cwd": str(source), "tokenizer": str(Path(info["pack_directory"]) / "tokenizer"),
             "model_name": item["alias"], "gpu": [0], "log": str(ROOT / "state/qwen-engine.log"),
-            "env": {"STRATA_ROUTE_PRIOR": "0", "STRATA_HC_Q8": "1"}, "lib_dirs": [str(binary.parent)],
+            "env": {"STRATA_ROUTE_PRIOR": "0", "STRATA_HC_Q8": "1", "STRATA_ROUTE_TAIL_SKIP": "0"},
+            "lib_dirs": [str(binary.parent)],
             "sampling": {"temperature": 1.0, "top_p": 0.95},
             "reasoning_effort": None if (args.reasoning_effort or "xhigh") == "xhigh" else args.reasoning_effort,
             "reasoning_budget_tokens": budget, "fit_max_tokens": True, "api_monitor": False,

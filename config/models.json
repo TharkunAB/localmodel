@@ -198,8 +198,11 @@
   "qwen3.8": {
     "alias": "qwen3.8",
     "runtime": "strata-qwen",
-    "context": 262144,
-    "kv_cache": "int8"
+    "context": 196608,
+    "kv_cache": "int8",
+    "kv_vram_cells": 65536,
+    "draft_tokens": 4,
+    "ple_io": "direct"
   },
   "groot-19b": {
     "repo": "GrootTeam/Groot-19B-A3B-261023-GGUF",

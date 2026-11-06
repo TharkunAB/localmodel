@@ -210,9 +210,10 @@ localmodel start qwen3.8
 ```
 
 Stop the current model before starting Qwen. `serve` is an alias for `start`.
-The default uses 256K context, three MTP draft tokens, int8 KV, a 32 GiB resident
-expert budget, and a 64 GiB process RAM limit with no swap. The resident expert
-budget is part of the process limit. Model files and preparation data stay in
+The default uses 192K context, a 64K GPU KV window, four MTP draft tokens,
+int8 KV, a 32 GiB resident expert budget, and a 64 GiB process RAM limit with
+no swap. The remaining KV uses RAM. The resident expert budget is part of
+the process limit. Model files and preparation data stay in
 `models/qwen38-unsloth-iq1-m` on the native Linux disk.
 
 The API listens on `127.0.0.1:8899`. Run `omp-local` or `opencode-local` after
@@ -231,9 +232,23 @@ Use `--prefill-chunk N` to set the prefill chunk size and `--vram-reserve-mib N`
 to change the GPU memory reserve. This profile uses MTP with 1 to 7
 draft tokens. Strata adds one accepted token to each verification window.
 Prompt lookup is off. `--speculative none` and `--no-offload` are not supported
-by this profile. The launcher forces `STRATA_ROUTE_PRIOR=0`.
+by this profile. The launcher forces `STRATA_ROUTE_PRIOR=0` and
+`STRATA_ROUTE_TAIL_SKIP=0`. The latter preserves low-ranked routed expert
+contributions even when those experts are absent from the GPU cache.
+Use `--kv-vram-cells N` to change the GPU KV window. Set it to the context
+capacity for full GPU KV. An omitted window is reduced automatically for
+a context below 64K. Full GPU KV can leave insufficient space for MTP.
+Use `--ple-io direct|mmap|ram` to select embedding-table reads. Direct is the
+default. `mmap` uses reclaimable page cache. `ram` loads the full table and
+requires more memory. This flag applies only to Qwen.
 Upstream 0.2.8 also disables this bias by default on 12 GiB NVIDIA cards.
 Bonsai remains the default for `localmodel start` without a model name.
+
+The selected Unsloth configuration passed four OMP checkpoints through
+185,151 actual input tokens. Weighted decode was 55.25 tokens/s. The final
+checkpoint reached 56.27 decode and 1783 new-suffix prefill tokens/s.
+All code, recall, and strict resume checks passed. See the
+[192K report](qwen-unsloth-192k.md) for tuning results and limits.
 
 The historical measurements below used the previous ISTA IQ2_XS weights.
 With engine 0.1.52, the 256K / 64 GiB repeat passed the 16K OMP benchmark at 520.1 prompt and
