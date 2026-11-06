@@ -235,7 +235,8 @@ def prepare(info: dict[str, Any]) -> None:
 
     pack = Path(info["pack_directory"])
     mtp = Path(info["mtp_directory"]).parent
-    run("iq_pack.py", "--gguf", info["first_shard"], "--out", str(pack))
+    # Use upstream conversion for the small projections outside the native tensors.
+    run("iq_pack.py", "--gguf", info["first_shard"], "--out", str(pack), "--compat-bf16")
     run("mtp_fetch.py", "fetch", "--out", str(mtp))
     run("mtp_fetch.py", "verify", "--out", str(mtp))
     run(

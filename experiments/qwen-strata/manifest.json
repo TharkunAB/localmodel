@@ -4,24 +4,30 @@
   "source_archive_url": "https://api.github.com/repos/Niko1221/Strata/tarball/c3b3f5035506f3e966f1b4b7b188aeaabae92f1d",
   "source_archive_sha256": "85aa74cc4203ecdfcf17e2e325b0806ef388d6b216da202f7bd3a48a8c234cce",
   "source_receipt_sha256": "c5b34616ae55dee4b18c82fc5d909c2bff6d789a31eae84560b331e1f483b81a",
-  "model_repository": "ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF",
-  "model_revision": "ed59f92082b1e93c0e96d60a8b11aab089b52f09",
-  "model_directory": "/home/tritlo/Code/local-models/models/qwen38-ista-iq2-xs",
-  "first_shard": "/home/tritlo/Code/local-models/models/qwen38-ista-iq2-xs/Qwen3.8-Flash-Next-GSQ-RCO-IQ2_XS-00001-of-00002.gguf",
-  "pack_directory": "/home/tritlo/Code/local-models/models/qwen38-ista-iq2-xs/pack",
-  "mtp_directory": "/home/tritlo/Code/local-models/models/qwen38-ista-iq2-xs/mtp/rt",
+  "model_repository": "unsloth/Qwen3.8-Flash-Next-GGUF",
+  "model_revision": "d96201194f103c906994f283f504209dc8d2a10c",
+  "model_directory": "/home/tritlo/Code/local-models/models/qwen38-unsloth-iq1-m",
+  "first_shard": "/home/tritlo/Code/local-models/models/qwen38-unsloth-iq1-m/Qwen3.8-Flash-Next-UD-IQ1_M-00001-of-00003.gguf",
+  "pack_directory": "/home/tritlo/Code/local-models/models/qwen38-unsloth-iq1-m/pack",
+  "mtp_directory": "/home/tritlo/Code/local-models/models/qwen38-unsloth-iq1-m/mtp/rt",
   "files": [
     {
-      "name": "Qwen3.8-Flash-Next-GSQ-RCO-IQ2_XS-00001-of-00002.gguf",
-      "size": 39225954592,
-      "sha256": "92cee27ae5bbadcd732416a0f7a7f0acc092399dbbe8f5a5efa707c2ec0a49d7",
-      "url": "https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/resolve/ed59f92082b1e93c0e96d60a8b11aab089b52f09/IQ2_XS/Qwen3.8-Flash-Next-GSQ-RCO-IQ2_XS-00001-of-00002.gguf"
+      "name": "Qwen3.8-Flash-Next-UD-IQ1_M-00001-of-00003.gguf",
+      "size": 10946618,
+      "sha256": "b0d883bb9464021f31074145af74bfc2aa2d4bf0cf506f26f6f5107f4ca6ce17",
+      "url": "https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/resolve/d96201194f103c906994f283f504209dc8d2a10c/UD-IQ1_M/Qwen3.8-Flash-Next-UD-IQ1_M-00001-of-00003.gguf"
     },
     {
-      "name": "Qwen3.8-Flash-Next-GSQ-RCO-IQ2_XS-00002-of-00002.gguf",
+      "name": "Qwen3.8-Flash-Next-UD-IQ1_M-00002-of-00003.gguf",
+      "size": 39196009888,
+      "sha256": "bddcd79634ccddbb2e0951345c73c6ae8bd7b12594f55a2a529474701757391e",
+      "url": "https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/resolve/d96201194f103c906994f283f504209dc8d2a10c/UD-IQ1_M/Qwen3.8-Flash-Next-UD-IQ1_M-00002-of-00003.gguf"
+    },
+    {
+      "name": "Qwen3.8-Flash-Next-UD-IQ1_M-00003-of-00003.gguf",
       "size": 28800138432,
-      "sha256": "316b46f3a2dbd68c900f43136ab9449f9dcc3725dfd8c794847c204bc161e113",
-      "url": "https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/resolve/ed59f92082b1e93c0e96d60a8b11aab089b52f09/IQ2_XS/Qwen3.8-Flash-Next-GSQ-RCO-IQ2_XS-00002-of-00002.gguf"
+      "sha256": "05716382c280d999b81afff92b2d527fadbfd926ac225ffdc273f2d1d13331c6",
+      "url": "https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/resolve/d96201194f103c906994f283f504209dc8d2a10c/UD-IQ1_M/Qwen3.8-Flash-Next-UD-IQ1_M-00003-of-00003.gguf"
     }
   ],
   "context": 262144,
@@ -57,7 +63,7 @@
     "pyyaml==6.0.3",
     "regex==2026.9.10"
   ],
-  "ple_shard": "/home/tritlo/Code/local-models/models/qwen38-ista-iq2-xs/Qwen3.8-Flash-Next-GSQ-RCO-IQ2_XS-00002-of-00002.gguf",
+  "ple_shard": "/home/tritlo/Code/local-models/models/qwen38-unsloth-iq1-m/Qwen3.8-Flash-Next-UD-IQ1_M-00003-of-00003.gguf",
   "source_tag": "v0.2.11",
   "control_version": "0.1.57"
 }

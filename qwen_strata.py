@@ -1,4 +1,4 @@
-"""Manage the pinned Qwen3.8 IQ2_XS files and the Strata server."""
+"""Manage the pinned Qwen3.8 Unsloth UD-IQ1_M files and the Strata server."""
 
 from __future__ import annotations
 
@@ -29,7 +29,7 @@ def manifest() -> dict[str, Any]:
 
 def directory() -> Path:
     """Require the dedicated model directory without symbolic links."""
-    folder = ROOT / "models/qwen38-ista-iq2-xs"
+    folder = ROOT / "models/qwen38-unsloth-iq1-m"
     if Path(manifest()["model_directory"]) != folder:
         raise RuntimeError("The Qwen model directory does not match its managed path.")
     if folder.parent.is_symlink() or folder.is_symlink() or (folder.exists() and not folder.is_dir()):
@@ -142,7 +142,7 @@ def remove(dry_run: bool = False) -> None:
 def settings(args: argparse.Namespace, item: dict[str, Any]) -> dict[str, Any]:
     """Build Qwen engine settings from the supported launcher controls."""
     if args.no_offload:
-        raise RuntimeError("Qwen IQ2_XS needs system RAM for experts on this GPU. --no-offload cannot fit its weights.")
+        raise RuntimeError("Qwen UD-IQ1_M needs system RAM for experts on this GPU. --no-offload cannot fit its weights.")
     if args.runtime != "stock" or args.speculative != "mtp":
         raise RuntimeError("This Qwen profile requires its pinned Strata runtime with MTP. Use a verify window of 2 or more tokens.")
     if args.lookup_type != "ngram-simple" or args.lookup_min_tokens is not None:
@@ -199,7 +199,7 @@ def settings(args: argparse.Namespace, item: dict[str, Any]) -> dict[str, Any]:
     return {"exe": str(binary), "arch": "qwen4exp", "drafting": "mtp", "args": native_args,
             "cwd": str(source), "tokenizer": str(Path(info["pack_directory"]) / "tokenizer"),
             "model_name": item["alias"], "gpu": [0], "log": str(ROOT / "state/qwen-engine.log"),
-            "env": {"STRATA_ROUTE_PRIOR": "0"}, "lib_dirs": [str(binary.parent)],
+            "env": {"STRATA_ROUTE_PRIOR": "0", "STRATA_HC_Q8": "1"}, "lib_dirs": [str(binary.parent)],
             "sampling": {"temperature": 1.0, "top_p": 0.95},
             "reasoning_effort": None if (args.reasoning_effort or "xhigh") == "xhigh" else args.reasoning_effort,
             "reasoning_budget_tokens": budget, "fit_max_tokens": True, "api_monitor": False,

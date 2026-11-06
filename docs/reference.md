@@ -193,14 +193,15 @@ Its RULER 128K score is 65.56; a 256K capacity claim does not imply reliable
 recall throughout that window. Use it as a helper candidate, not as a confirmed
 replacement for Bonsai or Qwen. Scores across publishers use different harnesses.
 
-## Qwen3.8 Flash-Next IQ2_XS with MTP
+## Qwen3.8 Flash-Next Unsloth UD-IQ1_M with MTP
 
-Use the pinned Strata 0.2.7.1 source with Control 0.1.53 and CUDA engine 0.1.54.
-The engine comes from 0.2.8. The older server avoids a tool-parser regression.
-See the [update review](strata-0.2.8-review.md).
-It uses the original ISTA IQ2_XS weights and their MTP draft layer.
-The download includes both model shards. Preparation
-keeps the native expert weights in their original shard.
+Use the pinned Strata 0.2.11 source with Control and CUDA engine 0.1.57.
+It uses Unsloth Dynamic v3.1 UD-IQ1_M and the official Qwen MTP draft layer.
+The download includes three model shards. The third contains the PLE table.
+Preparation keeps the native expert weights in their original shard.
+The upstream packer uses `--compat-bf16` for small projections. It records
+conversions in `pack/conversions.json`. The CUDA engine reads the original
+Q8 hyper-connection projections with `STRATA_HC_Q8=1`.
 
 ```sh
 localmodel fetch qwen3.8
@@ -212,7 +213,7 @@ Stop the current model before starting Qwen. `serve` is an alias for `start`.
 The default uses 256K context, three MTP draft tokens, int8 KV, a 32 GiB resident
 expert budget, and a 64 GiB process RAM limit with no swap. The resident expert
 budget is part of the process limit. Model files and preparation data stay in
-`models/qwen38-ista-iq2-xs` on the native Linux disk.
+`models/qwen38-unsloth-iq1-m` on the native Linux disk.
 
 The API listens on `127.0.0.1:8899`. Run `omp-local` or `opencode-local` after
 it is ready. They discover the model and context size. Keep SearXNG running
@@ -234,6 +235,7 @@ by this profile. The launcher forces `STRATA_ROUTE_PRIOR=0`.
 Upstream 0.2.8 also disables this bias by default on 12 GiB NVIDIA cards.
 Bonsai remains the default for `localmodel start` without a model name.
 
+The historical measurements below used the previous ISTA IQ2_XS weights.
 With engine 0.1.52, the 256K / 64 GiB repeat passed the 16K OMP benchmark at 520.1 prompt and
 35.49 decode tokens/s. Code, 100 assertions, recall, and strict JSON resume
 passed. Peak model RAM was 64 GiB, with no swap or OOM. This run omitted

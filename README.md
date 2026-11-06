@@ -143,8 +143,8 @@ This is a separate configuration; it does not reproduce the optimized timings.
 
 ## Set up Qwen3.8 Flash-Next
 
-`qwen3.8` selects **ISTA-DASLab Qwen3.8-Flash-Next GSQ-RCO IQ2_XS**, with the
-prepared MTP layer. It is not Qwen3.8-27B, which the remote script also supports.
+`qwen3.8` selects **Unsloth Qwen3.8-Flash-Next UD-IQ1_M Dynamic v3.1**, with the
+official Qwen MTP layer. It is not Qwen3.8-27B, which the remote script also supports.
 
 ```bash
 bin/setup-localmodel --strata --dry-run
@@ -159,12 +159,13 @@ Fetch also prepares the Qwen engine and MTP artifacts. The defaults are
 three draft tokens, and a 768 MiB VRAM reserve**. Strata's native speculation
 value includes the accepted token, so the launcher maps three drafts to four.
 Vision, suffix drafting, and routing priors are disabled.
-The stock 0.2.9 API enables the Linux CUDA GDN defaults through
+The pinned Strata 0.2.11 API enables the Linux CUDA GDN defaults through
 `STRATA_GDN_TC=1` and `STRATA_GDN_CONVL2=2`. The tensor-core path needs about
 57.5 MiB of extra GPU scratch space. See the
 [kernel review](docs/strata-0.2.9-review.md#qwen-linux-cuda-gdn-defaults).
 
-The 2026-11-05 matched retest found 2.25 to 2.82 times faster prefill on 0.2.11
+The following measurements used the previous ISTA IQ2_XS weights.
+They do not measure the Unsloth replacement. The 2026-11-05 matched retest found 2.25 to 2.82 times faster prefill on 0.2.11
 than 0.2.9, with approximately unchanged decode. A longer default run reached
 53.10 decode and 1548.20 new-suffix prefill tokens/s at about 128K actual input.
 All coding, recall, and strict JSON resume checks passed.
@@ -182,7 +183,11 @@ remain unchanged. See the [measurements and controls](docs/qwen-0.2.11-tuning.md
 for memory use, MTP depth, suffix lookup, CPU workers, and benchmark limits.
 The [older 0.2.9 results](docs/strata-0.2.9-review.md#local-measurements) remain available.
 
-The prepared model uses about **71.25 GiB**. Allow **at least 90 GiB free**
+The Unsloth shards total **68.01 GB** before the prepared index and MTP files.
+Preparation uses upstream `--compat-bf16` for small projections. The CUDA engine
+reads native Q8 hyper-connection projections with `STRATA_HC_Q8=1`. The main
+GGUF files stay unchanged and are verified against pinned SHA256 values.
+Allow **at least 90 GiB free**
 for an initial fetch, preparation, and runtimes. The RAM cap includes more than
 the expert budget: cache, page cache charged to the process group, and runtime
 buffers also count. Leave RAM for the OS and the coding agent.
