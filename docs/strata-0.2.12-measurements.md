@@ -2,7 +2,7 @@
 
 Measured on 2026-11-07. Measurements and cleanup are complete. The normal Qwen default remains MTP4. Explicit DFlash2 uses confidence 0.8. The long DFlash2 run decoded at 58.41 tok/s against MTP4's 52.17, but its different tool history required extra prefill and increased total model HTTP time. These runs do not establish a matched whole-workflow speedup.
 
-After these measurements, Matti selected file-backed experts and adaptive fetch 1 as the local Qwen memory defaults. This trades speed for reclaimable RAM. The mapped MTP4, fetch 1 row below describes that configuration. The long MTP4 and DFlash2 comparisons used resident experts. Use `--expert-ram-gb 36` to restore that memory layout; adaptive fetch then defaults to off.
+The local Qwen default uses a 36 GiB resident expert budget with adaptive fetch off. `localmodel start qwen3.8 lowram` selects file-backed experts and adaptive fetch 1. This profile trades speed for reclaimable RAM. The mapped MTP4, fetch 1 row below describes that configuration. Both profiles retain the 64 GiB cap. The long MTP4 and DFlash2 comparisons used resident experts.
 
 The raw evidence links below point to local, ignored files under `results/strata-0212-20261107`. Those files are not included in the published repository. Official upstream claims have separate public links. No target GGUF weights changed. Owned model and OMP scopes stopped, port 8899 closed, state was restored, and the temporary search service stopped.
 

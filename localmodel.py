@@ -152,6 +152,7 @@ def current(port: int | None = None) -> dict[str, Any]:
     if managed.get("port") == result["port"] and managed.get("model") == result["model"]:
         result["preset"] = managed.get("preset")
         result["profile"] = managed.get("profile")
+        result["settings_profile"] = managed.get("settings_profile", "default")
         result["pid"] = managed.get("controller_pid")
         for key in ("cpu_offload_gb", "cpu_moe_layers", "moe_cache_mib", "batch_tokens", "ubatch_tokens", "command", "runtime", "rounds", "memory_limit",
                     "expert_memory", "expert_ram_gb", "cpu_threads", "gpu_expert_cache_gb", "gpu_expert_fraction", "prefill_chunk", "vram_reserve_mib", "engram_cache_mib", "engram_threads", "thinking_budget", "strata_slots", "strata_slot_directory", "ple_io", "expert_tail_skip", "adaptive_fetch", "draft_conf"):
@@ -585,7 +586,8 @@ def serve(args: argparse.Namespace, item: dict[str, Any]) -> int:
         environment["LLAMA_MTP_CHAIN"] = chain
     if args.dry_run:
         if item["runtime"] in ("strata", "strata-qwen"):
-            print(json.dumps({"command": command, "configuration": strata.settings(args, item)}, indent=2))
+            print(json.dumps({"command": command, "settings_profile": args.settings_profile,
+                              "configuration": strata.settings(args, item)}, indent=2))
             return 0
         variables = ([f"LLAMA_MTP_CHAIN={environment['LLAMA_MTP_CHAIN']}"] if mtp else [])
         if args.mma_decode_min_kv is not None:
@@ -654,6 +656,7 @@ def serve(args: argparse.Namespace, item: dict[str, Any]) -> int:
             "command": command,
             "memory_limit": command[2] if command[:2] == [str(CAPPED), "--mem"] else None,
             "preset": args.preset,
+            "settings_profile": args.settings_profile,
             "runtime": args.runtime if item["runtime"] == "prism" else item["runtime"],
             "model": item["alias"], "port": args.port,
             "context": args.context or item["context"],
@@ -749,7 +752,7 @@ def stats_text() -> str:
     """Show recorded measurements without starting a model."""
     return ("2026-11-07 Strata 0.2.12 / native 0.1.58 comparison; 64G cap and zero swap.\n"
             "Qwen Unsloth IQ1_M, 192K capacity: normal default MTP4; optional tuned DFlash2 uses 5 drafts and confidence 0.8.\n"
-            "Current Qwen memory default: mapped experts, zero dedicated expert RAM, adaptive fetch 1, 64G cap. Chosen for reclaimable RAM.\n"
+            "Qwen default: 36 GiB resident expert budget, adaptive fetch off. lowram profile: mapped experts, zero dedicated expert RAM, adaptive fetch 1. Both use a 64G cap.\n"
             "Resident experts, growing 16K/32K/64K OMP: MTP4 53.63 decode / 1319.75 new-prefill tok/s; DFlash2 58.57 / 1452.02.\n"
             "Resident experts, matched 16K/64K/128K/180K: MTP4 52.17 decode / 1545.45 prefill; DFlash2 58.41 / 1701.80.\n"
             "Maximum actual input 185243 / 185415; both pass all code, recall, tool and strict JSON checks.\n"
@@ -877,16 +880,17 @@ def stats_text() -> str:
 
 def main() -> int:
     """Parse model management and discovery commands."""
-    help_tail = (f"Start defaults to {DEFAULT_START_MODEL}. Explicit flags override preset settings.\n"
+    help_tail = (f"Start defaults to {DEFAULT_START_MODEL}. Explicit flags override preset and profile settings.\n"
                  "Models: bonsai2-27b, bonsai2-9b, qwen3.8, deepseek, deepseek-coder, deepseek-full, flint, groot, lfm, dory, dory-gguf.\n"
-                 "Use localmodel list for installed profiles and localmodel presets for named settings.\n"
+                 "Use localmodel list for installed models and settings profiles; localmodel presets lists existing presets.\n"
+                 "Select a settings profile with localmodel start MODEL PROFILE, for example qwen3.8 lowram.\n"
                  "Use localmodel start --help for flags and localmodel start MODEL --dry-run to preview a launch.\n"
                  "Use localmodel --stats for recorded measurements and their limitations.")
     parser = argparse.ArgumentParser(prog="localmodel", description=__doc__, epilog=help_tail,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--stats", action="store_true", help="Show recorded performance measurements and exit.")
     commands = parser.add_subparsers(dest="action")
-    commands.add_parser("list", help="List model profiles and installed weights.")
+    commands.add_parser("list", help="List models, settings profiles, and installed weights.")
     commands.add_parser("stop", help="Stop the model started by localmodel.")
     preset_parser = commands.add_parser("presets", help="Show named settings and measured performance.")
     preset_parser.add_argument("--json", action="store_true")
@@ -920,6 +924,8 @@ def main() -> int:
                                 epilog=help_tail, formatter_class=argparse.RawDescriptionHelpFormatter)
     start.add_argument("model", nargs="?", default=DEFAULT_START_MODEL,
                        help=f"Model or preset to start (default: {DEFAULT_START_MODEL}).")
+    start.add_argument("settings_profile", nargs="?", default="default", metavar="PROFILE",
+                       help="Model settings profile (default: default). Qwen also supports lowram. Use localmodel list to see available profiles.")
     start.add_argument("--context", "--ctx", type=tokens)
     start.add_argument("--port", type=int, default=8899)
     start.add_argument("--mem", type=memory_size,
@@ -927,7 +933,7 @@ def main() -> int:
     start.add_argument("--expert-memory", choices=("cache", "resident"),
                        help="DeepSeek CPU expert storage (default: profile). cache uses --expert-ram-gb. resident copies variable-size experts within the native RAM allowance, with an 8 GiB margin. Remaining experts and Engram can still use SSD.")
     start.add_argument("--expert-ram-gb", type=float,
-                       help="Strata expert demand-cache budget in GiB, inside --mem (Coder: 0; deepseek-full: 48; Qwen: 0). Zero leaves CPU expert caching to Linux. With --expert-memory resident, omit this flag or use 0. Separate from llama.cpp --cache-ram.")
+                       help="Strata expert demand-cache budget in GiB, inside --mem (Coder: 0; deepseek-full: 48; Qwen: 36, or 0 with lowram). Zero leaves CPU expert caching to Linux. With --expert-memory resident, omit this flag or use 0. Separate from llama.cpp --cache-ram.")
     start.add_argument("--cpu-threads", type=int, help="Strata CPU expert workers, 0-64 (DeepSeek default: 12; Qwen: automatic). 0 selects the automatic count. Qwen also uses the host thread. I/O threads are separate.")
     start.add_argument("--strata-slots", action=argparse.BooleanOptionalAction, default=None,
                        help="Retain DeepSeek Strata conversation checkpoints (default: on). Keeps one saved conversation in RAM and a 2 GiB disk-cache budget per weights/runtime/context configuration.")
@@ -1025,28 +1031,39 @@ def main() -> int:
         return 0
     models = catalog()
     if args.action == "list":
-        print(f"{'MODEL':<28} {'WEIGHTS':<10} {'CONTEXT':>8}  {'RUNTIME':<8}  OPTIONAL DECODERS")
+        print(f"{'MODEL':<28} {'WEIGHTS':<10} {'CONTEXT':>8}  {'RUNTIME':<8}  {'PROFILES':<18}  OPTIONAL DECODERS")
         for name, item in models.items():
             state = "installed" if installed(name, item) else "missing"
             optional = ", ".join(f"{variant}:{'ready' if installed(name, item[variant]) else 'missing'}"
                                  for variant in ("mtp", "mtp_procreations", "dflash") if variant in item) or "-"
-            print(f"{name:<28} {state:<10} {item['context']:>8}  {item['runtime']:<8}  {optional}")
+            profiles = ", ".join(("default", *item.get("profiles", {})))
+            print(f"{name:<28} {state:<10} {item['context']:>8}  {item['runtime']:<8}  {profiles:<18}  {optional}")
         return 0
+    explicit = {argument.split("=", 1)[0][2:].replace("-", "_")
+                for argument in sys.argv[2:] if argument.startswith("--")}
+    for alias, destination in (("ctx", "context"), ("loops", "rounds"), ("no_prompt_lookup", "prompt_lookup"),
+                               ("no_mtp_chain", "mtp_chain"), ("no_replay", "replay"), ("no_gdn_mma", "gdn_mma")):
+        if alias in explicit:
+            explicit.add(destination)
     args.preset = args.model if args.model in presets.load() else None
     if args.preset:
         settings = presets.get(args.preset)["settings"]
-        explicit = {argument.split("=", 1)[0][2:].replace("-", "_")
-                    for argument in sys.argv[2:] if argument.startswith("--")}
-        for alias, destination in (("ctx", "context"), ("loops", "rounds"), ("no_prompt_lookup", "prompt_lookup"),
-                                   ("no_mtp_chain", "mtp_chain"), ("no_replay", "replay"), ("no_gdn_mma", "gdn_mma")):
-            if alias in explicit:
-                explicit.add(destination)
         for key, value in settings.items():
             if key == "model" or (args.action in ("start", "serve", "fetch", "pull", "remove") and key not in explicit):
                 setattr(args, key, Path(value) if key == "kv_mean_center" else value)
     args.model = ALIASES.get(args.model, args.model)
     if args.model not in models:
         parser.error("Unknown model. Use localmodel list.")
+    if args.action in ("start", "serve") and args.settings_profile != "default":
+        profiles = models[args.model].get("profiles", {})
+        if args.settings_profile not in profiles:
+            available = ", ".join(("default", *profiles))
+            parser.error(f"Unknown profile {args.settings_profile!r} for {args.model}. Available: {available}.")
+        settings = profiles[args.settings_profile]
+        for key, value in settings.items():
+            if key not in explicit:
+                setattr(args, key, Path(value) if key in ("kv_mean_center", "slot_save_path") else value)
+        explicit.update(settings)
     if getattr(args, "speculative", "none") == "dflash2" and args.model != qwen_strata.NAME:
         parser.error("--speculative dflash2 requires Strata Qwen.")
     if getattr(args, "draft_conf", None) is not None and (args.model != qwen_strata.NAME or args.speculative != "dflash2"):
@@ -1058,15 +1075,14 @@ def main() -> int:
     if getattr(args, "dspark_conf", None) is not None and (args.model != deepseek_strata.NAME or args.speculative != "dspark"):
         parser.error("--dspark-conf requires deepseek-full with --speculative dspark.")
     if args.model == deepseek_strata.NAME and args.action in ("start", "serve") and args.speculative == "dspark":
-        if not any(arg.split("=", 1)[0] == "--draft-tokens" for arg in sys.argv[2:]):
+        if "draft_tokens" not in explicit:
             args.draft_tokens = 5
     if args.model == qwen_strata.NAME and args.action in ("start", "serve"):
-        explicit_flags = {arg.split("=", 1)[0] for arg in sys.argv[2:]}
-        if "--speculative" not in explicit_flags:
+        if "speculative" not in explicit:
             args.speculative = "mtp"
-        if "--draft-tokens" not in explicit_flags:
+        if "draft_tokens" not in explicit:
             args.draft_tokens = 5 if args.speculative == "dflash2" else models[args.model].get("draft_tokens", 4)
-        if "--lookup-tokens" not in explicit_flags:
+        if "lookup_tokens" not in explicit:
             args.lookup_tokens = 12
         if args.kv_vram_cells is None:
             context = args.context or models[args.model]["context"]

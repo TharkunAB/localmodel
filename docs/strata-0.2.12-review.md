@@ -127,9 +127,9 @@ confirmed activation with mapped experts and MTP4. Modes 0, 1 and 2 measured
 44.26, 44.46 and 42.68 native decode tokens/s; new-prefill rates were 667.09,
 690.38 and 593.18. All three passed code, recall, required-tool and strict-format
 checks through about 66K actual input. These single trajectories do not
-establish a repeatable adaptive-fetch gain. After the comparison, Matti selected
-mapped experts and mode 1 as the local Qwen defaults to make expert RAM
-reclaimable. An explicit resident expert budget defaults to mode 0.
+establish a repeatable adaptive-fetch gain. The local Qwen default uses
+resident experts and mode 0. The `lowram` profile selects mapped experts
+and mode 1 to make expert RAM reclaimable. Both retain the 64 GiB cap.
 
 Serving has no separate adaptive admission/hit counter. GPU lookup misses
 are not SSD misses. Mapped expert payload counters can count the same bytes

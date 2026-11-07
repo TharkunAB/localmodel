@@ -194,7 +194,7 @@ def settings(args: argparse.Namespace, item: dict[str, Any]) -> dict[str, Any]:
         raise RuntimeError("These DeepSeek or llama.cpp controls do not apply to Qwen. Use the Qwen controls described by localmodel start --help.")
     if args.replay or args.gdn_mma is not None:
         raise RuntimeError("Replay and GDN MMA controls require a Bonsai runtime.")
-    ram = args.expert_ram_gb if args.expert_ram_gb is not None else 0
+    ram = args.expert_ram_gb if args.expert_ram_gb is not None else 36
     adaptive = getattr(args, "adaptive_fetch", None)
     if adaptive is None:
         adaptive = 1 if ram == 0 else 0
