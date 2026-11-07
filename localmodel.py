@@ -750,7 +750,14 @@ def stop() -> None:
 
 def stats_text() -> str:
     """Show recorded measurements without starting a model."""
-    return ("2026-11-07 full Unsloth DeepSeek on Strata 0.2.12 / native 0.1.58. deepseek now selects full UD-IQ1_S.\n"
+    return ("2026-11-07 full DeepSeek tuning, Strata 0.2.12 / native 0.1.58: defaults retained.\n"
+            "192K capacity, 64G cap, cache48, CPU12, prefill4096, reserve700, six experts, no DSpark.\n"
+            "Nine 16K OMP screens: controls 9.19/9.16 decode tok/s; cache40 8.49, cache52 9.37, CPU8 8.15, reserve1536 8.48.\n"
+            "DSpark depths 1/3: 8.50/8.74 decode tok/s. Chunk2048: 9.61 decode, but first prefill 189.91 versus 267.44/270.11 tok/s.\n"
+            "All repair/recall/strict-resume checks pass; no OOM or swap. Actual input 16571-18287; these screens do not fill 192K.\n"
+            "Outputs and tool paths differ; a single 2% cache52 gain is not established. All owned services stopped.\n"
+            "See docs/deepseek-full-0.2.12-tuning.md for settings, resources and limitations.\n\n"
+            "2026-11-07 full Unsloth DeepSeek on Strata 0.2.12 / native 0.1.58. deepseek now selects full UD-IQ1_S.\n"
             "192K capacity, 64G cap, cache48, CPU12, prefill4096, six experts, no DSpark.\n"
             "Growing 16K/64K/128K/180K OMP: 8.99 decode / 373.09 new-prefill tok/s, versus 9.55 / 355.32 on 0.2.11.\n"
             "All four checkpoints pass through 184758 actual input; 3118 assertions. Peak RAM 64 GiB, whole-GPU 11.624 GiB; no OOM or swap.\n"

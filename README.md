@@ -276,6 +276,11 @@ recall and strict resume checkpoints passed. The matched 0.2.11 run measured
 its shorter wall time does not establish a fixed-work speedup. See the
 [full-model 0.2.12 comparison](docs/deepseek-full-0.2.12.md).
 
+The later [nine-run tuning sweep](docs/deepseek-full-0.2.12-tuning.md) kept
+these defaults. The two 16K controls measured 9.19 and 9.16 decode tokens/s.
+A larger cache gave no established gain. Smaller prefill chunks reduced prompt
+speed, and both tested DSpark depths decoded more slowly than the controls.
+
 `deepseek-coder` remains an optional **ISTA GSQ-RCO Coder IQ2_XXS** profile,
 pinned to revision `54229d38d588a66d1c6cff08af7b281b9326c656`.
 It retains 192 of the original 384 routed experts per layer.
