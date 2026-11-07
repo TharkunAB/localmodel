@@ -733,8 +733,13 @@ def stop() -> None:
 def stats_text() -> str:
     """Show recorded measurements without starting a model."""
     return ("qwen3.8: Unsloth UD-IQ1_M v3.1 + MTP4, Strata 0.2.11 / native 0.1.57.\n"
-            "Default: 192K capacity, 64K GPU KV window, 64G cap, 32 GiB expert budget, direct PLE reads, 768 MiB VRAM reserve. Expert tail skipping and suffix lookup are off.\n"
-            "2026-11-06 growing 16K/64K/128K/180K OMP: 3290 tokens / 59.5461 decode seconds = 55.25 tok/s.\n"
+            "Default: 192K capacity, 64K GPU KV window, 64G cap, 36 GiB expert budget, direct PLE reads, 1024 MiB VRAM reserve. Expert tail skipping and suffix lookup are off.\n"
+            "2026-11-07 growing 16K/64K/128K/180K OMP: 4782 tokens / 89.8841 decode seconds = 53.20 tok/s; maximum input 185531.\n"
+            "Decode 54.84/55.05/52.30/50.99; initial/new-suffix prefill 1354/1677/1619/1517 tok/s. Later requests reuse prefixes.\n"
+            "MTP accepted 3257/4449 drafts (73.21%). RAM peak 64 GiB; whole-GPU peak 11.38 GiB; zero model swap/OOM.\n"
+            "All four code/recall/strict-resume checkpoints pass. Minimum reported free VRAM 498 MiB, with one warning below 512 MiB.\n"
+            "Actual resident experts 31.90 GiB; zero logical expert file reads. See docs/local-192k-comparison.md for metrics and limits.\n"
+            "Earlier 32 GiB / 768 MiB reserve run, 2026-11-06: 3290 tokens / 59.5461 decode seconds = 55.25 tok/s.\n"
             "Decode by checkpoint: 54.65/57.62/52.66/56.27; first-request new-suffix prefill: 1548/1920/1883/1783 tok/s. Later requests reuse prefixes.\n"
             "Last input 185151 tokens. All four code/recall/strict-resume checkpoints pass, 3118 assertions, zero tool errors. Draft acceptance 2270/2992 (75.87%).\n"
             "Peak 64 GiB, no OOM/model swap; 31.89 GiB expert RAM, 2.93 GiB GPU expert cache, 11.72 GiB whole-device VRAM peak.\n"
@@ -756,7 +761,11 @@ def stats_text() -> str:
             "Previous 48G code/recall pass; resume used fenced JSON (strict format fail). 40G/16 GiB: 609/46.34 tok/s, all checks pass.\n"
             "Source: results/strata-027-20261027/summary.md.\n\n"
             "deepseek / deepseek-coder: ISTA GSQ-RCO Coder IQ2_XXS, Strata 0.2.11 / native 0.1.57.\n"
-            "Default: 256K capacity, 64G cap, file-backed experts with zero private cache, 12 workers, 4096-token chunks, retained slots, no draft.\n"
+            "Default: 192K capacity, 64G cap, file-backed experts with zero private cache, 12 workers, 4096-token chunks, retained slots, no draft.\n"
+            "2026-11-07 growing 16K/64K/128K/180K OMP: 3034 tokens / 254.6245 decode seconds = 11.92 tok/s; maximum input 184811.\n"
+            "Decode 13.02/11.05/11.11/11.62; new-suffix prefill 412/487/488/483 tok/s. Later requests reuse prefixes.\n"
+            "All four code/recall/resume checkpoints pass, 3118 assertions. Peak about 64 GiB; zero model swap/OOM.\n"
+            "Coder remains the DeepSeek default. See docs/local-192k-comparison.md for tool-policy refusals, coding diagnostics, memory costs, and the full-Unsloth comparison.\n"
             "2026-11-05 matched default comparison, growing 16K/32K/64K OMP: 0.2.10 -> 0.2.11 weighted decode 12.499 -> 12.460 tok/s (-0.32%).\n"
             "Decode by checkpoint: 13.10/12.60/11.31 -> 12.78/12.63/11.84; first-request prefill 409.9/470.3/602.5 -> 413.2/482.6/605.8 tok/s.\n"
             "Later prefill measures the new suffix after prefix reuse. Generated 2239/2244 tokens; repair+resume 372.03/371.97 s.\n"
@@ -783,8 +792,14 @@ def stats_text() -> str:
             "Historical native 0.1.55 model comparison, same 64G/48 GiB demand cache: Coder 11.24 vs full Unsloth 8.16 tok/s.\n"
             "See docs/deepseek-coder-comparison.md for those earlier measurements and quality limits.\n"
             "\n"
-            "deepseek-full: Unsloth Dynamic v3.1 UD-IQ1_S, 256K capacity. Historical measurements below use native 0.1.55.\n"
-            "Default: 12 CPU workers, 4096-token chunks, retained conversation slots, 48 GiB expert cache, 70G cap, no draft.\n"
+            "deepseek-full: Unsloth Dynamic v3.1 UD-IQ1_S, Strata 0.2.11 / native 0.1.57, 192K capacity.\n"
+            "Default: 12 CPU workers, 4096-token chunks, retained conversation slots, 48 GiB expert cache, 64G cap, no draft.\n"
+            "2026-11-07 growing 16K/64K/128K/180K OMP: 3887 tokens / 406.9776 decode seconds = 9.55 tok/s; maximum input 184898.\n"
+            "Decode 9.81/9.42/9.26/9.25; new-suffix prefill 276/432/461/447 tok/s. All four code/recall/resume checkpoints pass.\n"
+            "Peak 64 GiB, zero model swap/OOM. Later prefill reuses prefixes. Single trajectories; output lengths differ.\n"
+            "16K screens: cache0=7.39, cache48=9.25, DSpark3=9.02, DSpark5=9.07, prefill8192=8.21, resident=7.62 decode tok/s.\n"
+            "DSpark and resident copies did not improve this selection. See docs/local-192k-comparison.md for settings, correctness and measurement limits.\n"
+            "Historical measurements below use native 0.1.55 and 256K capacity.\n"
             "0.2.9 tuning, 16K OMP: four workers 5.20 decode; twelve workers 8.51-8.80 tok/s.\n"
             "Growing 16K/32K/64K repeat: 8.07/8.28/7.82 decode tok/s; all checks pass, no tool errors. Peak 63.97 GiB, no swap/OOM/cap events.\n"
             "DSpark2 with twelve workers: 8.38 tok/s, 84.8% acceptance; remains optional.\n"
@@ -881,14 +896,14 @@ def main() -> int:
     start.add_argument("--expert-memory", choices=("cache", "resident"),
                        help="DeepSeek CPU expert storage (default: profile). cache uses --expert-ram-gb. resident copies variable-size experts within the native RAM allowance, with an 8 GiB margin. Remaining experts and Engram can still use SSD.")
     start.add_argument("--expert-ram-gb", type=float,
-                       help="Strata expert demand-cache budget in GiB, inside --mem (Coder: 0; deepseek-full: 48; Qwen: 32). Zero leaves CPU expert caching to Linux. With --expert-memory resident, omit this flag or use 0. Separate from llama.cpp --cache-ram.")
+                       help="Strata expert demand-cache budget in GiB, inside --mem (Coder: 0; deepseek-full: 48; Qwen: 36). Zero leaves CPU expert caching to Linux. With --expert-memory resident, omit this flag or use 0. Separate from llama.cpp --cache-ram.")
     start.add_argument("--cpu-threads", type=int, help="Strata CPU expert workers, 0-64 (DeepSeek default: 12; Qwen: automatic). 0 selects the automatic count. Qwen also uses the host thread. I/O threads are separate.")
     start.add_argument("--strata-slots", action=argparse.BooleanOptionalAction, default=None,
                        help="Retain DeepSeek Strata conversation checkpoints (default: on). Keeps one saved conversation in RAM and a 2 GiB disk-cache budget per weights/runtime/context configuration.")
     start.add_argument("--gpu-expert-cache-gb", type=float, help="Legacy control. Official Strata requires --gpu-expert-fraction instead.")
     start.add_argument("--gpu-expert-fraction", type=float, help="DeepSeek Strata GPU expert-cache fraction, from 0 to 1, of free VRAM after dense weights and the reserve (default: stock automatic).")
     start.add_argument("--prefill-chunk", type=int, help="Strata prefill chunk tokens (DeepSeek: 4096, minimum effective 256; Qwen: automatic unless set).")
-    start.add_argument("--vram-reserve-mib", type=int, help="Strata VRAM reserve for CUDA and desktop use, in MiB (DeepSeek: 700; Qwen: 768).")
+    start.add_argument("--vram-reserve-mib", type=int, help="Strata VRAM reserve for CUDA and desktop use, in MiB (DeepSeek: 700; Qwen: 1024).")
     start.add_argument("--engram-cache-mib", type=int, help="DeepSeek Strata hashed-embedding row-cache budget in MiB (default: 256; 0 disables).")
     start.add_argument("--engram-threads", type=int, help="DeepSeek Strata hashed-embedding SSD read threads (default: 16).")
     start.add_argument("--ple-io", choices=("direct", "mmap", "ram"),

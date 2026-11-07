@@ -57,7 +57,7 @@ official updates under the procedure below.
    delete files to make space. Retain the previous runtime for rollback until
    validation completes. Check the required download and extraction space.
 4. Use Coder with zero private expert cache, a 64 GiB hard memory cap, zero swap,
-   256K context capacity, and the current verified runtime settings. Respect
+   192K context capacity, and the current verified runtime settings. Respect
    later explicit user changes. Use `~/Code/heavy-management` for capped serial
    jobs. Do not increase queue concurrency. Stop below 8 GiB available Linux
    memory. Do not monitor Windows memory for these benchmark runs.

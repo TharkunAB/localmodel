@@ -1,6 +1,6 @@
 # DeepSeek Coder comparison on Strata 0.2.9
 
-For the current runtime, see the [Strata 0.2.10 remeasurement](strata-0.2.10-coder.md).
+For current settings and results, see the [192K comparison](local-192k-comparison.md).
 The later [memory-sharing comparison](coder-elastic-memory.md) changed the
 default to zero private expert cache with the same 64 GiB process cap.
 

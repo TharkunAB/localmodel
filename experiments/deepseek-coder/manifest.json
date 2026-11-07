@@ -2,7 +2,7 @@
   "model_repository": "ISTA-DASLab/DeepSeek-V4.1-Flash-1017-GSQ-RCO-Coder-GGUF",
   "model_revision": "54229d38d588a66d1c6cff08af7b281b9326c656",
   "model_directory": "/home/tritlo/Code/local-models/models/deepseek41-1017-gsq-rco-coder-iq2-xxs",
-  "context": 262144,
+  "context": 196608,
   "memory_limit": "64G",
   "expert_memory": "cache",
   "expert_ram_budget_gib": 0,

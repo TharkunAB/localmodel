@@ -211,8 +211,9 @@ localmodel start qwen3.8
 
 Stop the current model before starting Qwen. `serve` is an alias for `start`.
 The default uses 192K context, a 64K GPU KV window, four MTP draft tokens,
-int8 KV, a 32 GiB resident expert budget, and a 64 GiB process RAM limit with
-no swap. The remaining KV uses RAM. The resident expert budget is part of
+int8 KV, a 36 GiB resident expert budget, and a 64 GiB process RAM limit with
+no swap. The VRAM reserve is 1024 MiB. The remaining KV uses RAM.
+The resident expert budget is part of
 the process limit. Model files and preparation data stay in
 `models/qwen38-unsloth-iq1-m` on the native Linux disk.
 
@@ -245,9 +246,9 @@ Upstream 0.2.8 also disables this bias by default on 12 GiB NVIDIA cards.
 Bonsai remains the default for `localmodel start` without a model name.
 
 The selected Unsloth configuration passed four OMP checkpoints through
-185,151 actual input tokens. Weighted decode was 55.25 tokens/s. The final
-checkpoint reached 56.27 decode and 1783 new-suffix prefill tokens/s.
-All code, recall, and strict resume checks passed. See the
+185,531 actual input tokens. Weighted decode was 53.20 tokens/s.
+The smallest reported free VRAM was 498 MiB, versus 55 MiB with the earlier
+768 MiB reserve. All code, recall, and strict resume checks passed. See the
 [192K report](qwen-unsloth-192k.md) for tuning results and limits.
 
 The historical measurements below used the previous ISTA IQ2_XS weights.
@@ -268,16 +269,18 @@ The 128K and 256K settings are capacities, not filled workload validations.
 
 ## DeepSeek 1017 with SSD experts
 
-`deepseek` selects Unsloth Dynamic V3.1 UD-IQ1_S and official
-[Strata](https://github.com/Niko1221/Strata). The API source is pinned to
-the 0.2.7.1 tag (Control 0.1.53). The signed CUDA engine is `strata-dsv41` 0.1.54
-from Strata 0.2.8. The older server avoids a tool-parser regression.
-The source CLI still reports product version 0.2.7 and build 0.1.53.
-See the [update review](strata-0.2.8-review.md).
-The new weights are pinned to `8a6ec9cf118e785a362ea94ee123c61c70553be6`.
-The following measurements used the previous ISTA GSQ-RCO IQ1_M weights.
-They do not measure the new Unsloth weights.
-Both Strata profiles use a 64 GiB process cap after the WSL memory increase.
+`deepseek`, `deepseek-coder`, and `strata` select ISTA GSQ-RCO Coder IQ2_XXS,
+pinned to `54229d38d588a66d1c6cff08af7b281b9326c656`.
+`deepseek-full` and `deepseek-iq1-s` select Unsloth Dynamic V3.1 UD-IQ1_S,
+pinned to `8a6ec9cf118e785a362ea94ee123c61c70553be6`.
+Both use official [Strata](https://github.com/Niko1221/Strata) source, API,
+and packer 0.2.11, and the signed CUDA `strata-dsv41` engine
+0.1.57. See the [runtime review](strata-0.2.11-review.md).
+Both default to 192K context capacity and a 64 GiB process cap. Coder uses
+zero private expert cache. Full Unsloth uses a 48 GiB expert cache.
+
+The historical measurements below used the previous ISTA GSQ-RCO IQ1_M
+weights. They do not measure either current weight profile.
 With engine 0.1.52, the 64 GiB DeepSeek repeat passed the 16K OMP checks at 264.7 prompt and
 5.15 decode tokens/s, with a 47.58 GiB peak. It did not show a speed gain.
 See the [repeat report](../results/strata-0271-20261028/summary.md).
@@ -289,8 +292,12 @@ decode 5.31 tokens/s. This is one sampled run. See the
 [comparison](../results/strata-027-20261027/comparison.json).
 The installation uses four pinned Python packages. It does not use Abyss
 patches, a compiler, or the private CUDA toolkit from the Dory setup.
-The five Unsloth GGUF files use about 217 GiB on native WSL storage on C:.
-The model directory is `models/deepseek41-1017-unsloth-iq1-s`.
+Coder uses about 170.2 GiB in `models/deepseek41-1017-gsq-rco-coder-iq2-xxs`.
+Full Unsloth uses about 217 GiB in `models/deepseek41-1017-unsloth-iq1-s`.
+These totals include the 103 GiB Engram file. Fetch reuses its verified hard
+link when the other profile already has it. Keep these directories on fast
+native Linux storage, rather than a `/mnt/c` or `/mnt/d` Windows mount.
+The host drive containing the WSL virtual disk can vary.
 Bonsai remains the default when you omit the model name.
 
 Stop the current model before switching. Keep SearXNG running. Use these
@@ -303,12 +310,16 @@ localmodel start deepseek
 
 `fetch` installs and verifies the pinned official runtime, resumes missing
 weight downloads, and creates an index of the original GGUF files.
-`start` uses 256K context capacity, a hard 64 GiB RAM cap, a 36 GiB expert
-RAM cache, 4096-token prefill chunks, four CPU expert threads, and zero swap
-allowance. Dense layers and attention run on the GPU. Expert weights use GPU and RAM caches with
-SSD reads. OMP and OpenCode send `xhigh` reasoning requests. No DSpark
-drafter is loaded. The launcher passes `--experts 6` to keep all six routed
-experts. It does not select the new five-expert Faster mode.
+`start` uses 192K context capacity, a hard 64 GiB process-tree cap,
+4096-token prefill chunks, twelve CPU expert workers, and zero swap.
+Coder leaves CPU expert caching to Linux's reclaimable file cache. Full
+Unsloth adds a 48 GiB demand-cache budget inside the same process cap.
+Dense layers and attention run on the GPU. Other weights use RAM or SSD.
+OMP and OpenCode send `xhigh` reasoning requests. Neither profile loads a
+drafter by default. The launcher passes `--experts 6` to keep all six routed
+experts. It does not select the five-expert Faster mode.
+Use `localmodel fetch deepseek-full` and `localmodel start deepseek-full`
+to select the full profile after stopping the current server.
 
 DeepSeek blocks outgoing connections for the server and its native children.
 The local API and file access use their normal paths. `fetch` uses the network
@@ -322,30 +333,42 @@ localmodel status
 omp-local --mem 8
 ```
 
-OMP reads the live model ID and 262144-token context from port 8899.
+OMP reads the live model ID and context from port 8899. The default
+capacity is 196608 tokens; an explicit `--context` value changes it.
 Its RAM cap is separate from the model's cap. `opencode-local` can use the
 same server. OMP still requires local SearXNG to be ready.
 
-The smaller expert cache leaves RAM for other work. On a quiet machine,
-you can request a larger cache. You can also select a smaller context:
+`--expert-ram-gb` sets a private demand-cache budget inside `--mem`.
+Its default is zero for Coder and 48 GiB for full Unsloth. Zero still permits
+Linux to cache mapped expert pages. Use a smaller cap or context explicitly:
 
 ```sh
-localmodel start deepseek --expert-ram-gb 20
-localmodel start deepseek --expert-ram-gb 36
-localmodel start deepseek --context 16k
+localmodel start deepseek --context 64k --mem 48G
+localmodel start deepseek-full --expert-ram-gb 32
 ```
+
+`--expert-memory resident` copies a bounded set of experts into RAM.
+Omit `--expert-ram-gb` or set it to zero in that mode. It does not guarantee
+that every expert fits.
 
 Keep the expert cache below the hard cap. The process also needs RAM for
 dense weights, buffers, and file cache. The cap includes child processes.
 The normal server does not monitor free Windows RAM.
-The initial stock-runtime tests with 36 GiB and 20 GiB caches crossed the
+The historical initial stock-runtime tests with 36 GiB and 20 GiB caches crossed the
 8 GiB Windows headroom floor while another job used about 37 GiB of RAM.
 The test guard stopped those runs. Neither run recorded an OOM event.
 
 The stock API listens only on `127.0.0.1`. Offline mode disables remote
-image fetching and server-side MCP tools. The API request monitor and
-disk-backed conversation cache are off. Matching prompt prefixes can still
-be reused in RAM. The official packer indexes existing tensor bytes and
+image fetching and server-side MCP tools. The API request monitor is off.
+Conversation retention is on: one saved conversation in RAM and a 2 GiB
+disk budget per weights/runtime/context configuration under
+`state/deepseek-slots/`. The newest slot can exceed that disk budget.
+Slots include prompt tokens and survive a restart. `--no-strata-slots`
+disables retention but does not delete saved files. At startup, the native
+engine removes incompatible slots and slots unused for seven days from
+the selected slot directory.
+Matching prompt prefixes can also be reused in RAM.
+The official packer indexes existing tensor bytes and
 does not convert the model weights. The native `expert-profile.bin` file
 stores expert-routing counts, not conversation text.
 
@@ -370,16 +393,16 @@ The 48 GiB cap with a 36 GiB expert cache gave 257.7 prompt tokens/s and
 It used 59.0 GiB at its peak. Windows kept at least 14.9 GiB and 10.1 GiB
 free in those completed runs. Both used all six experts and 4096-token chunks.
 
-Use these explicit settings to reproduce either RAM budget:
+These commands apply the historical RAM budgets to the current full
+profile. They do not restore the retired weights or runtime:
 
 ```sh
-localmodel start deepseek --mem 48 --expert-ram-gb 36 --prefill-chunk 4096
-localmodel start deepseek --mem 64 --expert-ram-gb 48 --prefill-chunk 4096
+localmodel start deepseek-full --mem 48G --expert-ram-gb 36 --prefill-chunk 4096
+localmodel start deepseek-full --mem 64G --expert-ram-gb 48 --prefill-chunk 4096
 ```
 
-Run one command at a time. The default now uses 64 GiB, a 36 GiB expert cache,
-and 4096-token chunks. The 48 GiB expert cache did not give a clear speed gain
-over the 36 GiB cache in these single passes. The 64 GiB run generated more tokens and recovered from
+Run one command at a time. In those historical single passes, the 48 GiB
+expert cache did not give a clear speed gain over the 36 GiB cache. The 64 GiB run generated more tokens and recovered from
 two tool errors, so its longer task time does not measure a RAM penalty.
 An earlier 64 GiB attempt crossed the 8 GiB Windows floor and was stopped.
 The successful retry ran after a separate job finished and after a targeted
@@ -397,9 +420,19 @@ See the [historical 16K report](../results/deepseek-filled-omp/20261024-0352/sum
 and [runtime notes](../experiments/deepseek-strata/README.md).
 
 Use `localmodel start deepseek --dry-run` to inspect the command and settings.
-`--context`, `--expert-ram-gb`, `--cpu-threads`, `--gpu-expert-fraction`,
+`--context`, `--mem`, `--expert-memory`, `--expert-ram-gb`, `--cpu-threads`, `--gpu-expert-fraction`,
 `--vram-reserve-mib`, `--engram-cache-mib`, `--engram-threads`,
-`--prefill-chunk`, and `--thinking-budget` control this backend.
+`--prefill-chunk`, `--thinking-budget`, and `--no-strata-slots` control this backend.
+DSpark is optional for the full profile only:
+
+```sh
+localmodel fetch deepseek-full --speculative dspark
+localmodel start deepseek-full --speculative dspark --draft-tokens 3
+```
+
+The drafter needs another 7.43 GiB on disk. The implicit depth is five;
+`--draft-tokens` and `--dspark-conf` override its settings. A speed gain is
+not guaranteed. Coder rejects `--speculative dspark`.
 `--gpu-expert-fraction` uses a fraction from 0 to 1. The old
 `--gpu-expert-cache-gb` flag is rejected for this runtime.
 `--no-offload` cannot fit this model on the 12 GiB GPU.
@@ -412,11 +445,17 @@ To reclaim the model's disk space, inspect the deletion first:
 localmodel stop
 localmodel remove deepseek --dry-run
 localmodel remove deepseek
+localmodel remove deepseek-full --dry-run
 ```
 
-Removal deletes this model's five GGUF files and its generated index. It keeps
-the runtime, configuration, and benchmark results. Run `localmodel fetch deepseek`
-to restore the files.
+Use `deepseek` for Coder or `deepseek-full` for the full profile. Removal
+deletes the selected model directory, including its weights and generated
+packs. It preserves any Engram hard link in the other profile. It keeps the
+runtime, configuration, results, and separately stored conversation slots.
+Run `localmodel fetch` with the same profile name to restore its files.
+To remove only the optional drafter and its pack, use
+`localmodel remove deepseek-full --speculative dspark --dry-run`, then the
+same command without `--dry-run`. This keeps the full target weights.
 
 ## Flint
 

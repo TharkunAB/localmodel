@@ -4,8 +4,8 @@
   "model_revision": "8a6ec9cf118e785a362ea94ee123c61c70553be6",
   "source_repository": "https://github.com/Niko1221/Strata",
   "source_revision": "c3b3f5035506f3e966f1b4b7b188aeaabae92f1d",
-  "context": 262144,
-  "memory_limit": "70G",
+  "context": 196608,
+  "memory_limit": "64G",
   "expert_memory": "cache",
   "expert_ram_budget_gib": 48,
   "swap_limit": 0,
@@ -50,8 +50,10 @@
   ],
   "source_directory": "/home/tritlo/Code/local-models/state/sources/strata-official-0.2.11",
   "model_directory": "/home/tritlo/Code/local-models/models/deepseek41-1017-unsloth-iq1-s",
-  "tested_context_capacities": [],
-  "filled_long_context_verified": false,
+  "tested_context_capacities": [
+    196608
+  ],
+  "filled_long_context_verified": true,
   "previous_iq1_m_results": "results/strata-027-20261027/comparison.json",
   "previous_iq1_m_omp_results": "results/strata-027-20261027/deepseek-16k-48g-36cache/summary.json",
   "source_tag": "v0.2.11",

@@ -1,8 +1,9 @@
 # Qwen Unsloth: 192K defaults
 
-Measured on 2026-11-06 with Unsloth Dynamic v3.1 UD-IQ1_M, official Strata
-0.2.11, and native engine 0.1.57. The selected configuration reached 185,151
-input tokens and averaged **55.25 decode tokens/s** in the growing OMP test.
+Measured on 2026-11-06 and 2026-11-07 with Unsloth Dynamic v3.1 UD-IQ1_M,
+official Strata 0.2.11, and native engine 0.1.57. The selected configuration
+reached 185,531 input tokens and averaged **53.20 decode tokens/s**.
+The earlier 32 GiB / 768 MiB configuration and its tuning results follow below.
 
 ## Selected configuration
 
@@ -11,21 +12,36 @@ localmodel start qwen3.8
 ```
 
 The defaults are 196,608 context tokens, 65,536 GPU KV cells, INT8 KV,
-four MTP drafts, a 32 GiB expert RAM budget, a 64 GiB process-group cap,
-and a 768 MiB VRAM reserve. PLE reads use `direct`. CPU workers and prefill
+four MTP drafts, a 36 GiB expert RAM budget, a 64 GiB process-group cap,
+and a 1024 MiB VRAM reserve. PLE reads use `direct`. CPU workers and prefill
 chunks use the native automatic settings. Suffix lookup, routing priors,
 and expert tail skipping are off. Model swap is disabled.
 
 The native verification window includes the accepted token. Four drafts
 therefore map to `--spec 5`. The measured run loaded MTP and produced
-nonzero accepted-draft counters. The public launch configuration matches
-the measured configuration, apart from equivalent `32` and `32.0` spelling.
+nonzero accepted-draft counters. The public launch configuration uses the
+same settings as the selected run.
 
 `omp-local` discovers the 192K capacity. Its normal compaction threshold
 is 157,286 tokens, with a 16,000-token output allowance. The benchmark
 disabled automatic compaction to test larger inputs directly.
 
-## Growing conversation
+## Headroom validation on 2026-11-07
+
+The selected run generated 4,782 tokens in 89.8841 native decode seconds.
+All four code, recall, and strict resume checkpoints passed. The smallest
+reported free VRAM was 498 MiB, compared with 55 MiB in the earlier run.
+There was one warning below 512 MiB. The reserve improves the measured
+margin; it does not guarantee that other GPU activity cannot exhaust it.
+The 36 GiB budget held 31.90 GiB of actual resident experts.
+
+The earlier run averaged 55.25 tokens/s. The observed difference is 3.7%.
+The reserve, RAM budget, and initial page-cache advice changed together.
+Outputs also differ. This comparison does not isolate the reserve's cost.
+See the [complete comparison](local-192k-comparison.md) for the selected
+run's prefill, memory, correctness, and cleanup records.
+
+## Earlier growing conversation: 32 GiB / 768 MiB
 
 Each checkpoint used real OMP read, edit, and validation tools. It repaired
 a small function and recalled facts from the conversation. A resumed OMP

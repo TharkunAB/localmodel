@@ -155,8 +155,8 @@ localmodel start qwen3.8
 ```
 
 Fetch also prepares the Qwen engine and MTP artifacts. The defaults are
-**192K context, a 64K GPU KV window, a 64 GiB process cap, 32 GiB resident
-expert budget, INT8 KV, four draft tokens, and a 768 MiB VRAM reserve**.
+**192K context, a 64K GPU KV window, a 64 GiB process cap, 36 GiB resident
+expert budget, INT8 KV, four draft tokens, and a 1024 MiB VRAM reserve**.
 The rest of the KV cache uses RAM. Strata's native speculation value includes
 the accepted token, so the launcher maps four drafts to five.
 Vision, suffix drafting, routing priors, and expert tail skipping are disabled.
@@ -166,13 +166,15 @@ The pinned Strata 0.2.11 API enables the Linux CUDA GDN defaults through
 57.5 MiB of extra GPU scratch space. See the
 [kernel review](docs/strata-0.2.9-review.md#qwen-linux-cuda-gdn-defaults).
 
-The 2026-11-06 OMP run reached **185,151 input tokens** and averaged
-**55.25 decode tokens/s**. All four code, recall, and strict JSON resume checks
-passed. At the final checkpoint, decode was 56.27 tokens/s and new-suffix
-prefill was 1783 tokens/s. There were no tool errors, OOM events, or model swap.
-The smaller GPU KV window made room for MTP and the expert cache. The 32 GiB
-RAM budget covered the remaining experts; increasing it to 36 GiB added no
-residency. See the [measurements and limits](docs/qwen-unsloth-192k.md).
+The 2026-11-07 OMP run reached **185,531 input tokens** and averaged
+**53.20 decode tokens/s**. All four code, recall, and strict JSON resume checks
+passed. The smallest reported free VRAM was 498 MiB, versus 55 MiB in the
+earlier 32 GiB / 768 MiB run. One request still triggered the warning below
+512 MiB. The new budget held 31.90 GiB of resident experts. The earlier run
+averaged 55.25 tokens/s. These single runs also differ in output and cache
+preparation, so they do not isolate the cost of the larger reserve.
+See the [measurements and limits](docs/qwen-unsloth-192k.md) and the
+[Qwen and DeepSeek comparison](docs/local-192k-comparison.md).
 
 OMP discovers the 192K capacity and normally compacts near 157K input.
 The benchmark disabled automatic compaction to test the larger input directly.
@@ -214,21 +216,29 @@ localmodel start deepseek --dry-run
 localmodel start deepseek
 ```
 
-The defaults are **256K context, a 64 GiB process cap, zero private expert cache,
+The defaults are **192K context, a 64 GiB process cap, zero private expert cache,
 4096-token prefill chunks, twelve CPU workers, and all six selected experts**.
 CPU experts remain file-backed. Linux uses spare RAM to cache their pages and
 can reclaim those pages for other programs. GPU allocations stay in VRAM.
 Engram remains SSD-backed. `--expert-ram-gb 32` selects a dedicated 32 GiB
-expert cache. It is separate from the total process cap.
+expert cache. This budget is included in the total process cap.
 Conversation checkpoints are retained. Coder currently runs without DSpark.
 `omp-local` discovers its identity and context from the running server.
+
+The 2026-11-07 growing OMP test reached 184,811 input tokens at **11.92 decode
+tokens/s**. Full Unsloth reached 184,898 input tokens at **9.55 tokens/s**.
+Both passed the four repair, recall, and resume checkpoints. Coder remains
+the default for its throughput and reclaimable expert pages. Full Unsloth
+produced one correct lower-effort repair, but its test workflow hit the
+deadline. The small diagnostics do not establish a general quality ranking.
+See the [complete comparison](docs/local-192k-comparison.md).
 
 Allow **200 GiB free** on a fast Linux SSD for a new installation. Coder uses
 about 170.2 GiB, including the 103 GiB Engram file. If the full profile already
 has that verified Engram file, fetch reuses it through a hard link. The new
 transformer files need 67.2 GiB plus the downloader's 10 GiB reserve.
 
-The 2026-11-05 comparison uses these defaults and growing 16K/32K/64K OMP input.
+The 2026-11-05 comparison used 256K capacity and growing 16K/32K/64K OMP input.
 Strata 0.2.11 averaged **12.46 decode tokens/s**, versus **12.50** on 0.2.10.
 Repair and resume took **372 seconds** in each run. All quality checks passed.
 Both reached the 64 GiB cap without OOM or model swap. This single pair shows
@@ -261,8 +271,8 @@ and 48 GiB demand cache. Coder averaged **11.24 decode tokens/s** against
 [model comparison and quality limits](docs/deepseek-coder-comparison.md).
 
 The larger Unsloth **Dynamic V3.1 UD-IQ1_S** profile remains available as
-`deepseek-full` or `deepseek-iq1-s`. Its default cap is 70 GiB and its expert
-cache is 48 GiB. Its transformer shards need about 114 GiB in addition to
+`deepseek-full` or `deepseek-iq1-s`. It defaults to 192K context capacity, a
+64 GiB process cap, a 48 GiB expert cache, and no drafter. Its transformer shards need about 114 GiB in addition to
 the shared Engram. Stop the running server before switching.
 
 ```bash
@@ -270,8 +280,10 @@ localmodel fetch deepseek-full
 localmodel start deepseek-full
 ```
 
-If there is not enough disk space, first use `localmodel remove deepseek-coder`.
-This preserves an Engram link in the full profile when that link exists.
+If disk space is limited, inspect `localmodel remove deepseek-coder --dry-run`
+before using `localmodel remove deepseek-coder`. This preserves an Engram link
+in the full profile when that link exists. Keep the weights on the native
+Linux filesystem; the Windows drive containing the WSL virtual disk can vary.
 The downloader requires the remaining download size plus 10 GiB free.
 The optional full-profile DSpark files can be removed separately to recover
 another 7.43 GiB. Original tuning results remain in the
@@ -310,8 +322,8 @@ localmodel start deepseek-full --speculative dspark --draft-tokens 5
 The drafter adds about **7.43 GiB** on disk. Strata can keep draft experts
 in RAM when they do not fit in VRAM. This can reduce the main model's GPU
 cache and increase SSD reads. A speed gain is not guaranteed.
-Depth 5 is the default when DSpark is selected. A 16K OMP comparison reached
-4.60 tok/s with DSpark and 4.98 without it. Both runs passed the repair,
+Depth 5 is the default when DSpark is selected. The 2026-10-30 16K OMP
+comparison reached 4.60 tok/s with DSpark and 4.98 without it. Both runs passed the repair,
 100 assertions, recall, and resume checks. DSpark remains optional.
 See the [measurements and limits](experiments/deepseek-strata/README.md#16k-omp-comparison-2026-10-30).
 Use `--speculative none` to unload the drafter.
@@ -450,6 +462,7 @@ localmodel start qwen3.8 --context 128k --dry-run
 localmodel remove qwen3.8 --dry-run
 localmodel remove qwen3.8
 localmodel remove deepseek --dry-run
+localmodel remove deepseek-full --dry-run
 localmodel remove 27b-256k-optimized --dry-run
 ```
 
