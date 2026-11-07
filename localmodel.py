@@ -750,7 +750,13 @@ def stop() -> None:
 
 def stats_text() -> str:
     """Show recorded measurements without starting a model."""
-    return ("2026-11-07 Strata 0.2.12 / native 0.1.58 comparison; 64G cap and zero swap.\n"
+    return ("2026-11-07 full Unsloth DeepSeek on Strata 0.2.12 / native 0.1.58. deepseek now selects full UD-IQ1_S.\n"
+            "192K capacity, 64G cap, cache48, CPU12, prefill4096, six experts, no DSpark.\n"
+            "Growing 16K/64K/128K/180K OMP: 8.99 decode / 373.09 new-prefill tok/s, versus 9.55 / 355.32 on 0.2.11.\n"
+            "All four checkpoints pass through 184758 actual input; 3118 assertions. Peak RAM 64 GiB, whole-GPU 11.624 GiB; no OOM or swap.\n"
+            "2626 output tokens versus 3887 before; shorter OMP wall time (825.69 versus 966.70 s) is not a fixed-work speedup.\n"
+            "One recovered read('.') refusal came from the unchanged benchmark guard. See docs/deepseek-full-0.2.12.md.\n\n"
+            "2026-11-07 Strata 0.2.12 / native 0.1.58 comparison; 64G cap and zero swap.\n"
             "Qwen Unsloth IQ1_M, 192K capacity: normal default MTP4; optional tuned DFlash2 uses 5 drafts and confidence 0.8.\n"
             "Qwen default: 36 GiB resident expert budget, adaptive fetch off. lowram profile: mapped experts, zero dedicated expert RAM, adaptive fetch 1. Both use a 64G cap.\n"
             "Resident experts, growing 16K/32K/64K OMP: MTP4 53.63 decode / 1319.75 new-prefill tok/s; DFlash2 58.57 / 1452.02.\n"

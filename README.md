@@ -269,6 +269,13 @@ file. The downloader requires the remaining download size plus 10 GiB free.
 Stop the running server before switching. `omp-local` discovers the served
 model and context; no harness configuration change is needed.
 
+The Strata 0.2.12 repeat reached **184,758 actual input tokens**, with
+**8.99 decode tokens/s** and **373.09 new-prefill tokens/s**. All four repair,
+recall and strict resume checkpoints passed. The matched 0.2.11 run measured
+9.55 decode and 355.32 new-prefill tokens/s. The new run generated fewer tokens;
+its shorter wall time does not establish a fixed-work speedup. See the
+[full-model 0.2.12 comparison](docs/deepseek-full-0.2.12.md).
+
 `deepseek-coder` remains an optional **ISTA GSQ-RCO Coder IQ2_XXS** profile,
 pinned to revision `54229d38d588a66d1c6cff08af7b281b9326c656`.
 It retains 192 of the original 384 routed experts per layer.
