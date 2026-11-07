@@ -30,8 +30,8 @@ STATE = ROOT / "state"
 CAPPED = ROOT / "libexec/capped"
 ALIASES = {"bonsai": "bonsai2-27b", "bonsai2": "bonsai2-27b", "bonsai-ptq2": "bonsai-pq2",
            "groot": "groot-19b", "lfm": "lfm3-1.7b", "lfm3": "lfm3-1.7b",
-           "deepseek": deepseek_strata.CODER_NAME, "deepseek-full": deepseek_strata.NAME,
-           "deepseek-coder": deepseek_strata.CODER_NAME, "deepseek-iq1-s": deepseek_strata.NAME, "strata": deepseek_strata.CODER_NAME}
+           "deepseek": deepseek_strata.NAME, "deepseek-full": deepseek_strata.NAME,
+           "deepseek-coder": deepseek_strata.CODER_NAME, "deepseek-iq1-s": deepseek_strata.NAME, "strata": deepseek_strata.NAME}
 DEFAULT_CACHE_RAM_MIB = 32768
 DEFAULT_REASONING_EFFORT = "xhigh"
 DEFAULT_START_MODEL = "27b-256k-optimized"
@@ -794,12 +794,12 @@ def stats_text() -> str:
             "Previous 128K capacity / 48G cap: 16K OMP 1396 prompt / 61.68 decode tok/s.\n"
             "Previous 48G code/recall pass; resume used fenced JSON (strict format fail). 40G/16 GiB: 609/46.34 tok/s, all checks pass.\n"
             "Source: results/strata-027-20261027/summary.md.\n\n"
-            "deepseek / deepseek-coder: ISTA GSQ-RCO Coder IQ2_XXS, Strata 0.2.11 / native 0.1.57.\n"
+            "deepseek-coder (optional): ISTA GSQ-RCO Coder IQ2_XXS, Strata 0.2.11 / native 0.1.57.\n"
             "Default: 192K capacity, 64G cap, file-backed experts with zero private cache, 12 workers, 4096-token chunks, retained slots, no draft.\n"
             "2026-11-07 growing 16K/64K/128K/180K OMP: 3034 tokens / 254.6245 decode seconds = 11.92 tok/s; maximum input 184811.\n"
             "Decode 13.02/11.05/11.11/11.62; new-suffix prefill 412/487/488/483 tok/s. Later requests reuse prefixes.\n"
             "All four code/recall/resume checkpoints pass, 3118 assertions. Peak about 64 GiB; zero model swap/OOM.\n"
-            "Coder remains the DeepSeek default. See docs/local-192k-comparison.md for tool-policy refusals, coding diagnostics, memory costs, and the full-Unsloth comparison.\n"
+            "Coder is optional; deepseek now selects full Unsloth. See docs/local-192k-comparison.md for tool-policy refusals, coding diagnostics, memory costs, and the full-Unsloth comparison.\n"
             "2026-11-05 matched default comparison, growing 16K/32K/64K OMP: 0.2.10 -> 0.2.11 weighted decode 12.499 -> 12.460 tok/s (-0.32%).\n"
             "Decode by checkpoint: 13.10/12.60/11.31 -> 12.78/12.63/11.84; first-request prefill 409.9/470.3/602.5 -> 413.2/482.6/605.8 tok/s.\n"
             "Later prefill measures the new suffix after prefix reuse. Generated 2239/2244 tokens; repair+resume 372.03/371.97 s.\n"
@@ -826,7 +826,7 @@ def stats_text() -> str:
             "Historical native 0.1.55 model comparison, same 64G/48 GiB demand cache: Coder 11.24 vs full Unsloth 8.16 tok/s.\n"
             "See docs/deepseek-coder-comparison.md for those earlier measurements and quality limits.\n"
             "\n"
-            "deepseek-full: Unsloth Dynamic v3.1 UD-IQ1_S, Strata 0.2.11 / native 0.1.57, 192K capacity.\n"
+            "deepseek / deepseek-full: Unsloth Dynamic v3.1 UD-IQ1_S. The following results used Strata 0.2.11 / native 0.1.57, 192K capacity.\n"
             "Default: 12 CPU workers, 4096-token chunks, retained conversation slots, 48 GiB expert cache, 64G cap, no draft.\n"
             "2026-11-07 growing 16K/64K/128K/180K OMP: 3887 tokens / 406.9776 decode seconds = 9.55 tok/s; maximum input 184898.\n"
             "Decode 9.81/9.42/9.26/9.25; new-suffix prefill 276/432/461/447 tok/s. All four code/recall/resume checkpoints pass.\n"

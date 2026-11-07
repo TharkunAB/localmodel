@@ -269,10 +269,10 @@ The 128K and 256K settings are capacities, not filled workload validations.
 
 ## DeepSeek 1017 with SSD experts
 
-`deepseek`, `deepseek-coder`, and `strata` select ISTA GSQ-RCO Coder IQ2_XXS,
-pinned to `54229d38d588a66d1c6cff08af7b281b9326c656`.
-`deepseek-full` and `deepseek-iq1-s` select Unsloth Dynamic V3.1 UD-IQ1_S,
+`deepseek`, `deepseek-full`, `deepseek-iq1-s`, and `strata` select Unsloth Dynamic V3.1 UD-IQ1_S,
 pinned to `8a6ec9cf118e785a362ea94ee123c61c70553be6`.
+`deepseek-coder` selects the optional ISTA GSQ-RCO Coder IQ2_XXS,
+pinned to `54229d38d588a66d1c6cff08af7b281b9326c656`.
 Both use official [Strata](https://github.com/Niko1221/Strata) source, API,
 and packer 0.2.12, and the signed CUDA `strata-dsv41` engine
 0.1.58. See the [runtime review](strata-0.2.12-review.md).
@@ -318,8 +318,8 @@ Dense layers and attention run on the GPU. Other weights use RAM or SSD.
 OMP and OpenCode send `xhigh` reasoning requests. Neither profile loads a
 drafter by default. The launcher passes `--experts 6` to keep all six routed
 experts. It does not select the five-expert Faster mode.
-Use `localmodel fetch deepseek-full` and `localmodel start deepseek-full`
-to select the full profile after stopping the current server.
+Use `localmodel fetch deepseek-coder` and `localmodel start deepseek-coder`
+to restore and run Coder after stopping the current server.
 
 DeepSeek blocks outgoing connections for the server and its native children.
 The local API and file access use their normal paths. `fetch` uses the network
@@ -343,7 +343,7 @@ Its default is zero for Coder and 48 GiB for full Unsloth. Zero still permits
 Linux to cache mapped expert pages. Use a smaller cap or context explicitly:
 
 ```sh
-localmodel start deepseek --context 64k --mem 48G
+localmodel start deepseek --context 64k --mem 48G --expert-ram-gb 32
 localmodel start deepseek-full --expert-ram-gb 32
 ```
 
@@ -448,7 +448,7 @@ localmodel remove deepseek
 localmodel remove deepseek-full --dry-run
 ```
 
-Use `deepseek` for Coder or `deepseek-full` for the full profile. Removal
+Use `deepseek-coder` for Coder or `deepseek` for the full profile. Removal
 deletes the selected model directory, including its weights and generated
 packs. It preserves any Engram hard link in the other profile. It keeps the
 runtime, configuration, results, and separately stored conversation slots.

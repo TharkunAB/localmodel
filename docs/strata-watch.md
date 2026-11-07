@@ -56,7 +56,7 @@ official updates under the procedure below.
    Keep existing weights and results. Do not download another quantization or
    delete files to make space. Retain the previous runtime for rollback until
    validation completes. Check the required download and extraction space.
-4. Use Coder with zero private expert cache, a 64 GiB hard memory cap, zero swap,
+4. Use full Unsloth UD-IQ1_S with a 48 GiB expert cache, a 64 GiB hard memory cap, zero swap,
    192K context capacity, and the current verified runtime settings. Respect
    later explicit user changes. Use `~/Code/heavy-management` for capped serial
    jobs. Do not increase queue concurrency. Stop below 8 GiB available Linux
@@ -66,8 +66,8 @@ official updates under the procedure below.
    arguments for `localmodel stop` to recognize it. Changing Python `sys.argv`
    alone does not change those process arguments.
 5. Establish a matched old-runtime baseline at those settings when no suitable
-   result exists. Older zero-cache results used a 70 GiB cap; they are not a
-   matched 64 GiB baseline. Use the guarded OMP fixture at 16K, 32K, and 64K filled
+   result exists. Keep Coder and full-Unsloth results separate. Their weight
+   sets and expert-cache settings differ. Use the guarded OMP fixture at 16K, 32K, and 64K filled
    input. Keep the fixture, routing profile, sampling, and settings fixed. Do not
    reuse a frozen driver after changing its recorded source hashes.
    The workspace guard accepts replacement edits. Set `PI_EDIT_VARIANT=replace`

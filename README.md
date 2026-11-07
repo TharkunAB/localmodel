@@ -249,10 +249,9 @@ examples, not claims that they outperform the defaults.
 
 ## Set up DeepSeek V4.1 Flash 1017
 
-`deepseek` and `deepseek-coder` select **ISTA GSQ-RCO Coder IQ2_XXS**,
-pinned to revision `54229d38d588a66d1c6cff08af7b281b9326c656`.
-It retains 192 of the original 384 routed experts per layer. Strata keeps
-selected experts in VRAM and RAM and reads other weights from SSD.
+`deepseek`, `deepseek-full`, `deepseek-iq1-s`, and `strata` select
+**Unsloth Dynamic V3.1 UD-IQ1_S**, pinned to revision
+`8a6ec9cf118e785a362ea94ee123c61c70553be6`. It keeps the full expert pool.
 
 ```bash
 bin/setup-localmodel --strata --run
@@ -261,8 +260,20 @@ localmodel start deepseek --dry-run
 localmodel start deepseek
 ```
 
-The defaults are **192K context, a 64 GiB process cap, zero private expert cache,
-4096-token prefill chunks, twelve CPU workers, and all six selected experts**.
+The defaults are **192K context, a 64 GiB process cap, a 48 GiB expert cache,
+4096-token prefill chunks, twelve CPU workers, all six selected experts,
+and no drafter**. The expert cache is included in the process cap.
+Strata keeps selected experts in VRAM and RAM and reads other weights from SSD.
+Its transformer shards need about 114 GiB in addition to the 103 GiB Engram
+file. The downloader requires the remaining download size plus 10 GiB free.
+Stop the running server before switching. `omp-local` discovers the served
+model and context; no harness configuration change is needed.
+
+`deepseek-coder` remains an optional **ISTA GSQ-RCO Coder IQ2_XXS** profile,
+pinned to revision `54229d38d588a66d1c6cff08af7b281b9326c656`.
+It retains 192 of the original 384 routed experts per layer.
+Use `localmodel fetch deepseek-coder` and `localmodel start deepseek-coder`
+to restore and run it. Coder defaults to zero private expert cache.
 CPU experts remain file-backed. Linux uses spare RAM to cache their pages and
 can reclaim those pages for other programs. GPU allocations stay in VRAM.
 Engram remains SSD-backed. `--expert-ram-gb 32` selects a dedicated 32 GiB
@@ -272,8 +283,8 @@ Conversation checkpoints are retained. Coder currently runs without DSpark.
 
 The 2026-11-07 growing OMP test reached 184,811 input tokens at **11.92 decode
 tokens/s**. Full Unsloth reached 184,898 input tokens at **9.55 tokens/s**.
-Both passed the four repair, recall, and resume checkpoints. Coder remains
-the default for its throughput and reclaimable expert pages. Full Unsloth
+Both passed the four repair, recall, and resume checkpoints on Strata 0.2.11.
+Full Unsloth is now the selected DeepSeek default. It also
 produced one correct lower-effort repair, but its test workflow hit the
 deadline. The small diagnostics do not establish a general quality ranking.
 See the [complete comparison](docs/local-192k-comparison.md).
@@ -296,11 +307,11 @@ experts in RAM or VRAM. That was only a 1.7% decode gain over 64 GiB.
 Use `--expert-memory resident --mem 70G` to select that full-residency configuration.
 The file-backed test at 70 GiB averaged **12.80 tokens/s** when quiet and
 **6.40** under controlled memory pressure. A 32 GiB private cache averaged
-**9.08** and **9.14**, respectively. The default keeps the existing 64 GiB cap;
+**9.08** and **9.14**, respectively. The Coder profile keeps the existing 64 GiB cap;
 these sharing measurements used 70 GiB. See the [memory-sharing comparison](docs/coder-elastic-memory.md).
 
 The local [Strata release watch](docs/strata-watch.md) checks for stable releases
-every six hours. It queues updates and guarded Coder measurements when resources
+every six hours. It queues updates and guarded full-Unsloth measurements when resources
 are available. It does not interrupt a running model or deploy to a remote server.
 A daily Grok search checks public X reports for useful optimizations. Local
 configuration and measurements stay out of the search request.
@@ -314,16 +325,6 @@ The original matched comparison used native 0.1.55 and the same 64 GiB cap
 and 48 GiB demand cache. Coder averaged **11.24 decode tokens/s** against
 **8.16** for full Unsloth UD-IQ1_S. See the
 [model comparison and quality limits](docs/deepseek-coder-comparison.md).
-
-The larger Unsloth **Dynamic V3.1 UD-IQ1_S** profile remains available as
-`deepseek-full` or `deepseek-iq1-s`. It defaults to 192K context capacity, a
-64 GiB process cap, a 48 GiB expert cache, and no drafter. Its transformer shards need about 114 GiB in addition to
-the shared Engram. Stop the running server before switching.
-
-```bash
-localmodel fetch deepseek-full
-localmodel start deepseek-full
-```
 
 If disk space is limited, inspect `localmodel remove deepseek-coder --dry-run`
 before using `localmodel remove deepseek-coder`. This preserves an Engram link

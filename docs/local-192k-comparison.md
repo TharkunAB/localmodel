@@ -1,6 +1,6 @@
 # Local 192K comparison: Qwen, Coder and full DeepSeek
 
-2026-11-07. **Use Unsloth Qwen for interactive work. Retain Coder as the `deepseek` default.** The selected Qwen configuration reaches 185,531 actual input tokens at 53.20 native decode tok/s with more free VRAM than the earlier baseline. Full Unsloth remains an option: its lower-effort JSON Patch repair passes all code checks, but the public-check workflow is incomplete and a broader quality advantage is unproven.
+2026-11-07. These measurements used Strata 0.2.11. The selected Qwen configuration reaches 185,531 actual input tokens at 53.20 native decode tok/s with more free VRAM than the earlier baseline. Full Unsloth's lower-effort JSON Patch repair passes all code checks, but the public-check workflow is incomplete and a broader quality advantage is unproven. After this comparison, Matti selected full Unsloth as the `deepseek` default and removed the local Coder weights. Coder remains available through the explicit `deepseek-coder` alias.
 
 Links into `results/` and the installed OMP source refer to local evidence files. They are available on this machine and are not published with the repository documentation.
 
@@ -172,12 +172,12 @@ Coder removes half the routed experts; full Unsloth retains the expert pool at l
 
 ## Recommendation and launch commands
 
-Use **Unsloth Qwen at 192K with MTP4, a 36 GiB expert budget and 1,024 MiB reserve** for interactive OMP work. Retain **Coder as the `deepseek` alias**: full Unsloth is about 20% slower in the long sample, uses a 48 GiB dedicated cache budget and has no demonstrated broad quality advantage here. Keep full Unsloth available for tasks where its correct secondary JSON Patch repair is relevant, while recognizing the deadline-incomplete workflow and small diagnostic scope.
+Use **Unsloth Qwen at 192K with MTP4, a 36 GiB expert budget and 1,024 MiB reserve** for interactive OMP work. The `deepseek` alias now selects **full Unsloth**. It is about 20% slower than Coder in this 0.2.11 long sample, uses a 48 GiB dedicated cache budget and has no demonstrated broad quality advantage here. This selection keeps the full expert pool and uses Unsloth target weights. The deadline-incomplete workflow and small diagnostic scope still limit the quality comparison.
 
 ```bash
 localmodel start qwen3.8        # Selected interactive configuration
-localmodel start deepseek       # Coder, cache0
-localmodel start deepseek-full  # Full Unsloth, cache48
+localmodel start deepseek       # Full Unsloth, cache48
+localmodel start deepseek-full  # Same full Unsloth configuration
 ```
 
 Run one server at a time. All three now default to 192K capacity and a 64 GiB cap; production reasoning remains xhigh. The secondary low-effort trials do not change that default.
