@@ -115,7 +115,7 @@ and use the same request pattern.
 
 In the Qwen engine, `STRATA_ADAPT_FETCH=1` allows PCIe expert transfers to
 populate the adaptive VRAM tier. Mode `2` also disables that tier's separate copies from RAM.
-Both modes are optional and default to off. The transfer uses the existing
+Both modes are optional and default to off upstream. The transfer uses the existing
 memory path. It does not need network access or `io_uring`.
 
 Upstream disables adaptive fetch in resident RAM mode. It also requires an
@@ -127,7 +127,9 @@ confirmed activation with mapped experts and MTP4. Modes 0, 1 and 2 measured
 44.26, 44.46 and 42.68 native decode tokens/s; new-prefill rates were 667.09,
 690.38 and 593.18. All three passed code, recall, required-tool and strict-format
 checks through about 66K actual input. These single trajectories do not
-establish a repeatable adaptive-fetch gain. The default remains off.
+establish a repeatable adaptive-fetch gain. After the comparison, Matti selected
+mapped experts and mode 1 as the local Qwen defaults to make expert RAM
+reclaimable. An explicit resident expert budget defaults to mode 0.
 
 Serving has no separate adaptive admission/hit counter. GPU lookup misses
 are not SSD misses. Mapped expert payload counters can count the same bytes

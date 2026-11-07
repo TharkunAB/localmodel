@@ -155,8 +155,11 @@ localmodel start qwen3.8
 ```
 
 Fetch also prepares the Qwen engine and MTP artifacts. The defaults are
-**192K context, a 64K GPU KV window, a 64 GiB process cap, 36 GiB resident
-expert budget, INT8 KV, four draft tokens, and a 1024 MiB VRAM reserve**.
+**192K context, a 64K GPU KV window, a 64 GiB process cap, file-backed
+experts with adaptive fetch 1, INT8 KV, four draft tokens, and a 1024 MiB VRAM reserve**.
+The dedicated expert RAM budget is zero. Linux can reclaim cached expert
+file pages when other programs need RAM. The process can still use idle RAM
+for its file cache. The 64 GiB cap is a limit, not a reservation.
 The rest of the KV cache uses RAM. Strata's native speculation value includes
 the accepted token, so the launcher maps four drafts to five.
 Vision, suffix drafting, routing priors, and expert tail skipping are disabled.
@@ -166,7 +169,8 @@ The pinned Strata 0.2.12 API enables the Linux CUDA GDN defaults through
 57.5 MiB of extra GPU scratch space. See the
 [kernel review](docs/strata-0.2.9-review.md#qwen-linux-cuda-gdn-defaults).
 
-The Strata 0.2.12 OMP comparison reached about **185K actual input tokens**.
+The Strata 0.2.12 OMP comparison with a 36 GiB resident expert budget reached
+about **185K actual input tokens**.
 MTP4 averaged **52.17 decode tokens/s**. Tuned DFlash2 at confidence 0.8
 averaged **58.41 tokens/s**. Both passed all four code, recall, tool and strict
 JSON checks. The DFlash2 run required extra prefill after OMP changed an old
@@ -184,13 +188,20 @@ This adds a verified 324 MiB draft pack. It keeps the target GGUF weights.
 The DFlash2 defaults are five draft tokens and confidence 0.8. Use
 `--draft-tokens` and `--draft-conf` to override them. The measured run still
 produced low-VRAM warnings. Do not infer spare capacity for larger settings.
+These DFlash2 measurements used `--expert-ram-gb 36`. The combination of
+file-backed experts and DFlash2 has not been benchmarked here.
 `localmodel remove qwen3.8 --speculative dflash2 --dry-run` previews removal
 of only this optional pack.
 
-Experimental `--adaptive-fetch 1` or `--adaptive-fetch 2` requires
-`--expert-ram-gb 0`. That mode uses mapped experts and the OS page cache.
-It does not eliminate RAM use. Neither adaptive mode produced a useful gain
-in the comparison. Keep the resident expert configuration for normal use.
+The default `--expert-ram-gb 0 --adaptive-fetch 1` favors reclaimable RAM
+for compilation and other work. In the 16K/32K/64K comparison it averaged
+44.46 decode tokens/s, against 53.63 with resident experts. Adaptive fetch
+itself added no useful speed gain. Mapped experts were tested through about
+66K actual input at 192K capacity. The larger input test above used resident experts.
+Use `--adaptive-fetch 0` to disable adaptive admission while keeping mapped
+experts. Use `--expert-ram-gb 36` to restore the resident expert configuration;
+adaptive fetch then defaults to off. Explicit modes 1 and 2 require a zero
+expert RAM budget.
 
 The [earlier reserve comparison](docs/qwen-unsloth-192k.md) and
 [Qwen and DeepSeek comparison](docs/local-192k-comparison.md) retain the

@@ -749,8 +749,9 @@ def stats_text() -> str:
     """Show recorded measurements without starting a model."""
     return ("2026-11-07 Strata 0.2.12 / native 0.1.58 comparison; 64G cap and zero swap.\n"
             "Qwen Unsloth IQ1_M, 192K capacity: normal default MTP4; optional tuned DFlash2 uses 5 drafts and confidence 0.8.\n"
-            "Growing 16K/32K/64K OMP: MTP4 53.63 decode / 1319.75 new-prefill tok/s; DFlash2 58.57 / 1452.02.\n"
-            "Matched 16K/64K/128K/180K: MTP4 52.17 decode / 1545.45 prefill; DFlash2 58.41 / 1701.80.\n"
+            "Current Qwen memory default: mapped experts, zero dedicated expert RAM, adaptive fetch 1, 64G cap. Chosen for reclaimable RAM.\n"
+            "Resident experts, growing 16K/32K/64K OMP: MTP4 53.63 decode / 1319.75 new-prefill tok/s; DFlash2 58.57 / 1452.02.\n"
+            "Resident experts, matched 16K/64K/128K/180K: MTP4 52.17 decode / 1545.45 prefill; DFlash2 58.41 / 1701.80.\n"
             "Maximum actual input 185243 / 185415; both pass all code, recall, tool and strict JSON checks.\n"
             "Long-run model HTTP time 203.40 / 227.75 s; output 4448 / 4744 tokens. Faster decode did not establish faster whole tasks.\n"
             "OMP replaced an older read result; DFlash's run reread 62193 unchanged tokens from an earlier recurrent checkpoint. No parked-chat eviction.\n"
@@ -926,7 +927,7 @@ def main() -> int:
     start.add_argument("--expert-memory", choices=("cache", "resident"),
                        help="DeepSeek CPU expert storage (default: profile). cache uses --expert-ram-gb. resident copies variable-size experts within the native RAM allowance, with an 8 GiB margin. Remaining experts and Engram can still use SSD.")
     start.add_argument("--expert-ram-gb", type=float,
-                       help="Strata expert demand-cache budget in GiB, inside --mem (Coder: 0; deepseek-full: 48; Qwen: 36). Zero leaves CPU expert caching to Linux. With --expert-memory resident, omit this flag or use 0. Separate from llama.cpp --cache-ram.")
+                       help="Strata expert demand-cache budget in GiB, inside --mem (Coder: 0; deepseek-full: 48; Qwen: 0). Zero leaves CPU expert caching to Linux. With --expert-memory resident, omit this flag or use 0. Separate from llama.cpp --cache-ram.")
     start.add_argument("--cpu-threads", type=int, help="Strata CPU expert workers, 0-64 (DeepSeek default: 12; Qwen: automatic). 0 selects the automatic count. Qwen also uses the host thread. I/O threads are separate.")
     start.add_argument("--strata-slots", action=argparse.BooleanOptionalAction, default=None,
                        help="Retain DeepSeek Strata conversation checkpoints (default: on). Keeps one saved conversation in RAM and a 2 GiB disk-cache budget per weights/runtime/context configuration.")
@@ -978,7 +979,7 @@ def main() -> int:
                        help="Optional draft decoder (default: none; Qwen: mtp). DFlash2 is an explicit Qwen experiment. DSpark requires deepseek-full.")
     start.add_argument("--draft-tokens", type=int, default=2, help="Maximum neural draft tokens per step (default: 2; Qwen MTP: 4, DFlash2: 5; DeepSeek DSpark: 5). Qwen verifies N+1 tokens, including the accepted token.")
     start.add_argument("--adaptive-fetch", type=int, choices=(0, 1, 2),
-                       help="Qwen experimental PCIe expert admission: 0 off, 1 supplement tier copies, 2 replace tier copies. Modes 1/2 require --expert-ram-gb 0; inspect native activation logs.")
+                       help="Qwen experimental PCIe expert admission: 0 off, 1 supplement tier copies, 2 replace tier copies. Default: 1 with mapped experts, 0 with resident experts. Modes 1/2 require --expert-ram-gb 0; inspect native activation logs.")
     start.add_argument("--draft-conf", type=float, help="Qwen DFlash2 confidence threshold, 0 to 1 (default: 0.8).")
     start.add_argument("--dspark-conf", type=float, help="DSpark confidence threshold, 0 to 1 (default: 0.65). Requires --speculative dspark.")
     start.add_argument("--mtp-chain", action=argparse.BooleanOptionalAction, default=None,
