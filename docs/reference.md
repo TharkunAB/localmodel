@@ -195,7 +195,7 @@ replacement for Bonsai or Qwen. Scores across publishers use different harnesses
 
 ## Qwen3.8 Flash-Next Unsloth UD-IQ1_M with MTP
 
-Use the pinned Strata 0.2.11 source with Control and CUDA engine 0.1.57.
+Use the pinned Strata 0.2.12 source with Control and CUDA engine 0.1.58.
 It uses Unsloth Dynamic v3.1 UD-IQ1_M and the official Qwen MTP draft layer.
 The download includes three model shards. The third contains the PLE table.
 Preparation keeps the native expert weights in their original shard.
@@ -274,8 +274,8 @@ pinned to `54229d38d588a66d1c6cff08af7b281b9326c656`.
 `deepseek-full` and `deepseek-iq1-s` select Unsloth Dynamic V3.1 UD-IQ1_S,
 pinned to `8a6ec9cf118e785a362ea94ee123c61c70553be6`.
 Both use official [Strata](https://github.com/Niko1221/Strata) source, API,
-and packer 0.2.11, and the signed CUDA `strata-dsv41` engine
-0.1.57. See the [runtime review](strata-0.2.11-review.md).
+and packer 0.2.12, and the signed CUDA `strata-dsv41` engine
+0.1.58. See the [runtime review](strata-0.2.12-review.md).
 Both default to 192K context capacity and a 64 GiB process cap. Coder uses
 zero private expert cache. Full Unsloth uses a 48 GiB expert cache.
 

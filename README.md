@@ -161,7 +161,7 @@ The rest of the KV cache uses RAM. Strata's native speculation value includes
 the accepted token, so the launcher maps four drafts to five.
 Vision, suffix drafting, routing priors, and expert tail skipping are disabled.
 The PLE embedding table uses direct file reads.
-The pinned Strata 0.2.11 API enables the Linux CUDA GDN defaults through
+The pinned Strata 0.2.12 API enables the Linux CUDA GDN defaults through
 `STRATA_GDN_TC=1` and `STRATA_GDN_CONVL2=2`. The tensor-core path needs about
 57.5 MiB of extra GPU scratch space. See the
 [kernel review](docs/strata-0.2.9-review.md#qwen-linux-cuda-gdn-defaults).
@@ -331,9 +331,9 @@ Use `localmodel remove deepseek-full --speculative dspark` to remove only the
 draft weights and their pack. This keeps the main model.
 
 Local DeepSeek, Qwen, and remote DeepSeek use pinned source, API, and packer
-**0.2.11**, Control **0.1.57**, and signed native engine **0.1.57**.
+**0.2.12**, Control **0.1.58**, and signed native engine **0.1.58**.
 Qwen uses four MTP draft tokens. Coder keeps zero private expert cache.
-See the [runtime verification](docs/strata-0.2.11-review.md).
+See the [runtime verification](docs/strata-0.2.12-review.md).
 A crafted parser example can still turn quoted text into a tool call.
 This has not been observed in the OMP workloads. The client must still
 enforce tool permissions. See the [Coder update and comparison](docs/strata-0.2.11-coder.md).

@@ -9,16 +9,16 @@ The legacy `qwen` profile serves
 Qwen3.8-27B; the local harness uses a separate Qwen3.8-Flash-Next profile.
 
 All remote DeepSeek profiles now use the unmodified official Strata source
-`c3b3f5035506f3e966f1b4b7b188aeaabae92f1d` (0.2.11), Control 0.1.57, and signed
-CUDA 13 engine 0.1.57. This includes the official API server and GGUF packer.
-See the [update review](strata-0.2.11-review.md) for checks and known parser behavior.
+`146df3c468739147f520ac3816de806f71232571` (0.2.12), Control 0.1.58, and signed
+CUDA 13 engine 0.1.58. This includes the official API server and GGUF packer.
+See the [update review](strata-0.2.12-review.md) for checks and known parser behavior.
 The standalone file embeds the artifact pins, signature
 verification, and the same outgoing-network restriction as the local harness.
 Qwen, Flint, Ornith, and MiniMax keep their explicit llama.cpp paths.
 
 The original `start-qwen.sh` attachment has SHA-256
 `955915e9fc13bc9ba44a580285cd21a70a0c183c2fafb514e3e1c274326b8d3a`.
-The current embedded version is `2026-11-05-strata-0211-1`.
+The current embedded version is `2026-11-07-strata-0212-1`.
 Packaging checks do not establish remote GPU inference or throughput.
 
 ## Migrate an existing DeepSeek Pod
@@ -42,9 +42,9 @@ bash /workspace/start-remote-model.sh --profile deepseek-a40-quad \
 
 The new five-file checkpoint needs 250.4 GB of disk space. Preparation verifies
 every file against its pinned SHA-256. It does not remove the old GSQ weights
-or restart a server. The script uses the official 0.2.11 parser and retains the
+or restart a server. The script uses the official 0.2.12 parser and retains the
 outgoing-network restriction. Mistral on one B300 still defaults to 512K.
-If the full 0.2.11 runtime is already prepared, use
+If the full 0.2.12 runtime is already prepared, use
 `--prepare-only --prepare-assets-only` instead of `--prepare-only --install-deps`
 to stage the new weights while the old server runs. Stop it before the launch step.
 The default new weight directory is
@@ -52,7 +52,7 @@ The default new weight directory is
 
 ### Update an existing Strata installation
 
-Copy the updated script onto the Pod. To install Strata 0.2.11, stop the old
+Copy the updated script onto the Pod. To install Strata 0.2.12, stop the old
 server and run `--prepare-only --install-deps` with the same profile and root.
 Then start it with the same command without those two preparation flags.
 `--prepare-assets-only` does not update the runtime.
@@ -64,8 +64,9 @@ and root. It creates a small pack index in a directory named for the new source
 revision. It does not download the weights again, requantize them, or modify the
 old pack's receipt. The previous runtime and pack remain on disk.
 
-Run preparation once after this update, even if engine 0.1.57 was already
-installed with an older API server. Serving requires the new runtime and pack.
+Run preparation once after this update. The old 0.2.11 runtime does not satisfy
+the new source and native pins. Serving requires the new runtime and pack.
+This update does not deploy or restart an existing Pod automatically.
 
 ### Previous GSQ profile
 
