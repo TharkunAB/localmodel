@@ -166,15 +166,35 @@ The pinned Strata 0.2.12 API enables the Linux CUDA GDN defaults through
 57.5 MiB of extra GPU scratch space. See the
 [kernel review](docs/strata-0.2.9-review.md#qwen-linux-cuda-gdn-defaults).
 
-The 2026-11-07 OMP run reached **185,531 input tokens** and averaged
-**53.20 decode tokens/s**. All four code, recall, and strict JSON resume checks
-passed. The smallest reported free VRAM was 498 MiB, versus 55 MiB in the
-earlier 32 GiB / 768 MiB run. One request still triggered the warning below
-512 MiB. The new budget held 31.90 GiB of resident experts. The earlier run
-averaged 55.25 tokens/s. These single runs also differ in output and cache
-preparation, so they do not isolate the cost of the larger reserve.
-See the [measurements and limits](docs/qwen-unsloth-192k.md) and the
-[Qwen and DeepSeek comparison](docs/local-192k-comparison.md).
+The Strata 0.2.12 OMP comparison reached about **185K actual input tokens**.
+MTP4 averaged **52.17 decode tokens/s**. Tuned DFlash2 at confidence 0.8
+averaged **58.41 tokens/s**. Both passed all four code, recall, tool and strict
+JSON checks. The DFlash2 run required extra prefill after OMP changed an old
+tool result. It did not complete the whole workload faster. MTP4 remains the
+normal default. See the [measurements and limits](docs/strata-0.2.12-measurements.md).
+
+Use the optional tuned drafter with these commands:
+
+```bash
+localmodel fetch qwen3.8 --speculative dflash2
+localmodel start qwen3.8 --speculative dflash2
+```
+
+This adds a verified 324 MiB draft pack. It keeps the target GGUF weights.
+The DFlash2 defaults are five draft tokens and confidence 0.8. Use
+`--draft-tokens` and `--draft-conf` to override them. The measured run still
+produced low-VRAM warnings. Do not infer spare capacity for larger settings.
+`localmodel remove qwen3.8 --speculative dflash2 --dry-run` previews removal
+of only this optional pack.
+
+Experimental `--adaptive-fetch 1` or `--adaptive-fetch 2` requires
+`--expert-ram-gb 0`. That mode uses mapped experts and the OS page cache.
+It does not eliminate RAM use. Neither adaptive mode produced a useful gain
+in the comparison. Keep the resident expert configuration for normal use.
+
+The [earlier reserve comparison](docs/qwen-unsloth-192k.md) and
+[Qwen and DeepSeek comparison](docs/local-192k-comparison.md) retain the
+Strata 0.2.11 results.
 
 OMP discovers the 192K capacity and normally compacts near 157K input.
 The benchmark disabled automatic compaction to test the larger input directly.

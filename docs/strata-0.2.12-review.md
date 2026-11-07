@@ -8,10 +8,16 @@ The remote script version is `2026-11-07-strata-0212-1`.
 The pin update preserves target weights, quantization, context and cache defaults,
 Python dependency pins, and GPU compatibility rules.
 
-Measurements and runtime smoke checks are pending. The source and artifact
-checks below do not establish a throughput gain or remote GPU inference.
-The earlier [Qwen and DeepSeek comparison](local-192k-comparison.md) remains
-historical evidence for the previous runtime.
+Local measurements, API/native smoke checks, and cleanup are complete.
+Qwen MTP4 and tuned DFlash2 passed the long workload through approximately
+185K actual input tokens. DFlash2 measured faster native decode, but an OMP
+history edit caused extra prefill and increased its total model HTTP time.
+The normal Qwen default remains MTP4. Explicit DFlash2 uses confidence 0.8.
+See the [measurement report](strata-0.2.12-measurements.md) for exact settings,
+timing denominators, both Coder attempts, and resource limits. No remote GPU
+inference was tested. The earlier
+[Qwen and DeepSeek comparison](local-192k-comparison.md) remains historical
+evidence for the previous runtime.
 
 ## Artifact verification
 
@@ -53,10 +59,30 @@ Its declared base is
 at revision `a22a1744e85c17364dcc54a6a420af7135d4c7f6`.
 Strata provides an Apache-2.0 license and modification notice.
 
-This is a tuned drafter, not a claim that its tensors are unchanged from the
-original drafter. It does not replace the target GGUF weights. Its use on the
-current Unsloth IQ1_M target requires a local comparison with the existing MTP
-configuration. Download, parser, quality, and throughput checks are pending.
+The drafter has tuned tensors. It does not replace the target GGUF weights.
+Its signed-feed pin and full file hash passed verification. Native startup
+confirmed the tuned selector with no MTP layer. The initial confidence-0.35
+screen passed code, recall and required-tool checks, but all three strict
+resume checks rejected JSON inside Markdown fences. That failure is retained.
+
+Confidence 0.8 passed both the short screen and all four long checkpoints.
+The long run used native window 6, the existing manual memory layout, and
+196,608-token capacity. It reached 185,415 actual input tokens and measured
+58.41 native decode tokens/s, against MTP4's 52.17. Summed model HTTP times
+were 227.75 and 203.40 seconds. An OMP stale-read replacement caused one large
+prefix reread in the DFlash2 run. No parked-conversation eviction was logged;
+the earlier recurrent-checkpoint replacement sequence is not observable.
+These sampled trajectories do not establish a matched whole-workflow speedup.
+
+Factory Auto selects the ordinary DFlash2 pack for this IQ1_M quant.
+That separate benchmark asset was prepared from the pinned Inco source with
+the official producer. Both source files, the intermediate pack and the final
+selector-Q4 pack matched their pinned hashes. Factory screens at 128K and
+192K capacity passed all checks through about 66K actual input. Their suffix
+lookup behavior differs from the manual configuration. Aggregate speculation
+acceptance is not a neural drafter accuracy score. Factory 192K also reached
+zero reported free MiB for a prefill super-chunk, so the layer-major prefill
+path was disabled. Factory settings were not tested at 180K filled input.
 
 ## Source and network review
 
@@ -96,4 +122,15 @@ Upstream disables adaptive fetch in resident RAM mode. It also requires an
 active adaptive tier, a GPU plan, and a nonzero PCIe share. Some execution modes
 are incompatible. A benchmark must confirm activation in the startup log.
 Use a matched control with the same RAM and PCIe settings. A flag alone does
-not prove that adaptive fetch ran. Measurements are pending.
+not prove that adaptive fetch ran. Local mode-1 and mode-2 startup markers
+confirmed activation with mapped experts and MTP4. Modes 0, 1 and 2 measured
+44.26, 44.46 and 42.68 native decode tokens/s; new-prefill rates were 667.09,
+690.38 and 593.18. All three passed code, recall, required-tool and strict-format
+checks through about 66K actual input. These single trajectories do not
+establish a repeatable adaptive-fetch gain. The default remains off.
+
+Serving has no separate adaptive admission/hit counter. GPU lookup misses
+are not SSD misses. Mapped expert payload counters can count the same bytes
+repeatedly. Zero private expert RAM still permits OS page-cache use. All model
+scopes retained the 64 GiB cap and zero swap. No model OOM or swap was recorded;
+charged file pages and cap-reclaim events remain part of the memory totals.
