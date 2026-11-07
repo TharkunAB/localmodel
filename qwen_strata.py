@@ -197,7 +197,7 @@ def settings(args: argparse.Namespace, item: dict[str, Any]) -> dict[str, Any]:
     ram = args.expert_ram_gb if args.expert_ram_gb is not None else 36
     adaptive = getattr(args, "adaptive_fetch", None) or 0
     confidence = getattr(args, "draft_conf", None)
-    confidence = 0.35 if confidence is None else confidence
+    confidence = 0.8 if confidence is None else confidence
     if adaptive not in (0, 1, 2) or (adaptive and ram != 0):
         raise RuntimeError("Qwen --adaptive-fetch 1 or 2 requires --expert-ram-gb 0 (file-backed experts).")
     if not 0 <= confidence <= 1:

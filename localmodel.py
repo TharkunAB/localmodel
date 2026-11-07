@@ -665,7 +665,7 @@ def serve(args: argparse.Namespace, item: dict[str, Any]) -> int:
             "rounds": args.rounds if item["runtime"] in ("dory", "dory-native") else None,
             "kv_offload_gb": args.kv_offload_gb if item["runtime"] == "dory" else None,
             "speculative": args.speculative, "draft_tokens": args.draft_tokens,
-            "draft_conf": (args.draft_conf if args.draft_conf is not None else 0.35) if args.speculative == "dflash2" else None,
+            "draft_conf": (args.draft_conf if args.draft_conf is not None else 0.8) if args.speculative == "dflash2" else None,
             "adaptive_fetch": strata_config.get("adaptive_fetch"),
             "engine_log_offset": log_offset if item["runtime"] == "strata-qwen" else None,
             "dspark_conf": (args.dspark_conf if args.dspark_conf is not None else 0.65) if args.speculative == "dspark" else None,
@@ -964,7 +964,7 @@ def main() -> int:
     start.add_argument("--draft-tokens", type=int, default=2, help="Maximum neural draft tokens per step (default: 2; Qwen MTP: 4, DFlash2: 5; DeepSeek DSpark: 5). Qwen verifies N+1 tokens, including the accepted token.")
     start.add_argument("--adaptive-fetch", type=int, choices=(0, 1, 2),
                        help="Qwen experimental PCIe expert admission: 0 off, 1 supplement tier copies, 2 replace tier copies. Modes 1/2 require --expert-ram-gb 0; inspect native activation logs.")
-    start.add_argument("--draft-conf", type=float, help="Qwen DFlash2 confidence threshold, 0 to 1 (experimental default: 0.35).")
+    start.add_argument("--draft-conf", type=float, help="Qwen DFlash2 confidence threshold, 0 to 1 (default: 0.8).")
     start.add_argument("--dspark-conf", type=float, help="DSpark confidence threshold, 0 to 1 (default: 0.65). Requires --speculative dspark.")
     start.add_argument("--mtp-chain", action=argparse.BooleanOptionalAction, default=None,
                        help="Prism MTP chained drafting (default: on). Preset settings override LLAMA_MTP_CHAIN=0/1. Explicit flags take priority.")
