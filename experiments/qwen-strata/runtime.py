@@ -14,6 +14,7 @@ import sys
 import tarfile
 import tempfile
 import zipfile
+from urllib.parse import urljoin
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -87,7 +88,7 @@ def download(item: dict[str, Any], path: Path) -> None:
     partial.rename(path)
 
 
-def engine(info: dict[str, Any], install: bool) -> None:
+def engine(info: dict[str, Any], install: bool) -> Any:
     """Check the signed engine package without executing the engine."""
     s = info["runtime"]
     rt = Path(s["directory"])
@@ -176,6 +177,7 @@ def engine(info: dict[str, Any], install: bool) -> None:
     component.verify(c, full=True)
     if not Path(s["binary"]).is_file():
         raise RuntimeError("Engine executable missing")
+    return index
 
 
 def prepare(info: dict[str, Any]) -> None:
@@ -261,12 +263,46 @@ def prepare(info: dict[str, Any]) -> None:
     files = {
         str(p.relative_to(model)): dict(sha256=digest(p), **identity(p))
         for p in sorted(model.rglob("*"))
-        if p.is_file() and p.name != "artifacts.json"
+        if p.is_file() and p.name != "artifacts.json" and p.relative_to(model).parts[0] != "dflash2"
     }
     receipt = dict(
         schema=1, manifest_sha256=digest(HERE / "manifest.json"), files=files
     )
     (model / "artifacts.json").write_text(json.dumps(receipt, indent=2) + "\n")
+
+
+def draft_inventory(info: dict[str, Any]) -> set[str]:
+    """List only the managed optional drafter files."""
+    name = str(info["dflash2"]["name"])
+    if Path(name).name != name or not name.endswith(".pack"):
+        raise RuntimeError("Invalid optional draft pack name")
+    folder = Path(info["model_directory"]) / "dflash2"
+    names = {name, name + ".part", "verification.json"}
+    if folder.is_symlink() or (folder.exists() and not folder.is_dir()):
+        raise RuntimeError("The optional drafter needs a regular directory")
+    if folder.exists() and any(p.is_symlink() or not p.is_file() or p.name not in names for p in folder.iterdir()):
+        raise RuntimeError("Unknown or unsafe optional drafter file")
+    return {"dflash2/" + name for name in names}
+
+
+def draft(info: dict[str, Any], index: Any, install: bool) -> None:
+    """Verify the optional draft against the signed feed and its own receipt."""
+    draft_inventory(info)
+    pin = info["dflash2"]
+    package = next((p for p in index.drafters if p.name == pin["name"] and p.version == pin["version"]), None)
+    if package is None or any(getattr(package, key) != pin[key] for key in ("size", "sha256", "base")) or "cuda" not in package.backends or urljoin(info["runtime"]["feed_url"], package.url) != pin["url"]:
+        raise RuntimeError("Optional draft does not match the pinned signed feed")
+    folder = Path(info["model_directory"]) / "dflash2"
+    path = folder / pin["name"]
+    receipt = folder / "verification.json"
+    if install:
+        download(pin, path)
+        receipt.write_text(json.dumps(dict(sha256=pin["sha256"], file=identity(path)), indent=2) + "\n")
+    if not path.is_file() or not receipt.is_file():
+        raise RuntimeError("Optional DFlash2 is absent. Run localmodel fetch qwen3.8 --speculative dflash2.")
+    proof = json.loads(receipt.read_text())
+    if proof.get("sha256") != pin["sha256"] or proof.get("file") != identity(path) or path.stat().st_size != pin["size"]:
+        raise RuntimeError("Optional DFlash2 changed. Reverify it with localmodel fetch qwen3.8 --speculative dflash2.")
 
 
 def check(info: dict[str, Any]) -> None:
@@ -277,7 +313,8 @@ def check(info: dict[str, Any]) -> None:
     receipt = json.loads((model / "artifacts.json").read_text())
     if receipt["manifest_sha256"] != digest(HERE / "manifest.json"):
         raise RuntimeError("Artifact receipt uses another manifest")
-    actual = {str(p.relative_to(model)) for p in model.rglob("*") if p.is_file()}
+    draft_inventory(info)
+    actual = {str(p.relative_to(model)) for p in model.rglob("*") if p.is_file() and p.relative_to(model).parts[0] != "dflash2"}
     if actual != set(receipt["files"]) | {"artifacts.json"}:
         raise RuntimeError("Model directory has missing or unrecorded files")
     for name, item in receipt["files"].items():
@@ -310,9 +347,13 @@ def main() -> None:
     g.add_argument("--run", action="store_true")
     g.add_argument("--check", action="store_true")
     g.add_argument("--inventory", action="store_true")
+    ap.add_argument("--speculative", choices=("mtp", "dflash2"), default="mtp")
     a = ap.parse_args()
     info = read_manifest(HERE / "manifest.json")
     model = Path(info["model_directory"])
+    if a.inventory and a.speculative == "dflash2":
+        print(json.dumps(sorted(draft_inventory(info))))
+        return
     if a.inventory:
         receipt = model / "artifacts.json"
         files: dict[str, Any] = (
@@ -325,6 +366,7 @@ def main() -> None:
                     | {f["name"] for f in info["files"]}
                     | {f["name"] + ".part" for f in info["files"]}
                     | {"artifacts.json"}
+                    | draft_inventory(info)
                 )
             )
         )
@@ -350,7 +392,7 @@ def main() -> None:
             raise RuntimeError(
                 f"Preparation requires {required / 1024**3:.1f} GiB free, including 10 GiB headroom"
             )
-    engine(info, a.run)
+    index = engine(info, a.run)
     if a.run:
         if (model / "artifacts.json").exists():
             check(info)
@@ -359,6 +401,8 @@ def main() -> None:
                 download(f, model / f["name"])
             prepare(info)
     check(info)
+    if a.speculative == "dflash2":
+        draft(info, index, a.run)
     print(
         json.dumps(
             dict(

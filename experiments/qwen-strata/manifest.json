@@ -65,5 +65,13 @@
   ],
   "ple_shard": "/home/tritlo/Code/local-models/models/qwen38-unsloth-iq1-m/Qwen3.8-Flash-Next-UD-IQ1_M-00003-of-00003.gguf",
   "source_tag": "v0.2.12",
-  "control_version": "0.1.58"
+  "control_version": "0.1.58",
+  "dflash2": {
+    "name": "qwen3.8-flash-next-dflash2.strata1.q4_0-selq4.pack",
+    "version": "1",
+    "base": "incoai/Qwen3.8-Flash-Next-DFlash2@a22a1744e85c17364dcc54a6a420af7135d4c7f6",
+    "size": 339694592,
+    "sha256": "4df2e5ab2b47c064afbe662e16e4f06569877125c2d0e2123a4ac755266c664c",
+    "url": "https://github.com/Niko1221/Strata/releases/download/v0.2.12/qwen3.8-flash-next-dflash2.strata1.q4_0-selq4.pack"
+  }
 }
