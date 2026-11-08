@@ -21,7 +21,7 @@ from localmodel import CAPPED, STATE, check_free  # noqa: E402
 def main() -> int:
     """Validate a prepared candidate before an explicitly requested build."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("runtime", choices=("bonsai-native", "bonsai-next", "dory-native"))
+    parser.add_argument("runtime", choices=("bonsai-native", "bonsai-next", "bonsai-dspine", "dory-native"))
     parser.add_argument("--jobs", type=int, default=2, help="Compiler jobs (default: 2).")
     parser.add_argument("--run", action="store_true", help="Run the build. Omit this flag to print the plan.")
     args = parser.parse_args()

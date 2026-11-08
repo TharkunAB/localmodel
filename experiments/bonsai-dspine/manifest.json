@@ -1,0 +1,193 @@
+{
+  "id": "bonsai-dspine",
+  "status": "experimental-measured",
+  "prepared_at": "2026-11-08",
+  "source_repository": "https://github.com/PrismML-Eng/llama.cpp",
+  "source_revision": "e3de715222b2667c54a267441159a5729f11155e",
+  "base_commit": "e3de715222b2667c54a267441159a5729f11155e",
+  "bundle_repository": "https://github.com/professorpalmer/bonsai-ada-surgery",
+  "bundle_commit": "fe77c29cb8b185a382df17013b22d952aac341ed",
+  "source_directory": "/home/tritlo/Code/local-models/state/sources/bonsai-dspine",
+  "build_directory": "/home/tritlo/Code/local-models/state/builds/bonsai-dspine",
+  "binary": "/home/tritlo/Code/local-models/state/builds/bonsai-dspine/bin/llama-server",
+  "source_archive": {
+    "url": "https://codeload.github.com/PrismML-Eng/llama.cpp/tar.gz/e3de715222b2667c54a267441159a5729f11155e",
+    "sha256": "e0dbe5fde916a15a93cf11fe6467b320bf23b6b60fca772d3c136fdf880fda70",
+    "path": "/home/tritlo/Code/local-models/state/sources/bonsai-native/.git/preparation/base-source.tar.gz",
+    "size": 37384891
+  },
+  "patch": "/home/tritlo/Code/local-models/experiments/bonsai-dspine/runtime.patch",
+  "patch_sha256": "96bb501a81aacde6078db639918edf1e5393e865a1b52f47acc9a6536590c223",
+  "source_diff_sha256": "96bb501a81aacde6078db639918edf1e5393e865a1b52f47acc9a6536590c223",
+  "source_files_sha256": "/home/tritlo/Code/local-models/experiments/bonsai-dspine/source-files.sha256",
+  "source_files_count": 3589,
+  "upstream_patches": [
+    {
+      "number": "0028",
+      "path": "/home/tritlo/Code/local-models/experiments/bonsai-next/upstream/0028-llama-cuda-tiered-KV-cache-kv-vram-cells-VRAM-head-p.patch",
+      "sha256": "910df92496acef51f8dc828a742107cd6d466970e76da0cb27c473799e011af7"
+    },
+    {
+      "number": "0029",
+      "path": "/home/tritlo/Code/local-models/experiments/bonsai-next/upstream/0029-cuda-quantized-KV-GQA-decode-on-the-in-place-MMA-fla.patch",
+      "sha256": "b609d2b2f45636f1295f26bf469c19c3bfec16e4225eb3dff2197025b06eebea"
+    },
+    {
+      "number": "0031",
+      "path": "/home/tritlo/Code/local-models/experiments/bonsai-next/upstream/0031-speculative-spec-draft-window-and-spec-draft-n-max-t.patch",
+      "sha256": "cf8c8eec47f125ce61e95c37be984a2c07723901659a93bc4505ba0609c523e3"
+    },
+    {
+      "number": "0041",
+      "path": "/home/tritlo/Code/local-models/experiments/bonsai-next/upstream/0041-cuda-tiered-KV-prefill-writes-new-rows-through-the-V.patch",
+      "sha256": "23c30f817a9bb6cb87bdb038ad827f5c2f65f824fc9d57a334d7ca8d2a70d5ee"
+    },
+    {
+      "number": "0042",
+      "path": "/home/tritlo/Code/local-models/experiments/bonsai-next/upstream/0042-grammar-clone-redirects-stack-pointers-by-binary-sea.patch",
+      "sha256": "1a3fdbb65b2800b55a864ee9717bc24403873bdd46211d71abb041be178cb8e1"
+    },
+    {
+      "number": "0047",
+      "path": "/home/tritlo/Code/local-models/experiments/bonsai-next/upstream/0047-cuda-tiered-KV-partial-staging-GGML_CUDA_KV_TIER_STA.patch",
+      "sha256": "c4912627fb69f86213f8ca7db8986e8f1f24c1228f7867f8be8fe9c53849a213"
+    },
+    {
+      "number": "0053",
+      "path": "/home/tritlo/Code/local-models/experiments/bonsai-next/upstream/0053-cuda-CUDA-graphs-off-for-graphs-whose-attention-read.patch",
+      "sha256": "da5487a4cb4b40eda5cef082066a2666ca8a3586ed7f466f7353f5923c4d8643"
+    },
+    {
+      "number": "0046",
+      "path": "/home/tritlo/Code/local-models/experiments/bonsai-next/upstream/0046-server-checkpoint-every-nt-N-also-checkpoints-inside.patch",
+      "sha256": "f102ba37c6336c93046f307fb272dc05c66451c9721237a915c43d3bb8f312ce"
+    },
+    {
+      "number": "0054",
+      "path": "/home/tritlo/Code/local-models/experiments/bonsai-next/upstream/0054-cuda-chunked-gated-delta-net-MMA-prefill-port-of-ggml.patch",
+      "sha256": "98d13c1cf02f8ead3372d54ac5280e3401bcc790e48068ca47285cf06d931a1a"
+    },
+    {
+      "number": "0070",
+      "path": "/home/tritlo/Code/local-models/experiments/bonsai-next/upstream/0070-recurrent-replay-rollback-LLAMA_RS_REPLAY-1-one-recu.patch",
+      "sha256": "f9a11243cec81a0d8f50f0ccbff789d42904a70f3680e7368d77c17e6e416a49"
+    }
+  ],
+  "adaptations": [
+    "0031: retain bounded MTP-window sizing and eviction only; omit tail caps and depth-cutoff resizing.",
+    "0031: require MTP and nonempty batch; use 64-bit sizing arithmetic.",
+    "0041: place the graph begin/step/end hooks in e3de715 without importing optional op-timing code.",
+    "0070: preserve ARC-LAB SYCL replay; use a separate raw CUDA API and serialized state tag 3.",
+    "0070: require CUDA backend and F32 recurrent state/raw gates; validate saved pending counts and bound device counts.",
+    "DSpine: port four C++ inference files only; omit conversion and quantization tooling.",
+    "DSpine: recover selected borrowed output rows with normalized Hadamard, then signs; reuse build_embd_rows for tied inverse maps.",
+    "DSpine: reject incomplete bridges, invalid dimensions, non-causal or mixed draft architectures, and permuted output heads.",
+    "DSpine: apply output scaling and logit transforms to both initial logits and refined candidate scores.",
+    "DSpine: preserve dflash.attention.causal in the old speculative runner; the upstream base already has this fix."
+  ],
+  "cmake_args": [
+    "-DCMAKE_BUILD_TYPE=Release",
+    "-DGGML_CUDA=ON",
+    "-DGGML_RPC=OFF",
+    "-DGGML_NATIVE=OFF",
+    "-DGGML_CUDA_CCCL_VERSION=",
+    "-DLLAMA_BUILD_COMMON=ON",
+    "-DLLAMA_BUILD_TOOLS=ON",
+    "-DLLAMA_BUILD_SERVER=ON",
+    "-DLLAMA_BUILD_TESTS=OFF",
+    "-DLLAMA_BUILD_EXAMPLES=OFF",
+    "-DLLAMA_BUILD_APP=OFF",
+    "-DLLAMA_BUILD_UI=OFF",
+    "-DLLAMA_USE_PREBUILT_UI=OFF",
+    "-DLLAMA_OPENSSL=OFF",
+    "-DLLAMA_SUBPROCESS=OFF",
+    "-DLLAMA_LLGUIDANCE=OFF",
+    "-DFETCHCONTENT_FULLY_DISCONNECTED=ON",
+    "-DGGML_CUDA_NO_VMM=OFF",
+    "-DLLAMA_DSPARK_MARKOV_CUDA=OFF",
+    "-DLLAMA_USE_SYSTEM_GGML=ON",
+    "-Dggml_DIR=/home/tritlo/Code/local-models/state/deps/bonsai-dspine-ggml/lib/cmake/ggml",
+    "-DLLAMA_BUILD_COMMIT=e3de715-bonsai-dspine",
+    "-DCMAKE_EXE_LINKER_FLAGS=-Wl,-rpath-link,/home/tritlo/Code/local-models/state/runtimes/strata-qwen-0.1.58/engine"
+  ],
+  "build_target": "llama-server",
+  "build_jobs": 2,
+  "build_memory_cap": "16G",
+  "build_time_cap": "90m",
+  "environment": {
+    "PATH_prepend": "/home/tritlo/Code/local-models/.venv/bin",
+    "LD_LIBRARY_PATH_prepend": "/home/tritlo/Code/local-models/state/deps/bonsai-dspine-ggml/lib:/usr/lib/wsl/lib:/home/tritlo/Code/local-models/state/runtimes/strata-qwen-0.1.58/engine"
+  },
+  "native_features": [
+    "draft_window",
+    "kv_vram_cells",
+    "mma_decode_min_kv",
+    "grammar_clone",
+    "lookup_ngram_mod",
+    "mtp_chain",
+    "reasoning_xhigh",
+    "tier_prefetch",
+    "checkpoint_every",
+    "gdn_mma",
+    "recurrent_replay",
+    "dspine"
+  ],
+  "unsupported_features": [
+    "spec-draft-n-max-tail",
+    "sparse-host-tail",
+    "agent-proxy",
+    "reasoning-effort-normalization"
+  ],
+  "runtime_requirements": {
+    "host": "127.0.0.1",
+    "parallel": 1,
+    "gpu_layers": 99,
+    "cache_type_k": "q4_0",
+    "cache_type_v": "q4_0",
+    "flash_attention": "on",
+    "cuda_architecture": "89-real",
+    "cuda_vmm": true,
+    "existing_weights_only": false
+  },
+  "review": {
+    "scope": "DSpine additions to the existing reviewed bonsai-next source. Read source-audit.md.",
+    "finding": "Static review found no new networking, telemetry, file I/O or subprocess execution. The only added string handling reads one fixed boolean metadata value.",
+    "limitations": [
+      "Seven completed OMP workflow cases passed at 16K or 64K input; this is not a general accuracy evaluation.",
+      "The short non-thinking arithmetic fixture failed with and without speculation.",
+      "The port retains greedy draft selection; upstream probabilistic draft sampling is not included.",
+      "Only one CUDA device and one request slot were tested.",
+      "The RAM KV tail was allocated but not used by the filled 64K workloads."
+    ]
+  },
+  "parent_runtime": "experiments/bonsai-next/manifest.json",
+  "parent_patch_sha256": "c62f99ad87f082d4fde252fb96c921a62b79f5ae11585eba54c75d85db4bfbb7",
+  "upstream_dspine_repository": "https://github.com/Ajay9o9/llama.cpp",
+  "upstream_dspine_revision": "d493f841b20241606c47a4e0537d3c786b5cf50b",
+  "upstream_dspine_patch_sha256": "cec08cb1a5646197cd8c84820aa8a241663abb86b492974fef6d98cf3d05a5f2",
+  "dspine_changed_source_files": [
+    "common/speculative.cpp",
+    "src/llama-arch.cpp",
+    "src/llama-arch.h",
+    "src/llama-model.h",
+    "src/models/dflash.cpp"
+  ],
+  "build_dependencies": {
+    "ggml_prefix": "/home/tritlo/Code/local-models/state/deps/bonsai-dspine-ggml",
+    "source_runtime": "bonsai-next",
+    "note": "CMake-installed copy of the reviewed existing GGML build. Installation changes runtime search paths only.",
+    "cuda_libraries": {
+      "state/runtimes/strata-qwen-0.1.58/engine/libcublasLt.so.13": "1489aeb75d55ee55782798343ac66f57771d561cc1fe1e0491568deefa0e6515",
+      "state/runtimes/strata-qwen-0.1.58/engine/libcudart.so.13": "96c42e418cec19054186b9429c321603cc190bf26a18104e19408117a2a817b0",
+      "state/runtimes/strata-qwen-0.1.58/engine/libcublas.so.13": "25cde432108543626df85d887c730bf2cab96803ca16f9654e4abc8d2b45833e"
+    }
+  },
+  "draft": {
+    "repo": "aj9o9/Qwen3.8-27B-DSpine-b16-GGUF",
+    "revision": "62e92414e114702e792ea7a4c37eba57b25bac8b",
+    "filename": "Qwen3.8-27B-DSpine-b16-Q4_K_M.gguf",
+    "size": 1257892896,
+    "sha256": "0c6c984ac18611288d7b8f497bc347c4921e8231b1b6abf28650481eaf35ff55",
+    "path": "/home/tritlo/Code/local-models/models/bonsai2-27b-dspine/Qwen3.8-27B-DSpine-b16-Q4_K_M.gguf"
+  }
+}

@@ -1,0 +1,162 @@
+{
+  "official_revision": "ea909c0f5fab8865f9e14600334f55f7ce47308f",
+  "draft_revision": "62e92414e114702e792ea7a4c37eba57b25bac8b",
+  "verified_tensors": [
+    {
+      "target": "dspine_gate.weight",
+      "source": "selected_prefix_bridge.gate.weight",
+      "slice": 0,
+      "source_bytes": 1048576,
+      "target_bytes": 1048576,
+      "source_sha256": "1d8a10e0cde5a68eacbdc1a6af2558eb058622e3a1159a37c7e13cab593c7b4f",
+      "target_sha256": "1d8a10e0cde5a68eacbdc1a6af2558eb058622e3a1159a37c7e13cab593c7b4f",
+      "equal": true,
+      "conversion": "none"
+    },
+    {
+      "target": "dspine_gate.bias",
+      "source": "selected_prefix_bridge.gate.bias",
+      "slice": 0,
+      "source_bytes": 1024,
+      "target_bytes": 2048,
+      "source_sha256": "f6163e9367a4e2b850b9c90948bc3b32fffdedac6ae69dc3d85ece8d417878a4",
+      "target_sha256": "c1e3855b7e48721e584ca4928d3fe59e2b96366ea3b456f2595ef2fc3c6d146e",
+      "equal": true,
+      "conversion": "exact BF16 to F32 expansion"
+    },
+    {
+      "target": "dspine_pred_gate.weight",
+      "source": "selected_prefix_bridge.predecessor_gate.weight",
+      "slice": 0,
+      "source_bytes": 1048576,
+      "target_bytes": 1048576,
+      "source_sha256": "796cadaf06a4a9ded8783359a7aca4e3c75410ca28976a90cde75ed97edff512",
+      "target_sha256": "796cadaf06a4a9ded8783359a7aca4e3c75410ca28976a90cde75ed97edff512",
+      "equal": true,
+      "conversion": "none"
+    },
+    {
+      "target": "dspine_prev.weight",
+      "source": "selected_prefix_bridge.prev.weight",
+      "slice": 0,
+      "source_bytes": 1048576,
+      "target_bytes": 1048576,
+      "source_sha256": "1ab96e18ce23af8df93ccae0c60f3049647e1260eab3578f0fa291d22ef789cf",
+      "target_sha256": "1ab96e18ce23af8df93ccae0c60f3049647e1260eab3578f0fa291d22ef789cf",
+      "equal": true,
+      "conversion": "none"
+    },
+    {
+      "target": "blk.0.dspine_read.weight",
+      "source": "selected_prefix_bridge.early_read_weights",
+      "slice": 0,
+      "source_bytes": 10485760,
+      "target_bytes": 10485760,
+      "source_sha256": "0b3a7cc8200a6d184bb6a279388e187941748a43ffeaf336b0b429609039bec4",
+      "target_sha256": "0b3a7cc8200a6d184bb6a279388e187941748a43ffeaf336b0b429609039bec4",
+      "equal": true,
+      "conversion": "none"
+    },
+    {
+      "target": "blk.0.dspine_write.weight",
+      "source": "selected_prefix_bridge.feature_write_weights",
+      "slice": 0,
+      "source_bytes": 5242880,
+      "target_bytes": 5242880,
+      "source_sha256": "ecd7d1d8181f7898f73b214f5be65ed9173460f73c17f22a9dcec98926484d81",
+      "target_sha256": "ecd7d1d8181f7898f73b214f5be65ed9173460f73c17f22a9dcec98926484d81",
+      "equal": true,
+      "conversion": "none"
+    },
+    {
+      "target": "blk.1.dspine_read.weight",
+      "source": "selected_prefix_bridge.early_read_weights",
+      "slice": 1,
+      "source_bytes": 10485760,
+      "target_bytes": 10485760,
+      "source_sha256": "38ad99b973e627f39d4516e2f710ea620b3fd026998b6081a4cf1f621684c630",
+      "target_sha256": "38ad99b973e627f39d4516e2f710ea620b3fd026998b6081a4cf1f621684c630",
+      "equal": true,
+      "conversion": "none"
+    },
+    {
+      "target": "blk.1.dspine_write.weight",
+      "source": "selected_prefix_bridge.feature_write_weights",
+      "slice": 1,
+      "source_bytes": 5242880,
+      "target_bytes": 5242880,
+      "source_sha256": "78b1b96ec643b25c9c3f815e65483fc77cad10e70aab08c106a31fb46801385c",
+      "target_sha256": "78b1b96ec643b25c9c3f815e65483fc77cad10e70aab08c106a31fb46801385c",
+      "equal": true,
+      "conversion": "none"
+    },
+    {
+      "target": "blk.2.dspine_read.weight",
+      "source": "selected_prefix_bridge.early_read_weights",
+      "slice": 2,
+      "source_bytes": 10485760,
+      "target_bytes": 10485760,
+      "source_sha256": "5120500616ff9494740116c5e57cb9f786b438e0faab88d16e6f3c0161a4f890",
+      "target_sha256": "5120500616ff9494740116c5e57cb9f786b438e0faab88d16e6f3c0161a4f890",
+      "equal": true,
+      "conversion": "none"
+    },
+    {
+      "target": "blk.2.dspine_write.weight",
+      "source": "selected_prefix_bridge.feature_write_weights",
+      "slice": 2,
+      "source_bytes": 5242880,
+      "target_bytes": 5242880,
+      "source_sha256": "8142d0667fec9559541a02e1f8ffaceaef3c8cfb369da5f8e1a8c50450ececb6",
+      "target_sha256": "8142d0667fec9559541a02e1f8ffaceaef3c8cfb369da5f8e1a8c50450ececb6",
+      "equal": true,
+      "conversion": "none"
+    },
+    {
+      "target": "blk.3.dspine_read.weight",
+      "source": "selected_prefix_bridge.early_read_weights",
+      "slice": 3,
+      "source_bytes": 10485760,
+      "target_bytes": 10485760,
+      "source_sha256": "dd11888e9c8cd3d69132acb350eec0a05554707fe640c60433f6c2db4cd5de2e",
+      "target_sha256": "dd11888e9c8cd3d69132acb350eec0a05554707fe640c60433f6c2db4cd5de2e",
+      "equal": true,
+      "conversion": "none"
+    },
+    {
+      "target": "blk.3.dspine_write.weight",
+      "source": "selected_prefix_bridge.feature_write_weights",
+      "slice": 3,
+      "source_bytes": 5242880,
+      "target_bytes": 5242880,
+      "source_sha256": "c7b1548025b873e37a98f78f59aa7ddde0420bb787aec49bc3edeca1817b2026",
+      "target_sha256": "c7b1548025b873e37a98f78f59aa7ddde0420bb787aec49bc3edeca1817b2026",
+      "equal": true,
+      "conversion": "none"
+    },
+    {
+      "target": "blk.4.dspine_read.weight",
+      "source": "selected_prefix_bridge.read_weight",
+      "slice": 0,
+      "source_bytes": 10485760,
+      "target_bytes": 10485760,
+      "source_sha256": "b26873df020f4381f008449223c45bc9ed7678776d567625016b481ab0c408a7",
+      "target_sha256": "b26873df020f4381f008449223c45bc9ed7678776d567625016b481ab0c408a7",
+      "equal": true,
+      "conversion": "none"
+    },
+    {
+      "target": "blk.4.dspine_write.weight",
+      "source": "selected_prefix_bridge.feature_write_weights",
+      "slice": 4,
+      "source_bytes": 5242880,
+      "target_bytes": 5242880,
+      "source_sha256": "fcbbde0fade00b07312606be6d6b413bd0c58115d0234af686e37b48ddf527d4",
+      "target_sha256": "fcbbde0fade00b07312606be6d6b413bd0c58115d0234af686e37b48ddf527d4",
+      "equal": true,
+      "conversion": "none"
+    }
+  ],
+  "source_bytes_checked": 81789952,
+  "limitation": "The quantized codebook and other quantized tensors were not compared with the BF16 checkpoint."
+}

@@ -129,6 +129,8 @@ localmodel start
 The trained-head file preserves the target tensor bytes. The download helper
 verifies the required donor ranges and the complete generated file.
 See the [head audit](experiments/bonsai-next/head-audit.md).
+The [DSpine comparison](docs/bonsai-dspine-20261108.md) covers the separate
+experimental drafter. Its long OMP results keep MTP2 as the default.
 Allow roughly **15–20 GiB** of model/build space plus room for the CUDA toolkit
 and package caches. The retained target and generated model alone use 11.5 GiB.
 
