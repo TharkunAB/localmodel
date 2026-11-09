@@ -750,7 +750,15 @@ def stop() -> None:
 
 def stats_text() -> str:
     """Show recorded measurements without starting a model."""
-    return ("2026-11-07 full DeepSeek tuning, Strata 0.2.12 / native 0.1.58: defaults retained.\n"
+    return ("2026-11-09 official Strata 0.2.13 / native 0.1.59: existing defaults retained.\n"
+            "Full Unsloth IQ1_S, 192K capacity, cache48, 64G cap, CPU12, prefill4096, reserve700, six experts, no DSpark.\n"
+            "Matched 16K/32K/64K decode, 0.2.12 -> 0.2.13: 8.97 -> 9.17, 8.72 -> 9.12, 8.56 -> 8.81 tok/s.\n"
+            "Initial prefill: 261.11 -> 256.33, 347.54 -> 346.42, 417.30 -> 417.96 tok/s; actual input 15961/32331/65306.\n"
+            "All six repair/recall/strict-resume checks pass. Supplemental repair JSON-only compliance: old 3/3, new 2/3.\n"
+            "Output lengths and tool paths differ; the 16K/32K tasks take longer. These single passes do not establish a general speed gain.\n"
+            "Peak RAM 64 GiB and whole-GPU VRAM 11.79 GiB; no OOM or swap. Qwen MTP4, API tools and OMP discovery pass.\n"
+            "All benchmark services stopped. See docs/strata-0.2.13-review.md for resources, formatting limits and cache behavior.\n\n"
+            "2026-11-07 full DeepSeek tuning, Strata 0.2.12 / native 0.1.58: defaults retained.\n"
             "192K capacity, 64G cap, cache48, CPU12, prefill4096, reserve700, six experts, no DSpark.\n"
             "Nine 16K OMP screens: controls 9.19/9.16 decode tok/s; cache40 8.49, cache52 9.37, CPU8 8.15, reserve1536 8.48.\n"
             "DSpark depths 1/3: 8.50/8.74 decode tok/s. Chunk2048: 9.61 decode, but first prefill 189.91 versus 267.44/270.11 tok/s.\n"

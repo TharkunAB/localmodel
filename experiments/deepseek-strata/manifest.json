@@ -1,9 +1,9 @@
 {
-  "status": "official-strata-0212-source-verified",
+  "status": "official-strata-0213-source-verified",
   "model_repository": "unsloth/DeepSeek-V4.1-Flash-1017-GGUF",
   "model_revision": "8a6ec9cf118e785a362ea94ee123c61c70553be6",
   "source_repository": "https://github.com/Niko1221/Strata",
-  "source_revision": "146df3c468739147f520ac3816de806f71232571",
+  "source_revision": "d2f096475817d4666c364c820b0ca830f751cfc5",
   "context": 196608,
   "memory_limit": "64G",
   "expert_memory": "cache",
@@ -48,7 +48,7 @@
       "url": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF/resolve/8a6ec9cf118e785a362ea94ee123c61c70553be6/UD-IQ1_S/DeepSeek-V4.1-Flash-1017-UD-IQ1_S-00005-of-00005.gguf"
     }
   ],
-  "source_directory": "/home/tritlo/Code/local-models/state/sources/strata-official-0.2.12",
+  "source_directory": "/home/tritlo/Code/local-models/state/sources/strata-official-0.2.13",
   "model_directory": "/home/tritlo/Code/local-models/models/deepseek41-1017-unsloth-iq1-s",
   "tested_context_capacities": [
     196608
@@ -56,22 +56,22 @@
   "filled_long_context_verified": true,
   "previous_iq1_m_results": "results/strata-027-20261027/comparison.json",
   "previous_iq1_m_omp_results": "results/strata-027-20261027/deepseek-16k-48g-36cache/summary.json",
-  "source_tag": "v0.2.12",
-  "source_archive_url": "https://api.github.com/repos/Niko1221/Strata/tarball/146df3c468739147f520ac3816de806f71232571",
-  "source_archive_sha256": "4c8ed4924f040364e015bdfacacb491e226b91e8cac508715320c5042152f323",
-  "source_receipt_sha256": "e6f7b38d79fed49875580986b7c988875f423e0fab406ac1c2ac354162131ddb",
+  "source_tag": "v0.2.13",
+  "source_archive_url": "https://api.github.com/repos/Niko1221/Strata/tarball/d2f096475817d4666c364c820b0ca830f751cfc5",
+  "source_archive_sha256": "f80dbb99fb99137854700e6ef1dae4b5252afc535cd75dd594ac4e73200407dc",
+  "source_receipt_sha256": "731a327b1779d142dcae124d750452b2bfc4f483c777a5abf54ca301a3c9d83b",
   "runtime": {
-    "release_tag": "v0.2.12",
-    "version": "0.1.58",
-    "directory": "/home/tritlo/Code/local-models/state/runtimes/strata-official-0.1.58",
-    "archive_url": "https://github.com/Niko1221/Strata/releases/download/v0.2.12/strata-dsv41-0.1.58-linux-x86_64-cuda-cuda13.tar.gz",
-    "archive_sha256": "8ff96186db086b525c716a92f81e7d59e3cb2a0383aa4198ce0ddf14b7473c43",
-    "archive_size": 445222950,
-    "feed_url": "https://github.com/Niko1221/Strata/releases/download/v0.2.12/strata-feed.json",
-    "feed_sha256": "77bf5e7b86bb73abdce88a1159f76f2abef233856f9fc9f10890a7a31cda470d",
-    "feed_signature_sha256": "47a068d404ae051ea514b9d7992f7112eb0493955286ef91b703655b872f7efe",
-    "manifest_sha256": "ec36ed97697558ba980f7673fe51f0e374f3c6c2e7f819eb7ae8fbbfe5057a69",
-    "binary_sha256": "2a9ad0cf42c904ffd47b8964bad8f0ed01adf6a2d15bc45bf92dd0cdaf1e04ce",
+    "release_tag": "v0.2.13",
+    "version": "0.1.59",
+    "directory": "/home/tritlo/Code/local-models/state/runtimes/strata-official-0.1.59",
+    "archive_url": "https://github.com/Niko1221/Strata/releases/download/v0.2.13/strata-dsv41-0.1.59-linux-x86_64-cuda-cuda13.tar.gz",
+    "archive_sha256": "4440a62b6aaf51d740f8c37fcc0e7b28cf79ba37aaa199a214b98067c5bf36ad",
+    "archive_size": 445221867,
+    "feed_url": "https://github.com/Niko1221/Strata/releases/download/v0.2.13/strata-feed.json",
+    "feed_sha256": "b5eef44ac8a054d0b75e690698834253a227a55b3a850b4ac95336bef6b8980d",
+    "feed_signature_sha256": "c8b4953e49a38f7611ccef1a4efa2dd562663e6d842931304687159a74ca4fe3",
+    "manifest_sha256": "bb774889c7b5a3fa981762ac3033fed78ae2c2b089cf7777e4942e4a95a5d446",
+    "binary_sha256": "b1da3079c1accbea7dba103b7a9086c68ded868531759f611e4ef7f7525a689e",
     "python_packages": [
       "jinja2==3.1.6",
       "markupsafe==3.0.3",
@@ -92,5 +92,5 @@
   "previous_iq1_m_stock_results": "results/strata-official/20261024-migration/summary.json",
   "previous_iq1_m_runtime_results": "results/strata-official/20261025-update-bench/summary.json",
   "previous_iq1_m_runtime_omp_results": "results/strata-official/20261025-update-bench/64g-48cache-4096-retry/summary.json",
-  "control_version": "0.1.58"
+  "control_version": "0.1.59"
 }

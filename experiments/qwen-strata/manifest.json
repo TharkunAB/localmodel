@@ -1,9 +1,9 @@
 {
-  "source_directory": "/home/tritlo/Code/local-models/state/sources/strata-official-0.2.12",
-  "source_revision": "146df3c468739147f520ac3816de806f71232571",
-  "source_archive_url": "https://api.github.com/repos/Niko1221/Strata/tarball/146df3c468739147f520ac3816de806f71232571",
-  "source_archive_sha256": "4c8ed4924f040364e015bdfacacb491e226b91e8cac508715320c5042152f323",
-  "source_receipt_sha256": "e6f7b38d79fed49875580986b7c988875f423e0fab406ac1c2ac354162131ddb",
+  "source_directory": "/home/tritlo/Code/local-models/state/sources/strata-official-0.2.13",
+  "source_revision": "d2f096475817d4666c364c820b0ca830f751cfc5",
+  "source_archive_url": "https://api.github.com/repos/Niko1221/Strata/tarball/d2f096475817d4666c364c820b0ca830f751cfc5",
+  "source_archive_sha256": "f80dbb99fb99137854700e6ef1dae4b5252afc535cd75dd594ac4e73200407dc",
+  "source_receipt_sha256": "731a327b1779d142dcae124d750452b2bfc4f483c777a5abf54ca301a3c9d83b",
   "model_repository": "unsloth/Qwen3.8-Flash-Next-GGUF",
   "model_revision": "d96201194f103c906994f283f504209dc8d2a10c",
   "model_directory": "/home/tritlo/Code/local-models/models/qwen38-unsloth-iq1-m",
@@ -38,19 +38,19 @@
     "mtp"
   ],
   "runtime": {
-    "directory": "/home/tritlo/Code/local-models/state/runtimes/strata-qwen-0.1.58",
-    "binary": "/home/tritlo/Code/local-models/state/runtimes/strata-qwen-0.1.58/engine/strata",
-    "version": "0.1.58",
-    "archive_url": "https://github.com/Niko1221/Strata/releases/download/v0.2.12/strata-engine-0.1.58-linux-x86_64-cuda-cuda13.tar.gz",
-    "archive_sha256": "bbbfa8260125b94591cae30747cb0e4a9cee26d9cb0b2e284e33000c91509d54",
-    "archive_size": 723463241,
-    "manifest_sha256": "97e09305875fd8c69dbe1f9268ae902467ce8dc73d794ae12a7676644d37a199",
-    "feed_url": "https://github.com/Niko1221/Strata/releases/download/v0.2.12/strata-feed.json",
-    "feed_sha256": "77bf5e7b86bb73abdce88a1159f76f2abef233856f9fc9f10890a7a31cda470d",
-    "feed_signature_sha256": "47a068d404ae051ea514b9d7992f7112eb0493955286ef91b703655b872f7efe",
+    "directory": "/home/tritlo/Code/local-models/state/runtimes/strata-qwen-0.1.59",
+    "binary": "/home/tritlo/Code/local-models/state/runtimes/strata-qwen-0.1.59/engine/strata",
+    "version": "0.1.59",
+    "archive_url": "https://github.com/Niko1221/Strata/releases/download/v0.2.13/strata-engine-0.1.59-linux-x86_64-cuda-cuda13.tar.gz",
+    "archive_sha256": "42ab04fa3201e41bef5fac28c05f5c35c909419ec937d879b505bf1516742610",
+    "archive_size": 723498702,
+    "manifest_sha256": "076b8a35d5d16d78b55c485f50a9cdf7dc0e7904e15b5bb2d91ac47bccff8609",
+    "feed_url": "https://github.com/Niko1221/Strata/releases/download/v0.2.13/strata-feed.json",
+    "feed_sha256": "b5eef44ac8a054d0b75e690698834253a227a55b3a850b4ac95336bef6b8980d",
+    "feed_signature_sha256": "c8b4953e49a38f7611ccef1a4efa2dd562663e6d842931304687159a74ca4fe3",
     "venv": "/home/tritlo/Code/local-models/state/venvs/strata-official-0.2.8",
-    "release_tag": "v0.2.12",
-    "binary_sha256": "a6ca30de01cf938764820a3fabe0725cb734e59933863a13f86c82c768be5692"
+    "release_tag": "v0.2.13",
+    "binary_sha256": "0ba914b28df1c8e09c0b5209c2ca6040c75fb650a7408ff3d9ef3ad159a13eb9"
   },
   "gguf_source": {
     "url": "https://codeload.github.com/ggml-org/llama.cpp/zip/3cf03257f219afbe7334045ff7c6a06ac68c627d",
@@ -64,14 +64,14 @@
     "regex==2026.9.10"
   ],
   "ple_shard": "/home/tritlo/Code/local-models/models/qwen38-unsloth-iq1-m/Qwen3.8-Flash-Next-UD-IQ1_M-00003-of-00003.gguf",
-  "source_tag": "v0.2.12",
-  "control_version": "0.1.58",
+  "source_tag": "v0.2.13",
+  "control_version": "0.1.59",
   "dflash2": {
     "name": "qwen3.8-flash-next-dflash2.strata1.q4_0-selq4.pack",
     "version": "1",
     "base": "incoai/Qwen3.8-Flash-Next-DFlash2@a22a1744e85c17364dcc54a6a420af7135d4c7f6",
     "size": 339694592,
     "sha256": "4df2e5ab2b47c064afbe662e16e4f06569877125c2d0e2123a4ac755266c664c",
-    "url": "https://github.com/Niko1221/Strata/releases/download/v0.2.12/qwen3.8-flash-next-dflash2.strata1.q4_0-selq4.pack"
+    "url": "https://github.com/Niko1221/Strata/releases/download/v0.2.13/qwen3.8-flash-next-dflash2.strata1.q4_0-selq4.pack"
   }
 }
