@@ -1,0 +1,15 @@
+{
+  "url": "https://github.com/Niko1221/Strata/pull/5598",
+  "state": "open",
+  "merged": false,
+  "draft": false,
+  "base_sha": "146df3c468739147f520ac3816de806f71232571",
+  "head_sha": "043aeb1dd81806a4cd97ff6395cb92bac40920f3",
+  "head_repo": "slyfox1186/Strata",
+  "retrieved_at": "2026-11-09T02:22:00Z",
+  "changed_files": [
+    "serve/dsml.py",
+    "serve/test_dsv41.py"
+  ],
+  "patch_sha256": "37d3a6e3be4236aca3d48f0080984de1a7b8bfd9834e0a9d7a98ca29cf6c95f1"
+}

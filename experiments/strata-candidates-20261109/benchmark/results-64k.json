@@ -1,0 +1,436 @@
+[
+  {
+    "case": "custom-off-64k",
+    "status": "completed",
+    "checkpoints": [
+      {
+        "target": 65536,
+        "prefill_tps": 430.31610852125783,
+        "decode_tps": 9.509701952480155,
+        "new_input": 65308,
+        "reused_input": 0,
+        "generated_tokens": 1526,
+        "workflow_seconds": 342.7204034620081,
+        "quality": {
+          "passed": true,
+          "code_passed": true,
+          "recall_passed": true,
+          "tests_unchanged": true,
+          "read_executed": true,
+          "edit_executed": true,
+          "bash_executed": true,
+          "assertions": 100,
+          "strict_resume_passed": true,
+          "all_quality_checks_passed": true
+        },
+        "tool_errors": 0
+      }
+    ],
+    "aggregate_omp": {
+      "generated_tokens": 1526,
+      "decode_ms": 160467.7,
+      "decode_tps": 9.509701952480155,
+      "new_prefill_tokens": 66064,
+      "prefill_ms": 173006.9,
+      "all_request_prefill_tps": 381.85760221124127,
+      "note": "Includes repair and resume API calls only; excludes the short warmup."
+    },
+    "peak_cgroup_bytes": 68719476736,
+    "memory_events": {
+      "low": 0,
+      "high": 0,
+      "max": 7871,
+      "oom": 0,
+      "oom_kill": 0,
+      "oom_group_kill": 0
+    },
+    "cleanup": {
+      "server_stopped": true,
+      "profile_restored": true,
+      "worker_cleanup": "completed",
+      "lane_profile_restored": true,
+      "observer_stopped": true,
+      "guard_stopped": true,
+      "active_state_restored": true,
+      "state_config_restored": true,
+      "normal_settings_unchanged": true,
+      "port_8899_closed": true
+    },
+    "resources": {
+      "gpu_by_phase": {
+        "all": {
+          "gpu_util": {
+            "samples": 196,
+            "mean": 72.5204081632653,
+            "max": 100.0
+          },
+          "gpu_mem_used": {
+            "samples": 196,
+            "mean": 12175839691.755102,
+            "max": 12261117952.0
+          },
+          "gpu_power": {
+            "samples": 196,
+            "mean": 89.54221938775511,
+            "max": 172.119
+          },
+          "gpu_temp": {
+            "samples": 196,
+            "mean": 47.61224489795919,
+            "max": 69.0
+          }
+        },
+        "reading": {
+          "gpu_util": {
+            "samples": 88,
+            "mean": 69.60227272727273,
+            "max": 100.0
+          },
+          "gpu_mem_used": {
+            "samples": 88,
+            "mean": 12183099019.636364,
+            "max": 12261117952.0
+          },
+          "gpu_power": {
+            "samples": 88,
+            "mean": 122.39025000000001,
+            "max": 172.119
+          },
+          "gpu_temp": {
+            "samples": 88,
+            "mean": 53.68181818181818,
+            "max": 69.0
+          }
+        },
+        "generating": {
+          "gpu_util": {
+            "samples": 82,
+            "mean": 96.6829268292683,
+            "max": 100.0
+          },
+          "gpu_mem_used": {
+            "samples": 82,
+            "mean": 12182583445.853659,
+            "max": 12251721728.0
+          },
+          "gpu_power": {
+            "samples": 82,
+            "mean": 77.64719512195121,
+            "max": 86.206
+          },
+          "gpu_temp": {
+            "samples": 82,
+            "mean": 44.51219512195122,
+            "max": 47.0
+          }
+        },
+        "idle": {
+          "gpu_util": {
+            "samples": 26,
+            "mean": 6.1923076923076925,
+            "max": 98.0
+          },
+          "gpu_mem_used": {
+            "samples": 26,
+            "mean": 12130000896.0,
+            "max": 12182253568.0
+          },
+          "gpu_power": {
+            "samples": 26,
+            "mean": 15.879346153846154,
+            "max": 79.176
+          },
+          "gpu_temp": {
+            "samples": 26,
+            "mean": 36.84615384615385,
+            "max": 43.0
+          }
+        }
+      },
+      "gpu_note": "Whole-device NVML samples; arithmetic sample means, not process-only or continuous peaks. Inspect each observer start time for coverage.",
+      "gpu_units": {
+        "gpu_util": "percent",
+        "gpu_mem_used": "bytes",
+        "gpu_power": "watts",
+        "gpu_temp": "degrees Celsius"
+      },
+      "sampled_model_swap_peak_bytes": 0,
+      "minimum_linux_available_bytes": 58342367232
+    },
+    "native": {
+      "available": true,
+      "resident_copies": [],
+      "placement": [
+        "ds4: the experts VRAM leaves over (~113.0 GB) are read in place from the model's files (--mmap-experts off copies them into RAM) (68.4 GB of RAM free to keep them: the most-routed 0.0 GB read ahead; prompts in chunks of 4096)",
+        "ds4: RAM store: up to 5622 slots of 9.2 MB (51.5 GB), policy 0, 8 reader threads, unbuffered reads",
+        "ds4: RAM store: 5622 of the profile's hottest experts read in (39.0 GB) in 8.0 s",
+        "ds4: CUDA0 layers [0, 39] + head: weights 6.61 GB, experts 2.57 GB (304 of 15360 in VRAM), caches 0.18 GB, 0 MiB free",
+        "ds4: 15056 routed experts on the CPU lane (113.3 GB, in place in the model's files), 12 threads",
+        "ds4: CUDA0 layers [0, 39] + head: weights 6.61 GB, experts 2.57 GB (304 of 15360 in VRAM), caches 0.18 GB, 0 MiB free",
+        "ds4: 15056 routed experts on the CPU lane (113.3 GB, in place in the model's files), 12 threads"
+      ],
+      "cumulative_cpu_lane_percent": [
+        88.7,
+        0.5,
+        2.8,
+        3.1,
+        3.7,
+        3.8
+      ],
+      "cpu_lane_note": "Native serve summaries are cumulative across prefill and decode. They are not RAM-cache miss rates.",
+      "exact_store_summaries": [],
+      "cache_counter_lines": [
+        "[strata] 2026-11-09 04:17:36 engine started: /home/tritlo/Code/local-models/state/builds/strata-cache-route-20261109/native/strata-dsv41 --serve --pack /home/tritlo/Code/local-models/models/deepseek41-1017-unsloth-iq1-s/strata-pack --max-context 196608 --ssd-cache 51.539607552 --cpu-threads 12 --reserve-mib 700 --dspark none --experts 6 --vision off --prefill-chunk 4096 --verbose"
+      ],
+      "native_disk_summaries": []
+    },
+    "model_io": {
+      "available": false,
+      "samples": 0,
+      "read_bytes_by_device": {},
+      "single_device_read_bytes": null,
+      "start": null,
+      "end": null,
+      "note": "Observed model-cgroup interval only. Do not sum stacked block devices. Missing counters are unavailable, not zero."
+    },
+    "shared_root_observed": {
+      "samples": 196,
+      "start": 1794194275.864831,
+      "end": 1794194667.010985,
+      "read_bytes": 428717932544
+    },
+    "total_seconds": 419.1547400620184,
+    "variant": {
+      "borrow_allocation": [
+        "ds4: CUDA0 lends the prompt path up to 1.20 GB of its experts' VRAM (4 slots a layer) while a prompt runs: chunks of up to 4096 tokens"
+      ],
+      "borrow_fallback": [],
+      "borrow_returns": [
+        "ds4: the prompt path's room handed back: 95 experts (0.72 GB) read into VRAM again in 163 ms",
+        "ds4: the prompt path's room handed back: 99 experts (0.75 GB) read into VRAM again in 112 ms",
+        "ds4: the prompt path's room handed back: 16 experts (0.13 GB) read into VRAM again in 28 ms"
+      ],
+      "cache_route": []
+    },
+    "source": "results/strata-candidates-20261109/harness/custom-off-64k"
+  },
+  {
+    "case": "custom-route03-64k",
+    "status": "completed",
+    "checkpoints": [
+      {
+        "target": 65536,
+        "prefill_tps": 513.0703061719123,
+        "decode_tps": 12.153511685488255,
+        "new_input": 65306,
+        "reused_input": 0,
+        "generated_tokens": 805,
+        "workflow_seconds": 221.68903149099788,
+        "quality": {
+          "passed": true,
+          "code_passed": true,
+          "recall_passed": true,
+          "tests_unchanged": true,
+          "read_executed": true,
+          "edit_executed": true,
+          "bash_executed": true,
+          "assertions": 100,
+          "strict_resume_passed": true,
+          "all_quality_checks_passed": true
+        },
+        "tool_errors": 0
+      }
+    ],
+    "aggregate_omp": {
+      "generated_tokens": 805,
+      "decode_ms": 66236.0,
+      "decode_tps": 12.153511685488255,
+      "new_prefill_tokens": 66290,
+      "prefill_ms": 143826.9,
+      "all_request_prefill_tps": 460.9012639499287,
+      "note": "Includes repair and resume API calls only; excludes the short warmup."
+    },
+    "peak_cgroup_bytes": 66106789888,
+    "memory_events": {
+      "low": 0,
+      "high": 0,
+      "max": 0,
+      "oom": 0,
+      "oom_kill": 0,
+      "oom_group_kill": 0
+    },
+    "cleanup": {
+      "server_stopped": true,
+      "profile_restored": true,
+      "worker_cleanup": "completed",
+      "lane_profile_restored": true,
+      "observer_stopped": true,
+      "guard_stopped": true,
+      "active_state_restored": true,
+      "state_config_restored": true,
+      "normal_settings_unchanged": true,
+      "port_8899_closed": true
+    },
+    "resources": {
+      "gpu_by_phase": {
+        "all": {
+          "gpu_util": {
+            "samples": 137,
+            "mean": 64.2992700729927,
+            "max": 100.0
+          },
+          "gpu_mem_used": {
+            "samples": 137,
+            "mean": 12167288697.459854,
+            "max": 12185595904.0
+          },
+          "gpu_power": {
+            "samples": 137,
+            "mean": 98.50889051094892,
+            "max": 186.848
+          },
+          "gpu_temp": {
+            "samples": 137,
+            "mean": 49.175182481751825,
+            "max": 66.0
+          }
+        },
+        "reading": {
+          "gpu_util": {
+            "samples": 74,
+            "mean": 73.08108108108108,
+            "max": 100.0
+          },
+          "gpu_mem_used": {
+            "samples": 74,
+            "mean": 12178520672.864864,
+            "max": 12185595904.0
+          },
+          "gpu_power": {
+            "samples": 74,
+            "mean": 135.78543243243243,
+            "max": 186.848
+          },
+          "gpu_temp": {
+            "samples": 74,
+            "mean": 54.82432432432432,
+            "max": 66.0
+          }
+        },
+        "generating": {
+          "gpu_util": {
+            "samples": 33,
+            "mean": 95.15151515151516,
+            "max": 99.0
+          },
+          "gpu_mem_used": {
+            "samples": 33,
+            "mean": 12179608544.969696,
+            "max": 12185268224.0
+          },
+          "gpu_power": {
+            "samples": 33,
+            "mean": 86.20860606060606,
+            "max": 94.838
+          },
+          "gpu_temp": {
+            "samples": 33,
+            "mean": 46.60606060606061,
+            "max": 48.0
+          }
+        },
+        "idle": {
+          "gpu_util": {
+            "samples": 30,
+            "mean": 8.7,
+            "max": 98.0
+          },
+          "gpu_mem_used": {
+            "samples": 30,
+            "mean": 12126031325.866667,
+            "max": 12185268224.0
+          },
+          "gpu_power": {
+            "samples": 30,
+            "mean": 20.0904,
+            "max": 95.408
+          },
+          "gpu_temp": {
+            "samples": 30,
+            "mean": 38.06666666666667,
+            "max": 47.0
+          }
+        }
+      },
+      "gpu_note": "Whole-device NVML samples; arithmetic sample means, not process-only or continuous peaks. Inspect each observer start time for coverage.",
+      "gpu_units": {
+        "gpu_util": "percent",
+        "gpu_mem_used": "bytes",
+        "gpu_power": "watts",
+        "gpu_temp": "degrees Celsius"
+      },
+      "sampled_model_swap_peak_bytes": 0,
+      "minimum_linux_available_bytes": 59390918656
+    },
+    "native": {
+      "available": true,
+      "resident_copies": [],
+      "placement": [
+        "ds4: the experts VRAM leaves over (~113.0 GB) are read in place from the model's files (--mmap-experts off copies them into RAM) (68.4 GB of RAM free to keep them: the most-routed 0.0 GB read ahead; prompts in chunks of 4096)",
+        "ds4: RAM store: up to 5622 slots of 9.2 MB (51.5 GB), policy 0, 8 reader threads, unbuffered reads",
+        "ds4: RAM store: 5622 of the profile's hottest experts read in (39.0 GB) in 9.8 s",
+        "ds4: CUDA0 layers [0, 39] + head: weights 6.61 GB, experts 2.57 GB (304 of 15360 in VRAM), caches 0.18 GB, 0 MiB free",
+        "ds4: 15056 routed experts on the CPU lane (113.3 GB, in place in the model's files), 12 threads",
+        "ds4: CUDA0 layers [0, 39] + head: weights 6.61 GB, experts 2.57 GB (304 of 15360 in VRAM), caches 0.18 GB, 0 MiB free",
+        "ds4: 15056 routed experts on the CPU lane (113.3 GB, in place in the model's files), 12 threads"
+      ],
+      "cumulative_cpu_lane_percent": [
+        75.6,
+        0.5,
+        1.4,
+        1.6,
+        1.9,
+        1.9
+      ],
+      "cpu_lane_note": "Native serve summaries are cumulative across prefill and decode. They are not RAM-cache miss rates.",
+      "exact_store_summaries": [],
+      "cache_counter_lines": [
+        "[strata] 2026-11-09 04:25:06 engine started: /home/tritlo/Code/local-models/state/builds/strata-cache-route-20261109/native/strata-dsv41 --serve --pack /home/tritlo/Code/local-models/models/deepseek41-1017-unsloth-iq1-s/strata-pack --max-context 196608 --ssd-cache 51.539607552 --cpu-threads 12 --reserve-mib 700 --dspark none --experts 6 --vision off --prefill-chunk 4096 --verbose",
+        "ds4: cache-aware routing (STRATA_DS4_CACHE_ROUTE, CHANGES THE ANSWERS): a held expert's selection bonus 0.2 in RAM, 0.3 in VRAM"
+      ],
+      "native_disk_summaries": []
+    },
+    "model_io": {
+      "available": false,
+      "samples": 0,
+      "read_bytes_by_device": {},
+      "single_device_read_bytes": null,
+      "start": null,
+      "end": null,
+      "note": "Observed model-cgroup interval only. Do not sum stacked block devices. Missing counters are unavailable, not zero."
+    },
+    "shared_root_observed": {
+      "samples": 137,
+      "start": 1794194727.4895391,
+      "end": 1794195000.2535892,
+      "read_bytes": 169216851968
+    },
+    "total_seconds": 302.61507917000563,
+    "variant": {
+      "borrow_allocation": [
+        "ds4: CUDA0 lends the prompt path up to 1.20 GB of its experts' VRAM (4 slots a layer) while a prompt runs: chunks of up to 4096 tokens"
+      ],
+      "borrow_fallback": [],
+      "borrow_returns": [
+        "ds4: the prompt path's room handed back: 94 experts (0.71 GB) read into VRAM again in 170 ms",
+        "ds4: the prompt path's room handed back: 104 experts (0.79 GB) read into VRAM again in 139 ms",
+        "ds4: the prompt path's room handed back: 11 experts (0.09 GB) read into VRAM again in 25 ms",
+        "ds4: the prompt path's room handed back: 6 experts (0.05 GB) read into VRAM again in 12 ms"
+      ],
+      "cache_route": [
+        "ds4: cache-aware routing (STRATA_DS4_CACHE_ROUTE, CHANGES THE ANSWERS): a held expert's selection bonus 0.2 in RAM, 0.3 in VRAM"
+      ]
+    },
+    "source": "results/strata-candidates-20261109/harness/custom-route03-64k"
+  }
+]

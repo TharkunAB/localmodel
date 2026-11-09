@@ -1,0 +1,42 @@
+{
+  "configure_argv": [
+    "/home/tritlo/Code/local-models/.venv/bin/cmake",
+    "-G",
+    "Ninja",
+    "-S",
+    "/home/tritlo/Code/local-models/state/sources/strata-cache-route-20261109",
+    "-B",
+    "/home/tritlo/Code/local-models/state/builds/strata-cache-route-20261109/native",
+    "-DCMAKE_BUILD_TYPE=Release",
+    "-DSTRATA_ENABLE_CUDA=ON",
+    "-DSTRATA_BUILD_TESTS=OFF",
+    "-DSTRATA_BUILD_DSV41=ON",
+    "-DSTRATA_NATIVE_EXPERTS=ON",
+    "-DSTRATA_PORTABLE=ON",
+    "-DCMAKE_CUDA_ARCHITECTURES=89-real",
+    "-DCMAKE_CUDA_COMPILER=/home/tritlo/Code/local-models/state/builds/strata-cache-route-20261109/cuda-site/nvidia/cu13/bin/nvcc",
+    "-DCUDAToolkit_ROOT=/home/tritlo/Code/local-models/state/builds/strata-cache-route-20261109/cuda-site/nvidia/cu13",
+    "-DCMAKE_MAKE_PROGRAM=/home/tritlo/Code/local-models/.venv/bin/ninja",
+    "-DSTRATA_GGML_DIR=/home/tritlo/Code/local-models/state/sources/maya-ggml-3cf03257",
+    "-DSTRATA_BUILD_ID=4294e6aaf",
+    "-DCMAKE_INSTALL_RPATH=/home/tritlo/Code/local-models/state/builds/strata-cache-route-20261109/cuda-site/nvidia/cu13/lib",
+    "-DCMAKE_BUILD_WITH_INSTALL_RPATH=ON",
+    "-DCMAKE_SKIP_BUILD_RPATH=OFF"
+  ],
+  "build_argv": [
+    "/home/tritlo/Code/local-models/.venv/bin/cmake",
+    "--build",
+    "/home/tritlo/Code/local-models/state/builds/strata-cache-route-20261109/native",
+    "--target",
+    "strata-dsv41",
+    "--parallel",
+    "2"
+  ],
+  "cap_gib": 16,
+  "swap_bytes": 0,
+  "jobs": 2,
+  "scope": "strata-cache-route-build-20261109.scope",
+  "capped_wrapper": "/home/tritlo/Code/heavy-management/bin/capped",
+  "base_revision": "146df3c468739147f520ac3816de806f71232571",
+  "candidate_revision": "4294e6aaf398c7612b1e943f7947b94a95292350"
+}

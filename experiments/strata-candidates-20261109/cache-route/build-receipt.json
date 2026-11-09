@@ -1,0 +1,154 @@
+{
+  "status": "built-source-reviewed-not-inference-tested",
+  "base_revision": "146df3c468739147f520ac3816de806f71232571",
+  "candidate_revision": "4294e6aaf398c7612b1e943f7947b94a95292350",
+  "binary_path": "/home/tritlo/Code/local-models/state/builds/strata-cache-route-20261109/native/strata-dsv41",
+  "binary_sha256": "969607f71f27202f6aec1ee496f20544b4dfc66af76ecc27a50c6fe085930772",
+  "binary_size": 36564120,
+  "lib_dirs": [
+    "/home/tritlo/Code/local-models/state/runtimes/strata-official-0.1.58/engine-dsv41/0.1.58-linux-x86_64-cuda-cuda13",
+    "/home/tritlo/Code/local-models/state/builds/strata-cache-route-20261109/native",
+    "/usr/lib/wsl/lib"
+  ],
+  "provenance": "Exact Strata PR5596 head changes applied to separately copied official v0.2.12 source; portable CUDA13.0.88 sm89 build with clean pinned ggml3cf03257. Same custom binary routing off/on is the controlled comparison; official binary is an additional external control. No engine startup or inference performed during preparation. Serving must use the declared lib_dirs: official Strata CUDA13 libraries precede the custom build directory. ldd -r resolves every imported symbol with those libraries; the toolchain libraries are not selected.",
+  "source_directory": "/home/tritlo/Code/local-models/state/sources/strata-cache-route-20261109",
+  "official_source_directory": "/home/tritlo/Code/local-models/state/sources/strata-official-0.2.12",
+  "source_pins": {
+    "base_revision": "146df3c468739147f520ac3816de806f71232571",
+    "head_revision": "4294e6aaf398c7612b1e943f7947b94a95292350",
+    "patch_sha256": "feaa2dcc2d4f182b77110e7d9212bc426c35e358687e4d276ab72f762909de21",
+    "files": [
+      {
+        "path": "src/dsv41/ds4_model.cu",
+        "sha256": "250e358fcc2eaff56b022fa43580e9d422cb0a0478fe60cb6875a33daaa47891",
+        "source_url": "https://raw.githubusercontent.com/AlexGabbia/Strata/4294e6aaf398c7612b1e943f7947b94a95292350/src/dsv41/ds4_model.cu"
+      },
+      {
+        "path": "src/dsv41/ds4_store.hpp",
+        "sha256": "d4c547ba8528f94400b4730089cbca023650c8c01e632f2e58ef22e50f98cfeb",
+        "source_url": "https://raw.githubusercontent.com/AlexGabbia/Strata/4294e6aaf398c7612b1e943f7947b94a95292350/src/dsv41/ds4_store.hpp"
+      },
+      {
+        "path": "docs/DEEPSEEK41.md",
+        "sha256": "3b0768ccc981a29c0c64559ca02bb5bda7df967f19656432861fc6dec8bf7527",
+        "source_url": "https://raw.githubusercontent.com/AlexGabbia/Strata/4294e6aaf398c7612b1e943f7947b94a95292350/docs/DEEPSEEK41.md"
+      }
+    ]
+  },
+  "official_source_receipt_sha256": "e6f7b38d79fed49875580986b7c988875f423e0fab406ac1c2ac354162131ddb",
+  "source_comparison": {
+    "files": 5870,
+    "changed": [
+      {
+        "path": "docs/DEEPSEEK41.md",
+        "base_sha256": "81d98accb437546af2753ca23258845ef42d0f1e4a7166b3923f7be974c5a8b3",
+        "candidate_sha256": "3b0768ccc981a29c0c64559ca02bb5bda7df967f19656432861fc6dec8bf7527"
+      },
+      {
+        "path": "src/dsv41/ds4_model.cu",
+        "base_sha256": "26c5b9ddb8d34dc93fa2694f2adf4f45da6900ae18ec78cae4bb9652c87f2ba6",
+        "candidate_sha256": "250e358fcc2eaff56b022fa43580e9d422cb0a0478fe60cb6875a33daaa47891"
+      },
+      {
+        "path": "src/dsv41/ds4_store.hpp",
+        "base_sha256": "e5016f0d9c639d94a653a02e325f78ae946f466664b8d9dd4cff2de17327eded",
+        "candidate_sha256": "d4c547ba8528f94400b4730089cbca023650c8c01e632f2e58ef22e50f98cfeb"
+      }
+    ],
+    "candidate_file_list_sha256": "9a2f32e15fc4493ba98d32a0d748e1d7f31fdf6db5f6e25c29cc7bccd3c06496",
+    "official_source_receipt_sha256": "e6f7b38d79fed49875580986b7c988875f423e0fab406ac1c2ac354162131ddb",
+    "official_pinned_files_verified": 5816
+  },
+  "dependency_pins_sha256": "4eadaca8d731430528de64cb7832bfa003e7b39ab8580679fc8733b87b210a32",
+  "build_plan_sha256": "e5fead8171b5ad8b7c4ae1b30eee9967be2b1dfe0c67dbfba73444bbb608fe80",
+  "compiler_config": {
+    "CMAKE_BUILD_TYPE": "Release",
+    "CMAKE_CUDA_ARCHITECTURES": "89-real",
+    "CMAKE_CUDA_COMPILER": "/home/tritlo/Code/local-models/state/builds/strata-cache-route-20261109/cuda-site/nvidia/cu13/bin/nvcc",
+    "CMAKE_CUDA_FLAGS": "",
+    "CMAKE_CUDA_FLAGS_RELEASE": "-O3 -DNDEBUG",
+    "CMAKE_CXX_COMPILER": "/usr/bin/c++",
+    "CMAKE_CXX_FLAGS": "",
+    "CMAKE_CXX_FLAGS_RELEASE": "-O3 -DNDEBUG",
+    "GGML_AVX2": "ON",
+    "GGML_AVX512": "OFF",
+    "GGML_AVX512_BF16": "OFF",
+    "GGML_AVX512_VBMI": "OFF",
+    "GGML_AVX512_VNNI": "OFF",
+    "GGML_BMI2": "OFF",
+    "GGML_NATIVE": "OFF",
+    "GGML_OPENMP": "OFF",
+    "STRATA_NATIVE_EXPERTS": "ON",
+    "STRATA_PORTABLE": "ON"
+  },
+  "cxx_version": "c++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+  "cmake_version": "cmake version 4.1.3",
+  "libraries": [
+    {
+      "path": "/home/tritlo/Code/local-models/state/runtimes/strata-official-0.1.58/engine-dsv41/0.1.58-linux-x86_64-cuda-cuda13/libcudart.so.13",
+      "size": 704288,
+      "sha256": "96c42e418cec19054186b9429c321603cc190bf26a18104e19408117a2a817b0",
+      "origin": "unchanged official Strata 0.1.58 CUDA13 package"
+    },
+    {
+      "path": "/home/tritlo/Code/local-models/state/runtimes/strata-official-0.1.58/engine-dsv41/0.1.58-linux-x86_64-cuda-cuda13/libcublas.so.13",
+      "size": 54177976,
+      "sha256": "25cde432108543626df85d887c730bf2cab96803ca16f9654e4abc8d2b45833e",
+      "origin": "unchanged official Strata 0.1.58 CUDA13 package"
+    },
+    {
+      "path": "/home/tritlo/Code/local-models/state/runtimes/strata-official-0.1.58/engine-dsv41/0.1.58-linux-x86_64-cuda-cuda13/libcublasLt.so.13",
+      "size": 541607888,
+      "sha256": "1489aeb75d55ee55782798343ac66f57771d561cc1fe1e0491568deefa0e6515",
+      "origin": "unchanged official Strata 0.1.58 CUDA13 package"
+    },
+    {
+      "path": "/home/tritlo/Code/local-models/state/builds/strata-cache-route-20261109/native/libstrata_kq.so",
+      "size": 10080160,
+      "sha256": "15a24553a5b6ecd8d6291e565aa0360f8ff5d9002d0efb9b06184e9a03b8d8d8"
+    }
+  ],
+  "memory_cap_bytes": 17179869184,
+  "build_peak_mib": 3254,
+  "swap_max_bytes": 0,
+  "parallel_jobs": 2,
+  "build_exit_code": 0,
+  "built_at_utc": "2026-11-09T02:38:09.597792+00:00",
+  "activation_marker": "ds4: cache-aware routing (STRATA_DS4_CACHE_ROUTE, CHANGES THE ANSWERS): a held expert's selection bonus",
+  "review_limits": [
+    "Bias allocations (~60KiB data) are not registered in the existing per-device free list; process exit releases them.",
+    "Lock-free cache hints follow existing find(), without a proof of race freedom.",
+    "Routing changes answers and is cache-history-dependent; long-context task quality must be measured."
+  ],
+  "build_toolchain_libraries": [
+    {
+      "path": "/home/tritlo/Code/local-models/state/builds/strata-cache-route-20261109/cuda-site/nvidia/cu13/lib/libcudart.so.13",
+      "size": 704288,
+      "sha256": "468a02b712c80445c88abbc9538d660926e68a8ce92835f87c857000d5dfb50e",
+      "official_library_sha256": "96c42e418cec19054186b9429c321603cc190bf26a18104e19408117a2a817b0",
+      "identical_to_official_library": false
+    },
+    {
+      "path": "/home/tritlo/Code/local-models/state/builds/strata-cache-route-20261109/cuda-site/nvidia/cu13/lib/libcublas.so.13",
+      "size": 54440120,
+      "sha256": "1d5f1452af53a0b1cf36bc7d8116d2a22a5f2cffbaa8fca25a1b70360a2e8d7a",
+      "official_library_sha256": "25cde432108543626df85d887c730bf2cab96803ca16f9654e4abc8d2b45833e",
+      "identical_to_official_library": false
+    },
+    {
+      "path": "/home/tritlo/Code/local-models/state/builds/strata-cache-route-20261109/cuda-site/nvidia/cu13/lib/libcublasLt.so.13",
+      "size": 539533072,
+      "sha256": "4c15f403ac2a8040a3291d07f6c351b5c1f730b45f2ea41f302e415e9600655b",
+      "official_library_sha256": "1489aeb75d55ee55782798343ac66f57771d561cc1fe1e0491568deefa0e6515",
+      "identical_to_official_library": false
+    },
+    {
+      "path": "/home/tritlo/Code/local-models/state/builds/strata-cache-route-20261109/native/libstrata_kq.so",
+      "size": 10080160,
+      "sha256": "15a24553a5b6ecd8d6291e565aa0360f8ff5d9002d0efb9b06184e9a03b8d8d8"
+    }
+  ],
+  "runtime_linkage_verified_without_execution": true,
+  "runtime_linkage_log_sha256": "9d62e58d403e6d975ade0c0bf071a7258075df22c131ab62588ce21f91f64cee",
+  "runtime_library_policy": "Use the same official CUDA13 libraries for official and custom arms; LD_LIBRARY_PATH overrides the build-toolchain RUNPATH."
+}

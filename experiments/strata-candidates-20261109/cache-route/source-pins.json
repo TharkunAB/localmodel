@@ -1,0 +1,22 @@
+{
+  "base_revision": "146df3c468739147f520ac3816de806f71232571",
+  "head_revision": "4294e6aaf398c7612b1e943f7947b94a95292350",
+  "patch_sha256": "feaa2dcc2d4f182b77110e7d9212bc426c35e358687e4d276ab72f762909de21",
+  "files": [
+    {
+      "path": "src/dsv41/ds4_model.cu",
+      "sha256": "250e358fcc2eaff56b022fa43580e9d422cb0a0478fe60cb6875a33daaa47891",
+      "source_url": "https://raw.githubusercontent.com/AlexGabbia/Strata/4294e6aaf398c7612b1e943f7947b94a95292350/src/dsv41/ds4_model.cu"
+    },
+    {
+      "path": "src/dsv41/ds4_store.hpp",
+      "sha256": "d4c547ba8528f94400b4730089cbca023650c8c01e632f2e58ef22e50f98cfeb",
+      "source_url": "https://raw.githubusercontent.com/AlexGabbia/Strata/4294e6aaf398c7612b1e943f7947b94a95292350/src/dsv41/ds4_store.hpp"
+    },
+    {
+      "path": "docs/DEEPSEEK41.md",
+      "sha256": "3b0768ccc981a29c0c64559ca02bb5bda7df967f19656432861fc6dec8bf7527",
+      "source_url": "https://raw.githubusercontent.com/AlexGabbia/Strata/4294e6aaf398c7612b1e943f7947b94a95292350/docs/DEEPSEEK41.md"
+    }
+  ]
+}

@@ -1,0 +1,341 @@
+{
+  "checked_at": "2026-11-09T02:28:11.132755+00:00",
+  "source_base": "146df3c468739147f520ac3816de806f71232571",
+  "parser_pr": 5598,
+  "arena_pr": 5531,
+  "parser": {
+    "baseline": {
+      "fixture_count": 156,
+      "fixture_passed": 96,
+      "fixture_failed": 60,
+      "sequential_marker_diagnostic": [
+        {
+          "written": "ns.lookup",
+          "expected": [
+            {
+              "name": "ns.lookup",
+              "arguments": {
+                "id": "123"
+              }
+            },
+            {
+              "name": "ns.lookup",
+              "arguments": {
+                "id": 123
+              }
+            }
+          ],
+          "passed": false,
+          "calls": [
+            {
+              "name": "ns.lookup",
+              "arguments": {
+                "id": "123"
+              }
+            },
+            {
+              "name": "ns.lookup",
+              "arguments": {
+                "id": "123"
+              }
+            }
+          ],
+          "streamed_arguments": "{\"id\":\"123\"}{\"id\":\"123\"}",
+          "content": ""
+        },
+        {
+          "written": "lookup",
+          "expected": [
+            {
+              "name": "ns.lookup",
+              "arguments": {
+                "id": "123"
+              }
+            },
+            {
+              "name": "ns.lookup",
+              "arguments": {
+                "id": 123
+              }
+            }
+          ],
+          "passed": false,
+          "calls": [
+            {
+              "name": "ns.lookup",
+              "arguments": {
+                "id": 123
+              }
+            },
+            {
+              "name": "ns.lookup",
+              "arguments": {
+                "id": 123
+              }
+            }
+          ],
+          "streamed_arguments": "{\"id\":123}{\"id\":123}",
+          "content": ""
+        }
+      ]
+    },
+    "candidate": {
+      "fixture_count": 156,
+      "fixture_passed": 156,
+      "fixture_failed": 0,
+      "sequential_marker_diagnostic": [
+        {
+          "written": "ns.lookup",
+          "expected": [
+            {
+              "name": "ns.lookup",
+              "arguments": {
+                "id": "123"
+              }
+            },
+            {
+              "name": "ns.lookup",
+              "arguments": {
+                "id": 123
+              }
+            }
+          ],
+          "passed": false,
+          "calls": [
+            {
+              "name": "ns.lookup",
+              "arguments": {
+                "id": "123"
+              }
+            },
+            {
+              "name": "ns.lookup",
+              "arguments": {
+                "id": "123"
+              }
+            }
+          ],
+          "streamed_arguments": "{\"id\":\"123\"}{\"id\":\"123\"}",
+          "content": ""
+        },
+        {
+          "written": "lookup",
+          "expected": [
+            {
+              "name": "ns.lookup",
+              "arguments": {
+                "id": "123"
+              }
+            },
+            {
+              "name": "ns.lookup",
+              "arguments": {
+                "id": 123
+              }
+            }
+          ],
+          "passed": false,
+          "calls": [
+            {
+              "name": "ns.lookup",
+              "arguments": {
+                "id": "123"
+              }
+            },
+            {
+              "name": "ns.lookup",
+              "arguments": {
+                "id": "123"
+              }
+            }
+          ],
+          "streamed_arguments": "{\"id\":\"123\"}{\"id\":\"123\"}",
+          "content": ""
+        }
+      ]
+    }
+  },
+  "upstream_suites": {
+    "baseline": {
+      "tests_run": 130,
+      "skipped": 1,
+      "failures": 0,
+      "seconds": 26.336
+    },
+    "candidate": {
+      "tests_run": 131,
+      "skipped": 1,
+      "failures": 0,
+      "seconds": 26.257
+    }
+  },
+  "arena_host_checks": {
+    "baseline": 906,
+    "candidate": 918,
+    "both_passed": true,
+    "includes_hard_limit_refusal_and_fallback": true
+  },
+  "scope": {
+    "memory_max": 4294967296,
+    "memory_high": 4294967296,
+    "memory_swap_max": 0,
+    "memory_swap_current": 0,
+    "memory_events": {
+      "low": "0",
+      "high": "0",
+      "max": "0",
+      "oom": "0",
+      "oom_kill": "0",
+      "oom_group_kill": "0"
+    },
+    "peak_mib_rounded": 87
+  },
+  "gpu_inference_runs": 0,
+  "arena_runtime_applicability": "Current Qwen --resident-budget-gib 36 sets o.mmap_experts=true and bypasses ArenaExpertSource::open. Finite cgroup limits separately disable the new file-cache/hugetlb credit. DeepSeek uses a different expert store. No speed claim.",
+  "changed_source_files": [
+    {
+      "path": "serve/dsml.py",
+      "baseline_sha256": "27717ea9099dcdff1f61203d5104c9cab1a3e3b45962edcfa02d5586e723255d",
+      "candidate_sha256": "8e000751a8579cc3386632808551903ab662c855dd22f27c3c86b84028aa513d"
+    },
+    {
+      "path": "serve/test_dsv41.py",
+      "baseline_sha256": "e858369c56eac47f8ca66a12e031a39333d4b71898690690ae5d7d798ea4d7ec",
+      "candidate_sha256": "f3ffb9e573d5222c6d93dfafdce591ef427ad79a9200feb5c68cacc1e479ed22"
+    },
+    {
+      "path": "include/strata/core/ple_residency.hpp",
+      "baseline_sha256": "ebc23e4a9d6d39afcfbb03cfabd6bd8dd97d6ac0d442fff686f14260493ee6a5",
+      "candidate_sha256": "42e7127c666c66f26a5a054536d90270ea9dc58053c520950674380005fc6389"
+    },
+    {
+      "path": "src/core/expert_source.cpp",
+      "baseline_sha256": "6fd9a39af9edbc772bdf432346a79ca53d2531daa32ffcd7ace5385427b14099",
+      "candidate_sha256": "0f7dcd3504a8de045968207f256d005c15975f8ed118bef7f95c88ccc5a4ed07"
+    },
+    {
+      "path": "src/core/ple_residency_test.cpp",
+      "baseline_sha256": "b4761e3601763a94446d4dda5c272129f85d674103017a9d8909917d8d11c7ec",
+      "candidate_sha256": "7c28d8f9d3c129ab6940c49cc5b33906db16e6b0ec58bd0cdab0fa6a36562924"
+    },
+    {
+      "path": "src/program/generate.cpp",
+      "baseline_sha256": "a459f3a6051f56b1f30bf4f81e1085ecf685eb5f1963a0789a1e0ac9087de3a6",
+      "candidate_sha256": "85916fc555b237b2dcee493dd22ac1ed4bc110467deeac6d44da38bedd64ff26"
+    }
+  ],
+  "evidence": {
+    "results/strata-candidates-20261109/parser-arena/compile-baseline.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "results/strata-candidates-20261109/parser-arena/compile-candidate.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "results/strata-candidates-20261109/parser-arena/parser-baseline.json": "b36aa6ba1e392547fe72fd9e14f6605319e6f45eae11b5447c7d111e5ee03efd",
+    "results/strata-candidates-20261109/parser-arena/parser-baseline.log": "fa515f7692d25eab3ccdd29edce73f19219b92bcc947be05240c7417f16b4ad0",
+    "results/strata-candidates-20261109/parser-arena/parser-candidate.json": "6391eebd2b1454426f4eddf6bad627e5034635af3f7eda2b98f37058eb7d3728",
+    "results/strata-candidates-20261109/parser-arena/parser-candidate.log": "2ef5ff5f1abaf305caf180bf2c72564a4a6ad43c3b436554ed9243ff5ed5b074",
+    "results/strata-candidates-20261109/parser-arena/parser_probe.py": "9526f4f3b13ea37f3224ed46463bc22de1c24aa3e0f68a4c56a3aca3d7aa2401",
+    "results/strata-candidates-20261109/parser-arena/ple-residency-baseline.log": "7dcc52f39d3d39ebdd48ca6ccf11aaa9095929955461baceceb73788d92666ff",
+    "results/strata-candidates-20261109/parser-arena/ple-residency-candidate.log": "4505cc2e9e0cde7babf73d9755dab2e4d3a0c180c062ec52db15cda8dfd475fc",
+    "results/strata-candidates-20261109/parser-arena/run-cpu.sh": "25ff2f92aae02805a01d01c707ccd6f0e71582f791fc0f3fc5ca657eefe76380",
+    "results/strata-candidates-20261109/parser-arena/upstream-baseline.log": "761b089a756b867f561f437d421d958a5b4275c5782253dc58d4506941e96be4",
+    "results/strata-candidates-20261109/parser-arena/upstream-candidate.log": "62501e8df6f43f7fa6816fd27e620d7958a59a2a775d82d12c9acf8b526cd226",
+    "results/strata-candidates-20261109/parser-arena/guard-stop-timeout-r2.log": "0edcb7181eda8e34487ce3a491eb1e6894435a09071997f84b7a02e780d9d0d5",
+    "results/strata-candidates-20261109/parser-arena/score-guard-smoke.json": "1821c96198fe79da8fdda2e6bf76f6b4f1861cd3e6e6c80ac0a205f5f5ffd61a",
+    "results/strata-candidates-20261109/parser-arena/score_guard_worker.py": "99e6c755aa23381e9010bc34365e238c2d3c9503a2b2a330e1d3f56b57cb03c5",
+    "results/strata-candidates-20261109/parser-arena/guard-lowram.log": "b02bb9efeaa81d42cbfcea0df8f7d5c3b986798c1542645cec76d924105fbeae",
+    "results/strata-candidates-20261109/parser-arena/guard-sigterm.log": "e467f6c3ce965afefb316476dc28df7ae778d2b40ad20e5f91c3a81da9774a73",
+    "results/strata-candidates-20261109/parser-arena/score_guard_smoke.py": "6ac6b987b93ceef8a855e885e68efef4db87abbac25ad17f5a5d6a55135362e2",
+    "results/strata-candidates-20261109/parser-arena/score-guard-smoke-r2.json": "c4b0627c54840a2c706f900181546791bb0c322f192c5c0a9ef6405eb0a43ef8",
+    "results/strata-candidates-20261109/parser-arena/guard-lowram-r2.log": "3ec3690d826184366e652593b6b95f86266b6ab60d1a86a4fc6385278f4ec649",
+    "results/strata-candidates-20261109/parser-arena/fake-score.c": "4e51b3dd488f01e49d865f9072d4d5dd32c04ad5efaa43320d6463bae50e7a53",
+    "results/strata-candidates-20261109/parser-arena/guard-sigterm-r2.log": "73bd77060b60383a86ba7b9f72c91c4427b4d527ffe1279313e4841659efd10b"
+  },
+  "scorer_guard_smoke": {
+    "result": "pass",
+    "scorer_sha256": "9b8f071cc7b0c6d4e09799cef54f10abe48eaf94c59f185c92d694a9f2d65332",
+    "runs": [
+      {
+        "mode": "lowram",
+        "exit_code": 0,
+        "unit": "strata-candidate-score-1865928.scope",
+        "active_state": "inactive",
+        "scorer_sha256": "9b8f071cc7b0c6d4e09799cef54f10abe48eaf94c59f185c92d694a9f2d65332",
+        "output/summary.json": {
+          "status": "failed",
+          "unit": "strata-candidate-score-1865928.scope",
+          "error": "Available Linux RAM fell below 8 GiB.",
+          "elapsed_seconds": 4.020198965998134,
+          "native_isolation_verified": true,
+          "owned_process_stopped": true,
+          "owned_scope_empty": true,
+          "remaining_pids": [],
+          "cleanup_errors": [],
+          "profile_unchanged": true
+        },
+        "worker-result.json": {
+          "mode": "lowram",
+          "error_type": "RuntimeError",
+          "error": "Available Linux RAM fell below 8 GiB.",
+          "saw_isolated_native": true,
+          "stop_timeout_injected": false
+        },
+        "live_fake_pids_before_external_cleanup": []
+      },
+      {
+        "mode": "sigterm",
+        "exit_code": 0,
+        "unit": "strata-candidate-score-1866002.scope",
+        "active_state": "inactive",
+        "scorer_sha256": "9b8f071cc7b0c6d4e09799cef54f10abe48eaf94c59f185c92d694a9f2d65332",
+        "output/summary.json": {
+          "status": "failed",
+          "unit": "strata-candidate-score-1866002.scope",
+          "error": "Score controller received signal 15.",
+          "elapsed_seconds": 4.020395369007019,
+          "native_isolation_verified": true,
+          "owned_process_stopped": true,
+          "owned_scope_empty": true,
+          "remaining_pids": [],
+          "cleanup_errors": [],
+          "profile_unchanged": true
+        },
+        "worker-result.json": {
+          "mode": "sigterm",
+          "error_type": "RuntimeError",
+          "error": "Score controller received signal 15.",
+          "saw_isolated_native": true,
+          "stop_timeout_injected": false
+        },
+        "live_fake_pids_before_external_cleanup": []
+      },
+      {
+        "mode": "stop-timeout",
+        "exit_code": 0,
+        "unit": "strata-candidate-score-1866081.scope",
+        "active_state": "inactive",
+        "scorer_sha256": "9b8f071cc7b0c6d4e09799cef54f10abe48eaf94c59f185c92d694a9f2d65332",
+        "output/summary.json": {
+          "status": "cleanup_failed",
+          "unit": "strata-candidate-score-1866081.scope",
+          "error": "Available Linux RAM fell below 8 GiB.",
+          "elapsed_seconds": 4.021631962998072,
+          "native_isolation_verified": true,
+          "owned_process_stopped": true,
+          "owned_scope_empty": true,
+          "remaining_pids": [],
+          "cleanup_errors": [
+            "Command '['systemctl', '--user', 'stop', 'strata-candidate-score-1866081.scope']' timed out after 15 seconds"
+          ],
+          "profile_unchanged": true
+        },
+        "worker-result.json": {
+          "mode": "stop-timeout",
+          "error_type": "RuntimeError",
+          "error": "Available Linux RAM fell below 8 GiB.",
+          "saw_isolated_native": true,
+          "stop_timeout_injected": true
+        },
+        "live_fake_pids_before_external_cleanup": []
+      }
+    ],
+    "initial_failure_retained": "results/strata-candidates-20261109/parser-arena/score-guard-smoke.json"
+  }
+}

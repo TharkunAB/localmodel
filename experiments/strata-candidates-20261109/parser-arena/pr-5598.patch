@@ -1,0 +1,53 @@
+diff --git a/serve/dsml.py b/serve/dsml.py
+--- a/serve/dsml.py
++++ b/serve/dsml.py
+@@ -184,9 +184,11 @@ def _watch(self, evs):
+         return evs
+ 
+     def _on_param(self, tool, name, is_string) -> None:
+-        """string="true": the value is a string whatever it looks like ("123", "true"), as the template wrote it."""
++        """string="true": the value is a string whatever it looks like ("123", "true"), as the template wrote it.  `tool` is the
++        name as generated; an accepted short name (`lookup` for `ns.lookup`) is the declared tool here, as in the parser."""
+         if not is_string:
+             return
++        tool = self.aliases.get(tool, tool)
+         spec = self.schemas.get(tool)
+         if spec is None:
+             return
+diff --git a/serve/test_dsv41.py b/serve/test_dsv41.py
+--- a/serve/test_dsv41.py
++++ b/serve/test_dsv41.py
+@@ -212,8 +212,8 @@ class Parser(unittest.TestCase):
+     TOOLS = [WEATHER["function"], {"name": "lookup", "description": "", "parameters": {
+         "type": "object", "properties": {"id": {}}}}]
+ 
+-    def run_parser(self, text, thinking=True, step=7, cls=DsmlOutputParser):
+-        p = cls(thinking=thinking, tools=self.TOOLS, stream_tools=True)
++    def run_parser(self, text, thinking=True, step=7, cls=DsmlOutputParser, tools=None):
++        p = cls(thinking=thinking, tools=tools or self.TOOLS, stream_tools=True)
+         evs = []
+         for i in range(0, len(text), step):
+             evs += p.feed(text[i:i + step])
+@@ -237,6 +237,21 @@ def test_a_string_value_stays_a_string_even_when_the_schema_says_nothing(self):
+         evs = self.run_parser(call(("lookup", [("id", "7", False)])), thinking=False)
+         self.assertEqual([e.call.arguments for e in evs if e.kind == "tool_call"], [{"id": 7}])
+ 
++    def test_a_string_value_stays_a_string_when_the_call_writes_an_accepted_short_name(self):
++        """The parser reads `tools.lookup` (#4751) as `lookup`, the bare member of a declared `ns.lookup` as that tool, and the
++        last segment of `mcp__a__lookup` (#5281) as that tool; the string marker belongs to the declared tool's parameter."""
++        def one(name):
++            return [{"name": name, "parameters": {"type": "object", "properties": {"id": {}}}}]
++        for tools, written, declared in ((None, "tools.lookup", "lookup"), (one("ns.lookup"), "lookup", "ns.lookup"),
++                                         (one("mcp__a__lookup"), "lookup", "mcp__a__lookup")):
++            for step in (1, 3, 1000):
++                with self.subTest(written=written, step=step):
++                    evs = self.run_parser(call((written, [("id", "123", True)])), thinking=False, step=step, tools=tools)
++                    self.assertEqual([(e.call.name, e.call.arguments) for e in evs if e.kind == "tool_call"], [(declared, {"id": "123"})])
++                    self.assertEqual("".join(e.text for e in evs if e.kind == "tool_args"), '{"id":"123"}')
++                    evs = self.run_parser(call((written, [("id", "123", False)])), thinking=False, step=step, tools=tools)
++                    self.assertEqual([e.call.arguments for e in evs if e.kind == "tool_call"], [{"id": 123}])
++
+     def test_a_non_string_value_is_json(self):
+         evs = self.run_parser(call(("lookup", [("id", '{"a": [1, 2]}', False)])), thinking=False)
+         self.assertEqual([e.call.arguments for e in evs if e.kind == "tool_call"], [{"id": {"a": [1, 2]}}])
+

@@ -1,0 +1,17 @@
+{
+  "url": "https://github.com/Niko1221/Strata/pull/5531",
+  "state": "open",
+  "merged": false,
+  "draft": false,
+  "base_sha": "146df3c468739147f520ac3816de806f71232571",
+  "head_sha": "63cf7489329ac0b18ec779aeda4702c2f072560d",
+  "head_repo": "pjgmobile/Strata",
+  "retrieved_at": "2026-11-09T02:22:00Z",
+  "changed_files": [
+    "include/strata/core/ple_residency.hpp",
+    "src/core/expert_source.cpp",
+    "src/core/ple_residency_test.cpp",
+    "src/program/generate.cpp"
+  ],
+  "patch_sha256": "3236d0348bc63b4f0aff8f475f3ab1128489fb6a863e7f86556874dfad3bb819"
+}

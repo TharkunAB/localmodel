@@ -1,0 +1,277 @@
+{
+  "official": {
+    "status": "completed",
+    "unit": "strata-candidate-score-1868295.scope",
+    "score_sha256": "28ec0af436b785660b32e9f4c3c2a191357a0e772651ff10ed2edddde3062b05",
+    "segments": {
+      "segments": [
+        {
+          "name": "code",
+          "first_line": 0,
+          "end_line": 999,
+          "n": 999,
+          "ppl": 3.931951,
+          "top1": 0.757758
+        },
+        {
+          "name": "docs",
+          "first_line": 999,
+          "end_line": 1998,
+          "n": 999,
+          "ppl": 21.594481,
+          "top1": 0.469469
+        },
+        {
+          "name": "english",
+          "first_line": 1998,
+          "end_line": 2997,
+          "n": 999,
+          "ppl": 4.205384,
+          "top1": 0.600601
+        },
+        {
+          "name": "multilingual",
+          "first_line": 2997,
+          "end_line": 3996,
+          "n": 999,
+          "ppl": 6.686161,
+          "top1": 0.711712
+        },
+        {
+          "name": "agent",
+          "first_line": 3996,
+          "end_line": 4995,
+          "n": 999,
+          "ppl": 2.710183,
+          "top1": 0.80981
+        }
+      ]
+    },
+    "elapsed_seconds": 448.4786486939993,
+    "native_isolation_verified": true,
+    "owned_process_stopped": true,
+    "owned_scope_empty": true,
+    "remaining_pids": [],
+    "cleanup_errors": [],
+    "profile_unchanged": true,
+    "peak_cgroup_bytes": 68719468544,
+    "minimum_linux_available_bytes": 57488756736,
+    "maximum_swap_bytes": 0
+  },
+  "custom-off": {
+    "status": "completed",
+    "unit": "strata-candidate-score-1873748.scope",
+    "score_sha256": "28ec0af436b785660b32e9f4c3c2a191357a0e772651ff10ed2edddde3062b05",
+    "segments": {
+      "segments": [
+        {
+          "name": "code",
+          "first_line": 0,
+          "end_line": 999,
+          "n": 999,
+          "ppl": 3.931951,
+          "top1": 0.757758
+        },
+        {
+          "name": "docs",
+          "first_line": 999,
+          "end_line": 1998,
+          "n": 999,
+          "ppl": 21.594481,
+          "top1": 0.469469
+        },
+        {
+          "name": "english",
+          "first_line": 1998,
+          "end_line": 2997,
+          "n": 999,
+          "ppl": 4.205384,
+          "top1": 0.600601
+        },
+        {
+          "name": "multilingual",
+          "first_line": 2997,
+          "end_line": 3996,
+          "n": 999,
+          "ppl": 6.686161,
+          "top1": 0.711712
+        },
+        {
+          "name": "agent",
+          "first_line": 3996,
+          "end_line": 4995,
+          "n": 999,
+          "ppl": 2.710183,
+          "top1": 0.80981
+        }
+      ]
+    },
+    "elapsed_seconds": 432.5186466340092,
+    "native_isolation_verified": true,
+    "owned_process_stopped": true,
+    "owned_scope_empty": true,
+    "remaining_pids": [],
+    "cleanup_errors": [],
+    "profile_unchanged": true,
+    "peak_cgroup_bytes": 55601721344,
+    "minimum_linux_available_bytes": 59642855424,
+    "maximum_swap_bytes": 0
+  },
+  "custom-route03-r2": {
+    "status": "completed",
+    "unit": "strata-candidate-score-1877937.scope",
+    "score_sha256": "1e29da130acb3ecd8d887d7fec66c0da79b5ae0a0aea5a260f81b2857e02bcf3",
+    "segments": {
+      "segments": [
+        {
+          "name": "code",
+          "first_line": 0,
+          "end_line": 999,
+          "n": 999,
+          "ppl": 3.967127,
+          "top1": 0.755756
+        },
+        {
+          "name": "docs",
+          "first_line": 999,
+          "end_line": 1998,
+          "n": 999,
+          "ppl": 19.869802,
+          "top1": 0.464464
+        },
+        {
+          "name": "english",
+          "first_line": 1998,
+          "end_line": 2997,
+          "n": 999,
+          "ppl": 4.286244,
+          "top1": 0.590591
+        },
+        {
+          "name": "multilingual",
+          "first_line": 2997,
+          "end_line": 3996,
+          "n": 999,
+          "ppl": 6.90513,
+          "top1": 0.695696
+        },
+        {
+          "name": "agent",
+          "first_line": 3996,
+          "end_line": 4995,
+          "n": 999,
+          "ppl": 2.659155,
+          "top1": 0.803804
+        }
+      ]
+    },
+    "elapsed_seconds": 322.26063311001053,
+    "native_isolation_verified": true,
+    "owned_process_stopped": true,
+    "owned_scope_empty": true,
+    "remaining_pids": [],
+    "cleanup_errors": [],
+    "profile_unchanged": true,
+    "peak_cgroup_bytes": 51741085696,
+    "minimum_linux_available_bytes": 61848584192,
+    "maximum_swap_bytes": 0
+  },
+  "official-vs-custom-off": {
+    "results/strata-candidates-20261109/quality/custom-off/scores.tsv": {
+      "code": {
+        "positions": 999,
+        "top1": 1.0,
+        "kl": 0.0,
+        "ppl_ref": 3.9319514777559403,
+        "ppl": 3.9319514777559403
+      },
+      "docs": {
+        "positions": 999,
+        "top1": 1.0,
+        "kl": 0.0,
+        "ppl_ref": 21.59448119432817,
+        "ppl": 21.59448119432817
+      },
+      "english": {
+        "positions": 999,
+        "top1": 1.0,
+        "kl": 0.0,
+        "ppl_ref": 4.205383837915039,
+        "ppl": 4.205383837915039
+      },
+      "multilingual": {
+        "positions": 999,
+        "top1": 1.0,
+        "kl": 0.0,
+        "ppl_ref": 6.686161160577491,
+        "ppl": 6.686161160577491
+      },
+      "agent": {
+        "positions": 999,
+        "top1": 1.0,
+        "kl": 0.0,
+        "ppl_ref": 2.7101833930261905,
+        "ppl": 2.7101833930261905
+      },
+      "all": {
+        "positions": 4995,
+        "top1": 1.0,
+        "kl": 0.0,
+        "kl_p99": 0.0,
+        "ppl_ref": 5.783442434386754,
+        "ppl": 5.783442434386754
+      }
+    }
+  },
+  "custom-off-vs-route03": {
+    "results/strata-candidates-20261109/quality/custom-route03-r2/scores.tsv": {
+      "code": {
+        "positions": 999,
+        "top1": 0.9279279279279279,
+        "kl": 0.048092679067888576,
+        "ppl_ref": 3.9319514777559403,
+        "ppl": 3.967126880942198
+      },
+      "docs": {
+        "positions": 999,
+        "top1": 0.8798798798798799,
+        "kl": 0.053127116498514565,
+        "ppl_ref": 21.59448119432817,
+        "ppl": 19.869801410244442
+      },
+      "english": {
+        "positions": 999,
+        "top1": 0.8848848848848849,
+        "kl": 0.05240082039910281,
+        "ppl_ref": 4.205383837915039,
+        "ppl": 4.286244166712918
+      },
+      "multilingual": {
+        "positions": 999,
+        "top1": 0.914914914914915,
+        "kl": 0.05688549369813977,
+        "ppl_ref": 6.686161160577491,
+        "ppl": 6.9051301796618585
+      },
+      "agent": {
+        "positions": 999,
+        "top1": 0.9569569569569569,
+        "kl": 0.02809366632203762,
+        "ppl_ref": 2.7101833930261905,
+        "ppl": 2.6591550086509503
+      },
+      "all": {
+        "positions": 4995,
+        "top1": 0.9129129129129129,
+        "kl": 0.04771995519713666,
+        "kl_p99": 0.5157434850898932,
+        "ppl_ref": 5.783442434386754,
+        "ppl": 5.734986630802005
+      }
+    }
+  },
+  "deferred_attempt": {
+    "directory": "custom-route03",
+    "reason": "Admission CPU load average was still above 8 after the preceding scorer. No engine started."
+  }
+}
