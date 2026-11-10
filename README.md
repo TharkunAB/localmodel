@@ -20,7 +20,7 @@ conversation history, credentials, and private collaboration certificates.
 
 | Component | Address | Purpose |
 | --- | --- | --- |
-| Local model | `127.0.0.1:8899` | Main model for `omp-local`; subagents for `omp-remote` |
+| Local model | `127.0.0.1:8899` | Main model for `omp-local`; optional Qwen routing and subagents for `omp-remote` |
 | SearXNG | `127.0.0.1:8888` | DuckDuckGo search for both harness profiles |
 | Remote SSH tunnel | `127.0.0.1:8898` | Main model for `omp-remote` |
 | Model inside the remote Pod | `127.0.0.1:8897` | Target of the SSH tunnel |
@@ -499,10 +499,16 @@ curl --fail http://127.0.0.1:8898/v1/models
 omp-remote --mem 32
 ```
 
-`omp-remote` also requires SearXNG on **8888** and a local subagent model on
-**8899**. It discovers that local model dynamically, including our Qwen
-Flash-Next profile. There is no cached-model fallback. Its legacy `bonsai`
-provider name does not restrict which model can be served there.
+`omp-remote` also requires SearXNG on **8888**. A local model on **8899** is
+optional. New conversations select `router/auto`: simple requests use idle
+Qwen3.8-Flash-Next when available; complex requests and large conversations
+stay remote. Use `/model router/auto` in an existing conversation, or select
+`/model model/<served-id>` to stay remote. See the
+[routing rules](docs/harness.md#start-the-components) for details.
+
+Subagents use the local model discovered at launch, or the remote model when
+none is ready. The legacy `bonsai` provider name does not restrict which model
+can be served locally. Discovery does not use saved model metadata.
 The main remote model can advertise 1M context; OMP uses the discovered capacity.
 Output reserves at most one quarter of that context. At 256K, output is limited
 to 65536 tokens and automatic compaction starts at 180224 tokens.

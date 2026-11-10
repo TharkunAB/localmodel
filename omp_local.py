@@ -143,7 +143,9 @@ def model_provider(status: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def profile(status: dict[str, Any], bonsai: dict[str, Any] | None = None) -> tuple[dict[str, Any], dict[str, Any]]:
+def profile(
+    status: dict[str, Any], bonsai: dict[str, Any] | None = None, *, route: bool = False,
+) -> tuple[dict[str, Any], dict[str, Any]]:
     """Build a settings overlay with live model roles and context budgets."""
     settings: dict[str, Any] = {}
     providers = {"model": model_provider(status)}
@@ -154,6 +156,8 @@ def profile(status: dict[str, Any], bonsai: dict[str, Any] | None = None) -> tup
         task = f"bonsai/{bonsai['model']}"
     settings["modelRoles"] = {name: primary for name in ("default", "smol", "slow", "plan", "title")}
     settings["modelRoles"].update({"task": task, "web": "web/searxng"})
+    if route:
+        settings["modelRoles"]["default"] = "router/auto"
     settings["task"] = {
         "agentModelOverrides": {name: "@task" for name in ("task", "scout", "reviewer", "security-reviewer", "sonic")},
         "completionProbe": False,
@@ -165,6 +169,8 @@ def profile(status: dict[str, Any], bonsai: dict[str, Any] | None = None) -> tup
         )
         for provider, info in providers.items() for model in info["models"]
     }
+    if route:
+        thresholds["router/auto"] = thresholds[primary]
     settings["compaction"] = {"modelThresholds": thresholds}
     return settings, {"providers": providers}
 
@@ -179,7 +185,10 @@ def main(*, remote: bool = False) -> None:
             f"{launcher} [--mem SIZE] [OMP arguments]\n"
             "  Bare memory sizes use GiB. The cap includes child processes.\n"
             + ("  Discover the main model on localhost:8898; context defaults to 1M.\n"
-               "  Discover the task model on localhost:8899, including Qwen3.8-Flash-Next. No cached fallback.\n"
+               "  Auto-route simple requests to idle Qwen3.8-Flash-Next on localhost:8899.\n"
+               "  Complex or large requests stay remote. Local service is optional.\n"
+               "  Use /model router/auto for routing, or /model model/<ID> to stay remote.\n"
+               "  Tasks use the live local model if ready at launch; otherwise they use remote.\n"
                "  Resume accepts different deepseek-v4.1 profile suffixes.\n" if remote
                else "  Discover the current localmodel endpoint and its context.\n")
             + "  Start searxng-local first. OMP sessions require its health check on port 8888.\n"
@@ -204,6 +213,7 @@ def main(*, remote: bool = False) -> None:
     os.environ.pop("PI_PROFILE", None)
     for variable in ("PI_SMOL_MODEL", "PI_SLOW_MODEL", "PI_PLAN_MODEL"):
         os.environ.pop(variable, None)
+    os.environ.pop("OMP_REMOTE_ROUTER_CONFIG", None)
     os.environ["OMP_SKIP_SETUP"] = "1"
     if remote:
         os.environ["OMP_LOCAL_REMOTE_MODEL_FAMILY"] = "deepseek-v4.1"
@@ -230,9 +240,23 @@ def main(*, remote: bool = False) -> None:
         base: dict[str, Any] = json.loads(overlay.read_text()) if administrative and overlay.exists() else {}
         if not administrative:
             status = remote_current() if remote else current()
-            task_model = current(8899) if remote else None
-            base, models = profile(status, task_model)
+            task_model = None
+            if remote:
+                try:
+                    task_model = current(8899)
+                except RuntimeError:
+                    pass
+            base, models = profile(status, task_model, route=remote)
             (agent / "models.yml").write_text(json.dumps(models, indent=2) + "\n")
+            if remote:
+                provider = models["providers"]["model"]
+                os.environ["OMP_REMOTE_ROUTER_CONFIG"] = json.dumps({
+                    "remote": {
+                        **provider["models"][0], "provider": "model",
+                        "baseUrl": provider["baseUrl"], "api": provider["api"],
+                    },
+                    "localBaseUrl": "http://127.0.0.1:8899/v1",
+                })
         base["collab"] = collab
         for key in ("providers", "searxng", "retry", "disabledProviders", "mcp", "lsp", "launch",
                     "telemetry", "dev", "startup", "marketplace"):
@@ -250,7 +274,11 @@ def main(*, remote: bool = False) -> None:
     bun = shutil.which("bun")
     if bun is None:
         sys.exit("Bun is required to run the installed OMP package.")
-    os.execv(bun, [bun, str(cli), *args])
+    extension_flag = "--trusted-extension" if any(
+        value == "--trusted-extension" or value.startswith("--trusted-extension=") for value in options
+    ) else "--extension"
+    extensions = [extension_flag, str(ROOT / "config/omp-router.ts")] if remote and not administrative else []
+    os.execv(bun, [bun, str(cli), *extensions, *args])
 
 
 if __name__ == "__main__":

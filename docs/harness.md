@@ -87,7 +87,7 @@ task roles use that model. Search uses SearXNG at port 8888. URL reads fetch
 the URL directly.
 
 For a remote main model, expose its OpenAI-compatible endpoint on local port
-8898. An SSH tunnel is sufficient. Keep a local task model ready on port 8899:
+8898. An SSH tunnel is sufficient. A local model on port 8899 is optional:
 
 ```bash
 omp-remote --mem 32
@@ -96,9 +96,39 @@ omp-remote --mem 32
 `omp-remote` discovers the main model on port 8898 through IPv4 or IPv6. Its
 context limit defaults to 1048576 tokens and decreases when the server reports
 a smaller limit. The output limit is one quarter of that context, up to 262144
-tokens. This leaves room for the prompt and compaction. The main, plan, small,
+tokens. This leaves room for the prompt and compaction. The plan, small,
 slow, and title roles use this endpoint. Served IDs such as `deepseek-gsq-*`
 are read directly from the endpoint; no fixed model ID is required.
+
+New remote conversations select `router/auto`. The router sends simple requests
+to a ready Qwen3.8-Flash-Next on port 8899. It keeps complex requests on the
+remote model. It checks local availability for each request, so Qwen can start
+after OMP. It does not start a model server.
+
+The router uses conservative text rules. It does not call a classifier service.
+Short definitions, translations, summaries, arithmetic, and wording corrections
+can run locally. Coding, debugging, reviews, proofs, and uncertain requests
+stay remote. The rule accepts at most 800 UTF-8 bytes and eight lines, with no
+code fence. A busy local server also keeps a new turn remote. The load limits
+are 50% GPU utilization and a one-minute CPU load of 0.75 per available CPU.
+Missing GPU telemetry keeps the turn remote. Tool follow-ups retain the
+selected model while it is available and the conversation fits. Large conversations stay remote instead
+of being compacted to fit Qwen. Compaction uses the remote model.
+
+The local context check counts serialized UTF-8 bytes conservatively and
+reserves room for output and template framing. It can therefore keep a
+conversation remote even when the exact token count would fit locally.
+If a local request fails before it produces output, the router retries once
+remotely. It does not replay a response after partial output or cancellation.
+Each new turn prints the selected endpoint and the reason. Switching models
+can require a new prefill because the two servers do not share a prompt cache.
+
+Restart `omp-remote` to load the extension. After resuming an existing
+conversation, use `/model router/auto` to enable routing.
+Use `/model model/<served-id>` to keep the conversation remote. These selections
+also work with `--model`. The routing extension is
+[`config/omp-router.ts`](../config/omp-router.ts). It uses the pinned OMP
+custom-provider API. It does not require a runtime upgrade or a proxy service.
 
 | Reported context | Output limit | OMP compaction threshold |
 | --- | --- | --- |
@@ -109,10 +139,12 @@ are read directly from the endpoint; no fixed model ID is required.
 | 1048576 | 262144 | 770048 |
 
 The task, scout, reviewer, security-reviewer, and sonic agents use the live
-model on port 8899. This includes Qwen3.8. The provider name `bonsai` remains
-for compatibility; it does not require a Bonsai model. Discovery has no cached
-fallback. If either required endpoint is unavailable, `omp-remote` exits.
-Relaunch after changing a model or its context limit.
+model on port 8899 when it is ready at launch. This includes Qwen3.8. Otherwise,
+they use the remote model. The provider name `bonsai` remains for compatibility;
+it does not require a Bonsai model. Discovery does not use saved model metadata.
+Relaunch to change these task roles after starting or replacing the local model.
+The main router discovers Qwen independently. If the remote endpoint is
+unavailable at launch, `omp-remote` exits.
 
 Remote sessions saved with `deepseek-v4.1` or a `deepseek-v4.1-*` profile can
 resume with another served profile in that family. The current server must
@@ -126,7 +158,7 @@ report one matching model. Other model families retain OMP's normal checks.
 | OMP | Bun >=1.3.14; locked OMP and native packages | `state/omp-package/18.8.6/` |
 | Reviewed OMP patches | Input and output SHA256 in `config/omp-runtime.json` | `state/omp-runtime/18.8.6/managed/` |
 | Local OMP profile | Ready model; healthy SearXNG | `state/omp-local/` |
-| Remote OMP profile | Ports 8898 and 8899; healthy SearXNG | `state/omp-remote/` |
+| Remote OMP profile | Port 8898; optional local model on 8899; healthy SearXNG | `state/omp-remote/` |
 | SearXNG | Pinned source; its Python requirements; Granian | `search/`, `state/searxng/` |
 | Memory limits | Linux cgroup v2; systemd user manager; Python 3 | `libexec/capped*`, profile peak logs |
 | OpenCode, optional | External OpenCode v2.0.26 binary; reviewed goal plugin | `~/.opencode/bin/opencode`, `state/opencode*/` |
@@ -231,7 +263,7 @@ model. They keep a saved model configuration when discovery fails. A fresh
 service configuration starts with no allowed model providers. The OpenCode
 main routes follow the local endpoint or port 8898. Its optional general and
 explore agents retain their existing Bonsai route and cached-metadata behavior.
-This differs from OMP remote task discovery, which requires a live port 8899.
+OMP remote task discovery uses a live port 8899 when it is available at launch.
 
 To start an OpenCode service with a memory limit, put the limit before
 `service start`. Restarting a service interrupts its work. A service already
