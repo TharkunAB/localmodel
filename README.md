@@ -500,9 +500,10 @@ omp-remote --mem 32
 ```
 
 `omp-remote` also requires SearXNG on **8888**. A local model on **8899** is
-optional. New conversations select `router/auto`: simple requests use idle
-Qwen3.8-Flash-Next when available; complex requests and large conversations
-stay remote. Use `/model router/auto` in an existing conversation, or select
+optional. New conversations select `router/auto`: idle Qwen3.8-Flash-Next
+classifies each new request and chooses local or remote. It is instructed to
+send complex or uncertain work remotely. Large conversations stay remote.
+Use `/model router/auto` in an existing conversation, or select
 `/model model/<served-id>` to stay remote. See the
 [routing rules](docs/harness.md#start-the-components) for details.
 

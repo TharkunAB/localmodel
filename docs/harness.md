@@ -105,15 +105,26 @@ to a ready Qwen3.8-Flash-Next on port 8899. It keeps complex requests on the
 remote model. It checks local availability for each request, so Qwen can start
 after OMP. It does not start a model server.
 
-The router uses conservative text rules. It does not call a classifier service.
-Short definitions, translations, summaries, arithmetic, and wording corrections
-can run locally. Coding, debugging, reviews, proofs, and uncertain requests
-stay remote. The rule accepts at most 800 UTF-8 bytes and eight lines, with no
-code fence. A busy local server also keeps a new turn remote. The load limits
-are 50% GPU utilization and a one-minute CPU load of 0.75 per available CPU.
-Missing GPU telemetry keeps the turn remote. Tool follow-ups retain the
-selected model while it is available and the conversation fits. Large conversations stay remote instead
-of being compacted to fit Qwen. Compaction uses the remote model.
+Local Qwen decides the route with a separate classification request. It receives
+the new user request and excerpts from the two preceding user or reply messages.
+Each excerpt contains at most 1000 characters. It can choose local for routine
+work, including straightforward code changes. It should choose remote for
+difficult reasoning, broad changes, or uncertain scope. There is no keyword rule.
+The classifier has no tools. It uses temperature 0, disables thinking, and can
+produce at most 64 tokens. It must return a JSON routing decision within 10 seconds.
+An invalid answer, failed request, or timeout keeps the turn remote. Requests
+larger than 12000 UTF-8 bytes also stay remote to bound classification work.
+The classification result does not enter the conversation. Normal replies keep
+the selected reasoning effort. Classification adds local inference work and
+can replace a cached prompt on the local server.
+
+The router checks capacity and load before it calls the classifier. A busy
+local server keeps a new turn remote. The load limits are 50% GPU utilization
+and a one-minute CPU load of 0.75 per available CPU. Missing GPU telemetry
+keeps the turn remote. Tool follow-ups retain the selected model while it is
+available and the conversation fits. They do not call the classifier again.
+Large conversations stay remote instead of being compacted to fit Qwen.
+Compaction uses the remote model.
 
 The local context check counts serialized UTF-8 bytes conservatively and
 reserves room for output and template framing. It can therefore keep a
