@@ -276,7 +276,11 @@ shorter context, or `--mem 64` to change the process cap. A fixed layer count
 disables automatic fitting. `--no-offload` requests all layers on the GPU and
 can fail if VRAM is insufficient. `--cache-ram` controls snapshots; it does not
 set the RAM weight budget. The `mtp` profile accepts `--draft-tokens N` and
-`--speculative none` overrides. Its speed benefit is not yet measured.
+`--speculative none` overrides. The November 11 comparison measured 5.37 decode
+tokens/s with MTP and 2.99 without it on the 12 GiB RTX 4070 SUPER. Both passed
+the constructed 16K OMP repair and resume checks. Initial prefill was slower
+with MTP. These runs used 192K capacity; they did not fill that capacity.
+See the [27B comparison](docs/qwen27-20261111.md) for timings and limitations.
 
 `omp-local` discovers the model and context automatically. `omp-remote`
 subagents also discover it at launch. The automatic main-request router still

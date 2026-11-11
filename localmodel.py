@@ -765,7 +765,16 @@ def stop() -> None:
 
 def stats_text() -> str:
     """Show recorded measurements without starting a model."""
-    return ("2026-11-09 official Strata 0.2.13 / native 0.1.59: existing defaults retained.\n"
+    return ("2026-11-11 dense Qwen3.8-27B Dynamic 3.1 UD-Q4_K_M, llama.cpp b11946.\n"
+            "192K capacity, Q4 KV, auto GPU fitting, 48G cap, xhigh; same 15997-token initial OMP input.\n"
+            "Standard / MTP2: decode 2.99 / 5.37 tok/s; initial prefill 383.90 / 310.31 tok/s.\n"
+            "Repair plus strict resume: 340.07 / 210.04 s, with 842 / 698 generated tokens. Both pass all checks.\n"
+            "MTP accepts 431/528 draft tokens (81.63%). Single sampled runs; shorter output also reduces task time.\n"
+            "Peak scope RAM 24.19 / 14.73 GiB, whole-GPU VRAM 11741 / 11517 MiB; no swap or OOM.\n"
+            "RAM charges include file cache; their difference does not establish an MTP memory saving.\n"
+            "Use localmodel start qwen3.8-27b mtp. Flash-Next remains the faster local choice in earlier measurements.\n"
+            "All benchmark services stopped. See docs/qwen27-20261111.md.\n\n"
+            "2026-11-09 official Strata 0.2.13 / native 0.1.59: existing defaults retained.\n"
             "Full Unsloth IQ1_S, 192K capacity, cache48, 64G cap, CPU12, prefill4096, reserve700, six experts, no DSpark.\n"
             "Matched 16K/32K/64K decode, 0.2.12 -> 0.2.13: 8.97 -> 9.17, 8.72 -> 9.12, 8.56 -> 8.81 tok/s.\n"
             "Initial prefill: 261.11 -> 256.33, 347.54 -> 346.42, 417.30 -> 417.96 tok/s; actual input 15961/32331/65306.\n"
