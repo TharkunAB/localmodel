@@ -132,6 +132,7 @@ def main() -> None:
     elif name == "bonsai-ptq2":
         name = "bonsai-pq2"
     model = models[name]
+    base_name, base_path = name, model_path(root, model)
     variant = cast(str | None, getattr(arguments, "variant", None))
     if variant == "mtp_procreations" and arguments.command == "pull":
         subprocess.run([str(root.parent / "bin/localmodel"), "fetch", name,
@@ -146,7 +147,9 @@ def main() -> None:
     path = model_path(root, model)
     state = root / "state"
     state.mkdir(parents=True, exist_ok=True)
-    lock_name = "bonsai" if name in ("bonsai-ptq1", "bonsai2-27b-mtp") else name
+    lock_name = base_name if path == base_path else name
+    if lock_name in ("bonsai-ptq1", "bonsai2-27b-mtp"):
+        lock_name = "bonsai"
     with (state / f"models-{lock_name}.lock").open("w") as lock:
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)

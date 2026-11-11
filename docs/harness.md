@@ -75,6 +75,11 @@ The fetch command downloads the selected model and its required runtime. Check
 the model's documented disk, RAM, and GPU requirements first. The setup
 installer does not perform this step.
 
+`qwen3.8` is Flash-Next. For dense Qwen3.8 27B, use
+`localmodel fetch qwen3.8-27b`, then `localmodel start qwen3.8-27b`.
+The optional `localmodel start qwen3.8-27b mtp` profile uses the same weights.
+See the [dense Qwen setup](../README.md#set-up-qwen38-27b) for memory controls.
+
 Start the coding harness from the project you want to work on:
 
 ```bash

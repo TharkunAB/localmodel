@@ -154,7 +154,7 @@ def current(port: int | None = None) -> dict[str, Any]:
         result["profile"] = managed.get("profile")
         result["settings_profile"] = managed.get("settings_profile", "default")
         result["pid"] = managed.get("controller_pid")
-        for key in ("cpu_offload_gb", "cpu_moe_layers", "moe_cache_mib", "batch_tokens", "ubatch_tokens", "command", "runtime", "rounds", "memory_limit",
+        for key in ("cpu_offload_gb", "cpu_moe_layers", "gpu_layers", "moe_cache_mib", "batch_tokens", "ubatch_tokens", "command", "runtime", "rounds", "memory_limit",
                     "expert_memory", "expert_ram_gb", "cpu_threads", "gpu_expert_cache_gb", "gpu_expert_fraction", "prefill_chunk", "vram_reserve_mib", "engram_cache_mib", "engram_threads", "thinking_budget", "strata_slots", "strata_slot_directory", "ple_io", "expert_tail_skip", "adaptive_fetch", "draft_conf"):
             result[key] = managed.get(key)
         if result["backend"] == "dory":
@@ -337,6 +337,8 @@ def remove(name: str, speculative: str = "none", dry_run: bool = False, mtp_head
 
 def launch_command(args: argparse.Namespace, item: dict[str, Any]) -> list[str]:
     """Build a command with GPU weights and GPU KV cache."""
+    if args.gpu_layers is not None and (item["runtime"] != "llamacpp" or "cpu_moe_layers" in item):
+        raise RuntimeError("--gpu-layers requires a dense llama.cpp profile. Use --cpu-moe-layers for MoE profiles.")
     if item["runtime"] == "strata-qwen":
         return qwen_strata.command(args, item)
     if item["runtime"] == "strata":
@@ -364,18 +366,22 @@ def launch_command(args: argparse.Namespace, item: dict[str, Any]) -> list[str]:
     if args.lookup_min_tokens is not None and (not args.prompt_lookup or args.lookup_type != "ngram-mod"):
         raise RuntimeError("--lookup-min-tokens requires --prompt-lookup --lookup-type ngram-mod.")
     if item["runtime"] in ("flint", "llamacpp"):
-        if args.speculative != "none" or args.kv_mean_center or args.reasoning_effort:
-            raise RuntimeError("This profile has no configured draft decoder, KV calibration, or reasoning-effort control.")
+        if args.speculative != "none" and (args.speculative != "mtp" or "mtp" not in item):
+            raise RuntimeError("This profile has no configured artifact for the selected draft decoder.")
+        if args.kv_mean_center or (args.reasoning_effort and "reasoning_effort" not in item):
+            raise RuntimeError("This profile has no configured KV calibration or reasoning-effort control.")
         if args.cpu_offload_gb or args.kv_offload_gb:
             raise RuntimeError("Use --cpu-moe-layers for MoE profiles. Attention and KV stay on the GPU.")
         cpu_moe = 0 if args.no_offload else cpu_moe_layers if cpu_moe_layers is not None else item.get("cpu_moe_layers", 0)
         if args.moe_cache_mib and cpu_moe < 3:
             raise RuntimeError("The MoE cache needs routed experts in RAM. Use --cpu-moe-layers 3 or more and omit --no-offload.")
         cache_ram = args.cache_ram if args.cache_ram is not None else item.get("cache_ram", DEFAULT_CACHE_RAM_MIB)
-        model = ROOT / "bonsai/models" / item["directory"] / item["filename"]
+        weights = item["mtp"] if args.speculative == "mtp" else item
+        model = ROOT / "bonsai/models" / weights["directory"] / weights["filename"]
+        gpu_layers = 99 if args.no_offload else args.gpu_layers if args.gpu_layers is not None else item.get("gpu_layers", 99)
         command = [str(runtime_path(item["runtime"]) / "llama-server"), "--model", str(model),
                    "--alias", item["alias"], "--ctx-size", str(context),
-                   "--gpu-layers", "99", "--n-cpu-moe", str(cpu_moe), "--fit", "off",
+                   "--gpu-layers", str(gpu_layers), "--n-cpu-moe", str(cpu_moe), "--fit", "on" if gpu_layers == "auto" else "off",
                    "--flash-attn", "on", "--parallel", "1",
                    "--cache-type-k", args.kv_cache or item["kv_cache"],
                    "--cache-type-v", args.kv_cache or item["kv_cache"],
@@ -388,8 +394,16 @@ def launch_command(args: argparse.Namespace, item: dict[str, Any]) -> list[str]:
                    "--repeat-penalty", str(item.get("repeat_penalty", 1.0))]
         if args.moe_cache_mib is not None:
             command += ["--moe-cache-mib", str(args.moe_cache_mib)]
-        if args.prompt_lookup is not None:
-            command += ["--spec-type", args.lookup_type if args.prompt_lookup else "none"]
+        if "reasoning_effort" in item:
+            command += ["--reasoning-effort", args.reasoning_effort or item["reasoning_effort"]]
+        speculation: list[str] = []
+        if args.speculative == "mtp":
+            speculation.append("draft-mtp")
+            command += ["--spec-draft-n-max", str(args.draft_tokens)]
+        if args.prompt_lookup:
+            speculation.append(args.lookup_type)
+        if speculation or args.prompt_lookup is not None:
+            command += ["--spec-type", ",".join(speculation) or "none"]
         if args.prompt_lookup and args.lookup_type == "ngram-mod":
             command += ["--spec-ngram-mod-n-max", str(args.lookup_tokens),
                         "--spec-ngram-mod-n-min", str(args.lookup_min_tokens)]
@@ -655,6 +669,7 @@ def serve(args: argparse.Namespace, item: dict[str, Any]) -> int:
         active.write_text(json.dumps({"pid": process.pid, "controller_pid": os.getpid(), "profile": args.model,
             "command": command,
             "memory_limit": command[2] if command[:2] == [str(CAPPED), "--mem"] else None,
+            "gpu_layers": (99 if args.no_offload else args.gpu_layers if args.gpu_layers is not None else item.get("gpu_layers", 99)) if item["runtime"] == "llamacpp" else None,
             "preset": args.preset,
             "settings_profile": args.settings_profile,
             "runtime": args.runtime if item["runtime"] == "prism" else item["runtime"],
@@ -687,7 +702,7 @@ def serve(args: argparse.Namespace, item: dict[str, Any]) -> int:
             "cache_ram_mib": args.cache_ram if args.cache_ram is not None else item.get("cache_ram", DEFAULT_CACHE_RAM_MIB if item["runtime"] in ("prism", "dory-native", "flint") else None),
             "kv_cache": args.kv_cache or item.get("kv_cache"),
             "kv_mean_center": str(args.kv_mean_center) if args.kv_mean_center else None,
-            "reasoning_effort": (args.reasoning_effort or DEFAULT_REASONING_EFFORT) if item["runtime"] in ("prism", "strata", "strata-qwen") else None,
+            "reasoning_effort": (args.reasoning_effort or item.get("reasoning_effort", DEFAULT_REASONING_EFFORT)) if item["runtime"] in ("prism", "strata", "strata-qwen") or "reasoning_effort" in item else None,
             "expert_memory": strata_config.get("expert_memory"),
             "expert_ram_gb": strata_config.get("expert_ram_gb"),
             "ple_io": args.ple_io if item["runtime"] == "strata-qwen" else None,
@@ -902,7 +917,7 @@ def stats_text() -> str:
 def main() -> int:
     """Parse model management and discovery commands."""
     help_tail = (f"Start defaults to {DEFAULT_START_MODEL}. Explicit flags override preset and profile settings.\n"
-                 "Models: bonsai2-27b, bonsai2-9b, qwen3.8, deepseek, deepseek-coder, deepseek-full, flint, groot, lfm, dory, dory-gguf.\n"
+                 "Models: bonsai2-27b, bonsai2-9b, qwen3.8 (Flash-Next), qwen3.8-27b (dense), deepseek, deepseek-coder, deepseek-full, flint, groot, lfm, dory, dory-gguf.\n"
                  "Use localmodel list for installed models and settings profiles; localmodel presets lists existing presets.\n"
                  "Select a settings profile with localmodel start MODEL PROFILE, for example qwen3.8 lowram.\n"
                  "Use localmodel start --help for flags and localmodel start MODEL --dry-run to preview a launch.\n"
@@ -946,7 +961,7 @@ def main() -> int:
     start.add_argument("model", nargs="?", default=DEFAULT_START_MODEL,
                        help=f"Model or preset to start (default: {DEFAULT_START_MODEL}).")
     start.add_argument("settings_profile", nargs="?", default="default", metavar="PROFILE",
-                       help="Model settings profile (default: default). Qwen also supports lowram. Use localmodel list to see available profiles.")
+                       help="Model settings profile (default: default). Flash-Next also supports lowram; dense Qwen supports mtp. Use localmodel list to see available profiles.")
     start.add_argument("--context", "--ctx", type=tokens)
     start.add_argument("--port", type=int, default=8899)
     start.add_argument("--mem", type=memory_size,
@@ -973,6 +988,8 @@ def main() -> int:
                        help="Dory recurrent rounds per token (default: 2).")
     offload = start.add_mutually_exclusive_group()
     offload.add_argument("--no-offload", action="store_true", help="Keep transformer layers and attention on the GPU. For Flint and Groot this also sets --cpu-moe-layers 0; weights plus context may exceed VRAM. RAM snapshots and active KV spill use separate controls.")
+    offload.add_argument("--gpu-layers", type=int,
+                         help="Dense llama.cpp layers on the GPU; the rest use RAM. Dense Qwen defaults to automatic fitting. An explicit count disables fitting; --no-offload requests all layers.")
     offload.add_argument("--cpu-offload-gb", type=float, default=0, help="Dory CPU weight offload in GiB.")
     offload.add_argument("--cpu-moe-layers", type=int,
                          help="Place routed experts in the first N layers in RAM; keep attention on the GPU. Flint: default 33, range 0-49. Groot: default 24, range 0-40.")
@@ -985,7 +1002,7 @@ def main() -> int:
     start.add_argument("--kv-cache", choices=("q4_0", "q8_0", "f16"), help="llama.cpp KV cache type (default: model profile).")
     start.add_argument("--kv-mean-center", type=Path, help="Prism model-specific KV mean file.")
     start.add_argument("--reasoning-effort", choices=("default", "low", "medium", "xhigh"),
-                       help=f"Prism chat-template effort (default: {DEFAULT_REASONING_EFFORT}). The template must support the level.")
+                       help=f"Prism or dense Qwen chat-template effort (default: {DEFAULT_REASONING_EFFORT}). The template must support the level.")
     start.add_argument("--cache-ram", type=int,
                        help=f"llama.cpp prompt snapshot cache in MiB (default: {DEFAULT_CACHE_RAM_MIB}; Groot: 8192; LFM3: 4096; 0 disables). This differs from active KV spill.")
     start.add_argument("--prompt-lookup", action=argparse.BooleanOptionalAction, default=None,
@@ -1134,6 +1151,8 @@ def main() -> int:
         parser.error("Host KV cache size must be finite and nonnegative.")
     if args.cpu_moe_layers is not None and not 0 <= args.cpu_moe_layers <= 49:
         parser.error("Use 0 to 49 CPU expert layers (Groot supports at most 40).")
+    if args.gpu_layers is not None and not 0 <= args.gpu_layers <= 999:
+        parser.error("Use 0 to 999 GPU layers.")
     if args.moe_cache_mib is not None and args.moe_cache_mib < 0:
         parser.error("The MoE cache size must be nonnegative.")
     if models[args.model]["runtime"] != "flint" and args.prompt_lookup is None:

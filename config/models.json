@@ -195,6 +195,33 @@
     "runtime": "strata",
     "context": 196608
   },
+  "qwen3.8-27b": {
+    "repo": "unsloth/Qwen3.8-27B-GGUF",
+    "revision": "ce331efc48d5722b4b8041f72793e530eae18d9b",
+    "filename": "Qwen3.8-27B-UD-Q4_K_M.gguf",
+    "size": 16564259744,
+    "sha256": "1bce504dfecd84153666928a41d8a66706f0158d3a317bc5196b72819d7dc529",
+    "directory": "qwen3.8-27b",
+    "alias": "qwen3.8-27b",
+    "runtime": "llamacpp",
+    "context": 196608,
+    "kv_cache": "q4_0",
+    "gpu_layers": "auto",
+    "cache_ram": 8192,
+    "memory_mib": 49152,
+    "reasoning_effort": "xhigh",
+    "profiles": {
+      "mtp": { "speculative": "mtp", "draft_tokens": 2 }
+    },
+    "mtp": {
+      "repo": "unsloth/Qwen3.8-27B-GGUF",
+      "revision": "ce331efc48d5722b4b8041f72793e530eae18d9b",
+      "filename": "Qwen3.8-27B-UD-Q4_K_M.gguf",
+      "size": 16564259744,
+      "sha256": "1bce504dfecd84153666928a41d8a66706f0158d3a317bc5196b72819d7dc529",
+      "directory": "qwen3.8-27b"
+    }
+  },
   "qwen3.8": {
     "alias": "qwen3.8",
     "runtime": "strata-qwen",

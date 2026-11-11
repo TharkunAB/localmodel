@@ -146,7 +146,7 @@ This is a separate configuration; it does not reproduce the optimized timings.
 ## Set up Qwen3.8 Flash-Next
 
 `qwen3.8` selects **Unsloth Qwen3.8-Flash-Next UD-IQ1_M Dynamic v3.1**, with the
-official Qwen MTP layer. It is not Qwen3.8-27B, which the remote script also supports.
+official Qwen MTP layer. The separate `qwen3.8-27b` option uses the dense model.
 
 ```bash
 bin/setup-localmodel --strata --dry-run
@@ -248,6 +248,50 @@ localmodel start qwen3.8 --ple-io mmap
 
 Stop the first server before starting another. These overrides are tuning
 examples, not claims that they outperform the defaults.
+
+## Set up Qwen3.8 27B
+
+`qwen3.8-27b` selects the dense model with the November 11 Unsloth Dynamic 3.1
+`UD-Q4_K_M` weights. The 15.43 GiB GGUF includes an MTP head. The download uses
+a fixed repository revision and SHA256 check. Allow at least 18 GiB free disk
+space. This option uses the existing pinned llama.cpp runtime, not Strata's
+Flash-Next engine.
+
+```bash
+localmodel fetch qwen3.8-27b
+localmodel start qwen3.8-27b --dry-run
+localmodel start qwen3.8-27b
+# Optional two-token MTP profile; uses the same downloaded file.
+localmodel start qwen3.8-27b mtp
+```
+
+Start one server at a time. Defaults are 192K context capacity, Q4 KV,
+automatic GPU layer fitting, a 48 GiB process cap, an 8 GiB prompt snapshot
+cache, and xhigh reasoning. A 12 GiB GPU cannot hold these weights in full.
+The runtime places some dense layers in RAM. Those layers run for every token.
+The runtime chooses the layer split at startup and reports it in its log.
+
+Use `--gpu-layers N` to select a fixed layer count, `--context 32k` for a
+shorter context, or `--mem 64` to change the process cap. A fixed layer count
+disables automatic fitting. `--no-offload` requests all layers on the GPU and
+can fail if VRAM is insufficient. `--cache-ram` controls snapshots; it does not
+set the RAM weight budget. The `mtp` profile accepts `--draft-tokens N` and
+`--speculative none` overrides. Its speed benefit is not yet measured.
+
+`omp-local` discovers the model and context automatically. `omp-remote`
+subagents also discover it at launch. The automatic main-request router still
+requires Flash-Next; it does not classify requests with dense 27B.
+
+Preview removal with `localmodel remove qwen3.8-27b --dry-run`. The plain and
+MTP options use the same file, so removal of either deletes that file.
+
+This is a quantization update, not a new base model. Unsloth reports improved
+benchmark accuracy and leaves its older 3-bit files unchanged. Dense 27B uses
+less total storage than Flash-Next but activates more parameters per token.
+Its partial CPU execution can reduce throughput. Published base-model scores
+do not establish the quality of these local quantizations. See the
+[Unsloth update](https://unsloth.ai/docs/models/qwen3.8) and
+[Qwen comparison](https://huggingface.co/Qwen/Qwen3.8-Flash-Next).
 
 ## Set up DeepSeek V4.1 Flash 1017
 
