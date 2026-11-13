@@ -161,7 +161,8 @@ This is a separate configuration; it does not reproduce the optimized timings.
 ## Set up Qwen3.8 Flash-Next
 
 `qwen3.8` selects **Unsloth Qwen3.8-Flash-Next UD-IQ1_M Dynamic v3.1**, with the
-official Qwen MTP layer. The separate `qwen3.8-27b` option uses the dense model.
+official Qwen MTP layer and the separate **Q8_0 Engram table**.
+The separate `qwen3.8-27b` option uses the dense model.
 
 ```bash
 bin/setup-localmodel --strata --dry-run
@@ -178,7 +179,9 @@ Adaptive fetch is off with resident experts.
 The rest of the KV cache uses RAM. Strata's native speculation value includes
 the accepted token, so the launcher maps four drafts to five.
 Vision, suffix drafting, routing priors, and expert tail skipping are disabled.
-The PLE embedding table uses direct file reads.
+The Q8_0 PLE embedding table uses direct file reads. Its 54.4 GB file does not
+require 54.4 GB of RAM or VRAM. The default row cache holds about 170 MiB of
+table data. Core weights and the MTP layer keep their existing precision.
 The pinned Strata 0.2.13 native engine enables the Linux CUDA GDN defaults
 equivalent to `STRATA_GDN_TC=1` and `STRATA_GDN_CONVL2=2`. The tensor-core path
 needs about 57.5 MiB of extra GPU scratch space. See the
@@ -269,14 +272,35 @@ The [previous ISTA measurements](qwen-0.2.11-tuning.md) remain available.
 They are not a matched quantization comparison after the VM move and changes
 in desktop VRAM use.
 
-The Unsloth shards total **68.01 GB** before the prepared index and MTP files.
+The original Unsloth shards total **68.01 GB** before the prepared index and MTP
+files. The default Q8_0 table adds **54.4 GB**, for **122.41 GB** of downloaded
+weights. Strata keeps all three original shards for dense tensor validation.
+The separate table has its own SHA256 pin and verification receipt.
 Preparation uses upstream `--compat-bf16` for small projections. The CUDA engine
 reads native Q8 hyper-connection projections with `STRATA_HC_Q8=1`. The main
 GGUF files stay unchanged and are verified against pinned SHA256 values.
-Allow **at least 90 GiB free**
-for an initial fetch, preparation, and runtimes. The RAM cap includes more than
+Allow **at least 145 GiB free** for the default initial fetch, preparation, and
+runtimes. The smaller table option needs at least 90 GiB. The RAM cap includes more than
 the expert budget: cache, page cache charged to the process group, and runtime
 buffers also count. Leave RAM for the OS and the coding agent.
+
+Use the bundled IQ4_NL table to avoid the separate Q8_0 download:
+
+```bash
+localmodel fetch qwen3.8 --engram iq4_nl
+localmodel start qwen3.8 --engram iq4_nl
+```
+
+Both commands use the same IQ1_M core weights and MTP layer. The explicit
+`--engram default` value remains a legacy alias for `--engram iq4_nl`.
+The positional `default` settings profile still uses Q8_0 when no Engram flag
+is given. Fetch does not delete an existing table.
+
+To reclaim the separate table's space, stop Qwen and preview
+`localmodel remove qwen3.8 --engram q8_0 --dry-run`. Remove `--dry-run` to delete
+only that table. Plain `localmodel remove qwen3.8`, or the same command with
+`--engram iq4_nl`, removes the core model and its draft files. Both commands
+keep the separate Q8_0 table.
 
 Example overrides:
 

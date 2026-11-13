@@ -216,10 +216,12 @@ def fetch_runtime(runtime: str = "stock") -> None:
     print(f"Installed runtime {info['release']}. SHA256 verified.", flush=True)
 
 
-def fetch(name: str, item: dict[str, Any], speculative: str = "none", mtp_head: str = "teacher", engram: str = "default") -> None:
+def fetch(name: str, item: dict[str, Any], speculative: str = "none", mtp_head: str = "teacher", engram: str | None = None) -> None:
     """Fetch a pinned model and its required runtime."""
     if speculative == "dflash2" and item["runtime"] != "strata-qwen":
         raise RuntimeError("DFlash2 artifacts require Strata Qwen.")
+    if engram is None:
+        engram = "q8_0" if item["runtime"] == "strata-qwen" else "default"
     if engram != "default" and item["runtime"] != "strata-qwen":
         raise RuntimeError("--engram requires Strata Qwen.")
     if item["runtime"] == "strata-qwen":
@@ -1011,8 +1013,8 @@ def main() -> int:
                               help="Fetch a supported optional decoder (default: plain weights; Qwen includes MTP). Qwen dflash2 also fetches its optional signed draft pack.")
     fetch_parser.add_argument("--mtp-head", choices=("teacher", "procreations"), default="teacher",
                               help="MTP head to fetch (default: selected preset, otherwise teacher). Requires --speculative mtp.")
-    fetch_parser.add_argument("--engram", choices=("default", "q8_0"), default="default",
-                              help="Qwen table precision. q8_0 fetches a separate 54.4 GB table and preserves the core files.")
+    fetch_parser.add_argument("--engram", choices=("q8_0", "iq4_nl", "default"),
+                              help="Qwen table precision (default: q8_0). Fetch the separate 54.4 GB Q8_0 table, or only the core files with iq4_nl. The legacy value default also means iq4_nl.")
     removal = commands.add_parser("remove", help="Delete selected weights and download data. Keep configuration and runtimes.",
                                   description="Remove the artifacts selected by fetch. Refuse weights that a running process uses.")
     removal.add_argument("model", help="Model name, alias, or preset. Presets select their configured decoder.")
@@ -1021,8 +1023,8 @@ def main() -> int:
     removal.add_argument("--mtp-head", choices=("teacher", "procreations"), default="teacher",
                          help="Select the same MTP artifact as fetch (default: selected preset, otherwise teacher).")
     removal.add_argument("--dry-run", action="store_true", help="Show the selected paths and storage use without deleting files.")
-    removal.add_argument("--engram", choices=("default", "q8_0"), default="default",
-                         help="q8_0 removes only the optional Qwen table. The default keeps the existing model-removal behavior.")
+    removal.add_argument("--engram", choices=("default", "iq4_nl", "q8_0"), default="default",
+                         help="q8_0 removes only the separate Qwen table. iq4_nl, default, or no flag removes the core model and keeps the separate Q8_0 table.")
     calibration = commands.add_parser("calibrate", help="Build a local model-specific KV mean file. Stop the server first.")
     calibration.add_argument("model")
     calibration.add_argument("--text", type=Path, required=True, help="Representative local calibration text.")
@@ -1064,8 +1066,8 @@ def main() -> int:
     start.add_argument("--engram-threads", type=int, help="DeepSeek Strata hashed-embedding SSD read threads (default: 16).")
     start.add_argument("--ple-io", choices=("direct", "mmap", "ram"),
                        help="Qwen embedding-table reads: direct (default), mmap (reclaimable page cache), or ram (full RAM copy; needs more memory).")
-    start.add_argument("--engram", choices=("default", "q8_0"), default="default",
-                       help="Qwen table precision: default uses the bundled IQ4_NL table; q8_0 uses the separately fetched table. Core weights and MTP are unchanged.")
+    start.add_argument("--engram", choices=("q8_0", "iq4_nl", "default"),
+                       help="Qwen table precision (default: q8_0). Use iq4_nl for the smaller bundled table. The legacy value default also means iq4_nl. Core weights and MTP are unchanged.")
     start.add_argument("--thinking-budget", type=int, help="Strata chat-template thinking budget in tokens (default: 32768). Client requests can turn thinking off.")
     start.add_argument("--runtime", choices=("stock", "bonsai-native", "bonsai-next"), default="stock",
                        help="Bonsai runtime (default: selected preset; stock for base model names). bonsai-next adds reviewed checkpoint and replay patches in a separate build.")
@@ -1181,6 +1183,8 @@ def main() -> int:
         parser.error("--tui requires a Strata model.")
     if getattr(args, "cache_reuse_fix", False) and args.model != qwen_strata.NAME:
         parser.error("--cache-reuse-fix requires Strata Qwen.")
+    if args.action in ("start", "serve", "fetch", "pull") and args.engram is None:
+        args.engram = "q8_0" if args.model == qwen_strata.NAME else "default"
     if getattr(args, "engram", "default") != "default" and args.model != qwen_strata.NAME:
         parser.error("--engram requires Strata Qwen.")
     if args.action in ("start", "serve") and args.settings_profile != "default":
@@ -1232,7 +1236,7 @@ def main() -> int:
                 (args.model == deepseek_strata.NAME and args.speculative == "dspark")):
             parser.error("This profile has no pinned artifact for the selected decoder.")
         if args.action == "remove":
-            if args.engram != "default" and args.speculative != "none":
+            if args.engram == "q8_0" and args.speculative != "none":
                 parser.error("Remove the optional Engram table or a speculative decoder in separate commands.")
             remove(args.model, args.speculative, args.dry_run, args.mtp_head, args.engram)
         else:

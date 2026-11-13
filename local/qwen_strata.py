@@ -78,12 +78,12 @@ def environment() -> dict[str, str]:
     return env
 
 
-def fetch(speculative: str = "mtp", engram: str = "default") -> None:
+def fetch(speculative: str = "mtp", engram: str = "q8_0") -> None:
     """Download and verify the model, draft layer, and native runtime."""
     if speculative not in ("mtp", "dflash2"):
         raise RuntimeError("Qwen supports only mtp or dflash2 artifacts.")
-    if engram not in ("default", "q8_0"):
-        raise RuntimeError("Qwen Engram must be default or q8_0.")
+    if engram not in ("default", "iq4_nl", "q8_0"):
+        raise RuntimeError("Qwen Engram must be q8_0 or iq4_nl; default is a legacy alias for iq4_nl.")
     with model_lock():
         directory()
         if not PYTHON.exists():
@@ -97,7 +97,7 @@ def fetch(speculative: str = "mtp", engram: str = "default") -> None:
                             "-B", str(ROOT / "qwen_engram.py")], env=environment(), check=True)
 
 
-def check_ready(speculative: str = "mtp", cache_reuse_fix: bool = False, engram: str = "default") -> None:
+def check_ready(speculative: str = "mtp", cache_reuse_fix: bool = False, engram: str = "q8_0") -> None:
     """Validate pinned artifacts before a server can start."""
     if speculative not in ("mtp", "dflash2"):
         raise RuntimeError("Qwen supports only mtp or dflash2 artifacts.")
@@ -108,8 +108,8 @@ def check_ready(speculative: str = "mtp", cache_reuse_fix: bool = False, engram:
         qwen_cache_reuse.verify()
     if engram == "q8_0":
         qwen_engram.verify()
-    elif engram != "default":
-        raise RuntimeError("Qwen Engram must be default or q8_0.")
+    elif engram not in ("default", "iq4_nl"):
+        raise RuntimeError("Qwen Engram must be q8_0 or iq4_nl; default is a legacy alias for iq4_nl.")
 
 
 def remove(dry_run: bool = False, speculative: str = "mtp", engram: str = "default") -> None:
@@ -120,8 +120,8 @@ def remove(dry_run: bool = False, speculative: str = "mtp", engram: str = "defau
         if engram == "q8_0":
             qwen_engram.remove(dry_run)
             return
-        if engram != "default":
-            raise RuntimeError("Qwen Engram must be default or q8_0.")
+        if engram not in ("default", "iq4_nl"):
+            raise RuntimeError("Qwen Engram must be q8_0 or iq4_nl; default is a legacy alias for iq4_nl.")
         model = directory()
         folder = model / "dflash2" if speculative == "dflash2" else model
         if folder.is_symlink():
@@ -258,9 +258,9 @@ def settings(args: argparse.Namespace, item: dict[str, Any]) -> dict[str, Any]:
     if not 0 <= budget <= 1048576:
         raise RuntimeError("Use a thinking budget from 0 to 1048576 tokens.")
     info = manifest()
-    engram = getattr(args, "engram", "default")
-    if engram not in ("default", "q8_0"):
-        raise RuntimeError("Qwen Engram must be default or q8_0.")
+    engram = getattr(args, "engram", None) or "q8_0"
+    if engram not in ("default", "iq4_nl", "q8_0"):
+        raise RuntimeError("Qwen Engram must be q8_0 or iq4_nl; default is a legacy alias for iq4_nl.")
     ple_table = str(qwen_engram.table_path()) if engram == "q8_0" else info["ple_shard"]
     source = Path(info["source_directory"])
     cache_reuse_fix = getattr(args, "cache_reuse_fix", False)
