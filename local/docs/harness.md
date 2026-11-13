@@ -526,9 +526,17 @@ omp-local --mem 32
 task roles use that model. Search uses SearXNG at port 8888. URL reads fetch
 the URL directly.
 
-For a remote main model, expose its OpenAI-compatible endpoint on local port
-8898. Follow the [RunPod guide](../../remote/runpod.md) to start the server
-and tunnel. A local model on port 8899 is optional:
+For a remote main model, run `remotemodel` on the rental GPU host. It uses
+`/workspace/remote-models` by default and reuses prepared weights and runtimes.
+`remotemodel start deepseek --tui` prepares missing files and starts Strata with
+the same telemetry display as `localmodel start MODEL --tui`. `remotemodel fetch deepseek`
+prepares without serving; `--no-fetch` on `start` requires prepared files.
+`remotemodel status` and `remotemodel stop` control that host's managed server.
+These commands do not SSH from the workstation to a Pod.
+
+Expose the remote OpenAI-compatible endpoint on workstation port 8898.
+Follow the [RunPod guide](../../remote/runpod.md) to install `remotemodel` and
+start the SSH tunnel. A local model on port 8899 is optional:
 
 ```bash
 omp-remote --mem 32

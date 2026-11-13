@@ -1,13 +1,23 @@
 # Run the remote launcher on RunPod
 
-`remote/start-remote-model.sh` is the standalone rental-GPU payload.
-The root `start-remote.sh` bootstrap fetches and runs it. The payload embeds
-Python and does not require the local harness, systemd, or
-`heavy-management`. Automatic selection serves **DeepSeek V4.1 Flash 1017**
-on supported Strata GPUs. One B300 selects **Mistral Large 4 UD-IQ1_S**
-with llama.cpp, DSpark, and 512K context. Other models require an explicit profile.
-The legacy `qwen` profile serves
-Qwen3.8-27B; the local harness uses a separate Qwen3.8-Flash-Next profile.
+`remotemodel` manages a model server on the rental GPU host. Its commands
+mirror `localmodel`: `start`, `fetch`, `list`, `status`, and `stop`. Install
+the root `start-remote.sh` bootstrap as `remotemodel` to fetch the latest
+published code on each invocation. A source checkout also provides
+`remote/bin/remotemodel` for a fixed version without bootstrap updates.
+
+The CLI reuses `remote/start-remote-model.sh` for GPU selection, preparation,
+build caching, and serving. That standalone backend remains available with
+its existing flags. Neither interface requires systemd or `heavy-management`
+on the rental host. The Strata TUI and its dependency lock are shared with
+the local harness; model profiles remain specific to the host.
+
+Automatic selection serves **DeepSeek V4.1 Flash 1017** on supported Strata
+GPUs. One B300 selects **Mistral Large 4 UD-IQ1_S** with llama.cpp, DSpark,
+and 512K context. Other models require an explicit profile. The legacy `qwen`
+profile serves Qwen3.8-27B; the local harness uses a separate
+Qwen3.8-Flash-Next profile. `remotemodel` does not connect to a Pod over SSH.
+Run it on the GPU host; run `omp-remote` on your workstation.
 
 All remote DeepSeek profiles now use the unmodified official Strata source
 `d2f096475817d4666c364c820b0ca830f751cfc5` (0.2.13), Control 0.1.59, and signed
@@ -19,7 +29,7 @@ Qwen, Flint, Ornith, and MiniMax keep their explicit llama.cpp paths.
 
 The original `start-qwen.sh` attachment has SHA-256
 `955915e9fc13bc9ba44a580285cd21a70a0c183c2fafb514e3e1c274326b8d3a`.
-The current embedded version is `2026-11-09-strata-0213-1`.
+The current embedded backend version is `2026-11-13-vllm-review-1`.
 Packaging checks do not establish remote GPU inference or throughput.
 
 ## Migrate an existing DeepSeek Pod
@@ -412,9 +422,13 @@ terminated. A network volume persists independently of the Pod and replaces
 the volume disk at `/workspace`. The container disk is cleared when the Pod
 stops. See RunPod's [storage options](https://docs.runpod.io/pods/storage/types).
 
-Pass `--root /workspace/remote-models`. The unchanged script default is
-`/opt/qwen`, which is usually on the disposable container disk. For an initial
-DeepSeek run, budget at least 300 GB of working storage. Higher precision
+`remotemodel` defaults to `/workspace/remote-models` for weights, runtimes,
+profile records, and logs. Build archives default to `/workspace/archive`.
+Set `--root` or `REMOTEMODEL_ROOT` to change the data root; the existing
+`QWEN_ROOT` environment variable is also supported. Keep the same root to
+reuse prepared files. The legacy option-only script interface retains its
+`/opt/qwen` default, which is usually on the disposable container disk.
+For an initial DeepSeek run, budget at least 300 GB of working storage. Higher precision
 profiles need their model-file total plus build space, drafts, and at least the
 launcher's 20 GiB free-space reserve. Quantization variants occupy separate
 files and can require hundreds of additional GB. Also allocate container disk
@@ -428,7 +442,7 @@ preview and launch commands. Network-backed Engram random reads can be slow.
 A successful preview checks filesystem type; it does not measure storage
 throughput or perform the later manifest-based free-disk check.
 
-## Copy the bootstrap once and preview
+## Install remotemodel once and preview
 
 Add your public SSH key in RunPod and select a template with full SSH access.
 Use the **SSH over exposed TCP** command from the Pod's Connect tab. It gives
@@ -445,50 +459,151 @@ scp -P PORT -i ~/.ssh/id_ed25519 start-remote.sh root@IP:/workspace/start-remote
 ssh -p PORT -i ~/.ssh/id_ed25519 root@IP
 ```
 
-Keep `/workspace/start-remote.sh` on the persistent volume. Each run resolves
-`TharkunAB/localmodel`'s latest published `main` commit. It fetches
-`remote/start-remote-model.sh` at that immutable commit and verifies the Git
-blob hash before running it. If that path is absent, it checks the legacy
-`bin/start-remote-model.sh` path at the same commit. Fetch or verification
-failure stops the bootstrap. It does not run a stale cached payload.
-
-Changes must be published to `main` before this bootstrap can fetch them.
-A local checkout or branch does not change the published payload. All command
-arguments pass through to the payload unchanged. Future payload updates need
-no new SCP command; rerun the same bootstrap on the Pod.
-
-The Pod needs Bash, Python 3.10 or later, `/dev/fd`, and outbound HTTPS access
-for the bootstrap.
-Every invocation fetches the payload, including `--help`, `--show-config`, and
-serving. Payload preparation can also download dependencies and weights.
-The inference process and its children start under the outgoing-network
-restriction after these network operations finish. For a fixed version or
-an offline launch, use the direct payload workflow below.
-
-On the Pod, inspect the help and the selected DeepSeek plan:
+On the Pod, keep the bootstrap on persistent storage and link the command:
 
 ```sh
-bash /workspace/start-remote.sh --help
-bash /workspace/start-remote.sh \
-  --profile auto --root /workspace/remote-models --no-ssh --show-config
+chmod +x /workspace/start-remote.sh
+mkdir -p ~/.local/bin
+ln -s /workspace/start-remote.sh ~/.local/bin/remotemodel
+export PATH="$HOME/.local/bin:$PATH"
+remotemodel --help
+remotemodel list
+remotemodel start deepseek --dry-run
 ```
 
-`--dry-run` is an alias for `--show-config`. A native DeepSeek preview reads GPU
-inventory, checks storage, and reports the required and available host RAM.
-It can inspect a plan while the GPU or API port is busy. A low-RAM preview
-reports `ready: false`; preparation and serving enforce their RAM requirements.
-After the bootstrap fetches the payload, its preview does not download model
-files, build, or start services. Inspect the printed profile,
-model revision, GPU placement, context, cache settings, root, and endpoint.
+Add the `PATH` setting to your shell configuration. A root user can link
+`/usr/local/bin/remotemodel` instead. If the container is replaced, recreate
+the link to the retained `/workspace/start-remote.sh` file.
 
-Do not combine preview flags with `--archive-build-only`, `--smoke-test`, or
-`--smoke-full-context`. Those actions take precedence in the supplied script:
-an archive action can build and write files, and smoke actions send inference
-requests. Preview also rejects `--setup-ssh` and `--ssh-only`.
+Each invocation resolves `TharkunAB/localmodel`'s latest published `main`
+commit. The bootstrap verifies the Git blob hash of each required remote
+and shared file at that exact commit. Code is cached under
+`/workspace/remote-models/launcher/<commit>`; `REMOTEMODEL_CODE_DIR` can select
+a different code-cache directory. Fetch or verification failure stops the
+bootstrap. It does not silently run an older cached release.
+
+Changes must be published to `main` before this bootstrap can fetch them.
+A local checkout or branch does not change the published code. Future updates
+need no new SCP command. Keep weights and runtime directories across updates;
+the new code reuses prepared files that still match its pins.
+
+The Pod needs Bash, Python 3.10 or later, `/dev/fd`, and outbound HTTPS access
+for the bootstrap. Every bootstrap invocation checks GitHub, including help,
+status, stop, preview, and `--no-fetch`. These commands can run without that
+check through the fixed source checkout described below.
+
+`remotemodel start deepseek --dry-run` reads GPU inventory and prints the plan
+and commands. It does not prepare files, build, or start a server. With the
+bootstrap, only the code fetch/cache occurs first. Inspect the profile,
+model revision, GPU placement, context, expert cache, root, and endpoint.
+A plan can be inspected while the GPU or API port is busy. A low-RAM preview
+reports `ready: false`; preparation and serving enforce their RAM requirements.
+A successful preview is not a remote GPU inference or throughput test.
+
+## Start, fetch, inspect, and stop
+
+Use `tmux` so SSH disconnects do not interrupt preparation or inference. Install
+`tmux` separately if the image lacks it; `--install-deps` does not install it.
+
+```sh
+# Optional: prepare weights, runtime, and monitor before loading a model.
+remotemodel fetch deepseek --tui --install-deps
+
+tmux new -s remote-model
+remotemodel start deepseek --tui
+```
+
+`start` runs preparation before serving. It reuses verified weights, runtimes,
+and builds; missing files are fetched automatically. Preparation can install
+pinned runtime and monitor dependencies. OS package installation needs the
+explicit `--install-deps` flag. `fetch` performs preparation and exits without
+loading a model. An existing server must stop before its runtime is updated.
+
+The serving process and its children run under the existing outgoing-network
+restriction after preparation finishes. Serving does not download or build.
+Use `--no-fetch` to skip preparation and require prepared files:
+
+```sh
+remotemodel start deepseek --tui --no-fetch
+```
+
+This flag does not disable the bootstrap's GitHub request. Use a fixed source
+checkout to start fully offline. The monitor must already be prepared when
+combining `--tui` with `--no-fetch`.
+The shared TUI dependencies require Python 3.11 or later with `venv` support.
+The launcher checks for that interpreter before preparing model files.
+
+The Strata monitor is read-only. Press `t` to cycle terminal, dark, and light
+colors. Press `q` to close the display while the server stays in the foreground.
+Press Ctrl-C to stop the server. `--tui` is rejected for non-Strata profiles.
+Detach from tmux with Ctrl-b then d; reconnect with `tmux attach -t remote-model`.
+
+In another terminal on the Pod:
+
+```sh
+remotemodel status
+remotemodel stop
+```
+
+These commands inspect or stop only a server owned by `remotemodel`. Use the
+same `--root` and `--port` when the server uses non-default values. `stop`
+checks the saved process identity before sending a signal. It does not stop
+an unrelated process that happens to use the port.
+
+Model names select the existing backend profiles:
+
+| Model name | Selection |
+| --- | --- |
+| `auto` | Existing hardware detector: DeepSeek/Strata on supported GPUs, Mistral on one B300. |
+| `deepseek` | DeepSeek-only hardware detection. Unsupported Strata GPUs fail. |
+| `mistral` | Mistral Large 4 on one B300. |
+
+```sh
+# No model name also selects auto.
+remotemodel start
+remotemodel start auto
+remotemodel start mistral --context 512K
+# Keep a specific DeepSeek profile and existing prepared files.
+remotemodel start deepseek --profile deepseek-a40-quad --root /opt/qwen --tui
+```
+
+The API binds to `127.0.0.1:8897`. `--port` changes the port; there is no host
+flag. Existing controls such as `--profile`, `--quant`, `--context`,
+`--spec`, `--dspark`, `--layer-split`, `--expert-ram-gb`, `--vram-reserve-mib`,
+and build-archive flags pass to the backend. Their existing profile restrictions
+still apply. Use `remotemodel --backend-help` for the complete backend flags.
+Build identities and archives retain their existing verification rules.
+No context, precision, or model is silently reduced after a failed start.
+
+The new CLI does not set up SSH by default. RunPod's SSH service remains the
+connection used by these examples. The legacy backend still exposes
+`--setup-ssh` and `--ssh-only` for explicit SSH administration. Those options
+require root and existing or supplied public keys. They can create host keys,
+append public keys from `SSH_PUBLIC_KEY` or `PUBLIC_KEY`, and start an installed
+key-only SSH daemon with TCP forwarding. They retain existing configuration
+and keys; they do not install the daemon.
 
 ## Use a fixed payload or start offline
 
-Copy the payload directly when you need the exact version from a checkout:
+A source checkout provides the new CLI without bootstrap updates. Select and
+retain a reviewed commit, then invoke its command directly on the Pod:
+
+```sh
+cd /workspace/localmodel
+remote/bin/remotemodel fetch deepseek --tui --install-deps
+# Later, after preparation, with no bootstrap request:
+remote/bin/remotemodel start deepseek --tui --no-fetch
+remote/bin/remotemodel status
+remote/bin/remotemodel stop
+```
+
+Retain both `remote/` and the shared files under `local/` from the same commit.
+The source checkout does not need local model weights, workstation runtimes,
+OMP, or systemd. It needs the shared monitor module and dependency lock when
+`--tui` is used. Runtime data still defaults to `/workspace/remote-models`.
+
+The old standalone payload also remains usable. Copy it directly when you
+need a single file with the exact backend version from a checkout:
 
 ```sh
 # On the workstation, from the selected checkout's repository root:
@@ -496,57 +611,30 @@ scp -P PORT -i ~/.ssh/id_ed25519 remote/start-remote-model.sh \
   root@IP:/workspace/start-remote-model.sh
 ```
 
-Prepare the selected profile and runtime with that file while internet access
-is available. Keep the same root and settings for preparation and serving:
+Prepare with that file while internet access is available, then serve:
 
 ```sh
 # On the Pod:
 bash /workspace/start-remote-model.sh --profile auto \
   --root /workspace/remote-models --no-ssh --install-deps --prepare-only
-
-# Later, serve the prepared model without fetching the latest payload:
 bash /workspace/start-remote-model.sh --profile auto \
   --root /workspace/remote-models --no-ssh
 ```
 
 The direct file does not update itself from GitHub. DeepSeek serving verifies
 the prepared runtime and weights offline. Missing preparation causes an error.
-Keep the copied file with the preparation records when reproducing a run.
-To update this fixed version, copy the desired payload explicitly and prepare
-it before restarting the server.
+The standalone file does not provide the new `--tui` integration. Keep it with
+the preparation records when reproducing a run. To update it, copy the desired
+payload explicitly and prepare it before restarting the server.
 
-## Prepare and run
+Existing option-only `bash /workspace/start-remote.sh --profile ...` commands
+still select the legacy interface. Their defaults and preparation flags remain
+unchanged. The examples earlier in this guide retain that form where they
+document a specific historical deployment or an advanced backend operation.
 
-Use `tmux` so SSH disconnects do not interrupt preparation or inference. Install
-`tmux` separately if the image lacks it; `--install-deps` does not install it.
-
-```sh
-tmux new -s remote-model
-bash /workspace/start-remote.sh \
-  --profile auto --root /workspace/remote-models --no-ssh \
-  --install-deps --prepare-only
-bash /workspace/start-remote.sh \
-  --profile auto --root /workspace/remote-models --no-ssh
-```
-
-After the bootstrap fetches the current payload, preparation installs the
-requested system dependencies, verifies the signed Strata engine, downloads
-and verifies the selected weights, and creates the
-native pack. `--prepare-only` exits without starting the server. DeepSeek
-requires `--prepare-only` with `--install-deps`. Its serving path never installs
-runtime updates. A new payload can require another preparation step before
-it can serve. Stop an existing server before a runtime upgrade.
-Use the same profile and settings for preview, preparation, and launch. Add
-`--accept-experimental` only for explicit MiniMax profiles.
-Detach with Ctrl-b then d. Reconnect with `tmux attach -t remote-model`.
-
-The API binds to `127.0.0.1:8897`. `--port` changes the port; there is no host
-flag. The examples use `--no-ssh` because the existing Pod SSH service is enough.
-By default the launcher only checks for an SSH listener. `--setup-ssh` or
-`--ssh-only` can create host keys, append public keys from `SSH_PUBLIC_KEY` or
-`PUBLIC_KEY`, and start an installed key-only SSH daemon with TCP forwarding.
-Those options require root and existing or supplied public keys. The launcher
-retains existing SSH configuration and keys. It does not install the daemon.
+For legacy commands, do not combine preview flags with `--archive-build-only`,
+`--smoke-test`, or `--smoke-full-context`. Those actions can take precedence over
+preview and perform builds or inference. Run them separately from a preview.
 
 ## Connect the client
 

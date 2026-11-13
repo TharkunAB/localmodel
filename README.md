@@ -7,9 +7,9 @@ a shared memory cap to the agent and its child processes.
 
 ```text
 README.md         Installation and launch overview
-start-remote.sh   Copy once to the rental GPU; fetch the latest main payload
+start-remote.sh   Install once as remotemodel; fetch the latest main code
 local/            Workstation launchers, configuration, docs, and experiments
-remote/           Rental-GPU payload and RunPod guide
+remote/           remotemodel CLI, rental-GPU backend, and RunPod guide
 ```
 
 Source, dependency pins, and reviewed patches are tracked. Weights, installed
@@ -73,45 +73,65 @@ measured limits.
 
 ## Use a model on a rental GPU
 
+`remotemodel` runs on the rental GPU host. `omp-remote` runs on your workstation.
 Choose a Pod with direct SSH over TCP and a compatible CUDA image. The
 [RunPod guide](remote/runpod.md) lists supported GPUs and storage requirements.
-The remote payload selects DeepSeek on supported Strata GPUs or Mistral on a
-single B300. A successful plan does not establish GPU inference performance.
+Automatic selection uses DeepSeek on supported Strata GPUs or Mistral on a
+single B300. The existing quantization, DSpark, GPU-placement, and build-cache
+settings remain in the remote backend.
 
-Copy the bootstrap once from this checkout. Use the IP and mapped SSH port
-from the Pod's Connect panel:
+Copy the bootstrap once. Use the IP and mapped SSH port from the Pod's
+Connect panel:
 
 ```bash
 scp -P PORT -i ~/.ssh/id_ed25519 start-remote.sh root@IP:/workspace/start-remote.sh
 ssh -p PORT -i ~/.ssh/id_ed25519 root@IP
 ```
 
-On the Pod, preview, prepare, then serve:
+On the Pod, install the command and start DeepSeek:
 
 ```bash
+chmod +x /workspace/start-remote.sh
+mkdir -p ~/.local/bin
+ln -s /workspace/start-remote.sh ~/.local/bin/remotemodel
+export PATH="$HOME/.local/bin:$PATH"
+
+remotemodel list
+remotemodel start deepseek --dry-run
+# First preparation can install missing OS dependencies when explicitly requested.
+remotemodel fetch deepseek --tui --install-deps
+
 tmux new -s model
-bash /workspace/start-remote.sh --profile auto \
-  --root /workspace/remote-models --no-ssh --show-config
-bash /workspace/start-remote.sh --profile auto \
-  --root /workspace/remote-models --no-ssh --install-deps --prepare-only
-bash /workspace/start-remote.sh --profile auto \
-  --root /workspace/remote-models --no-ssh
+remotemodel start deepseek --tui
 ```
 
-Each bootstrap run resolves the latest published `main` commit from
-`TharkunAB/localmodel`, fetches the payload at that exact commit, verifies its
-Git blob hash, and passes all arguments to it. It selects
-`remote/start-remote-model.sh`, or the legacy `bin/start-remote-model.sh` when
-the new path is absent at the same commit. Changes must be published to `main`
-before the bootstrap can use them. Copying this checkout's bootstrap does not
-publish its payload.
+`start` prepares missing runtime files and weights, then starts the server.
+It reuses verified downloads and builds. Data defaults to
+`/workspace/remote-models`; build archives stay under `/workspace/archive`.
+Use `start auto` for hardware-based model selection, including Mistral on one
+B300. `--tui` is available for Strata: `t` cycles terminal, dark, and light
+colors; `q` closes the display; Ctrl-C stops the server. The display shares
+its code and dependency lock with the local Strata monitor.
 
-The bootstrap needs internet access on every run, including previews. Model
-preparation can download dependencies and weights. Serving blocks outgoing
-connections from the inference process and its children. For an offline start
-or a fixed payload version, copy and invoke
-[`remote/start-remote-model.sh`](remote/start-remote-model.sh) directly; see
-[the fixed-payload workflow](remote/runpod.md#use-a-fixed-payload-or-start-offline).
+```bash
+# These commands run on the Pod, in another terminal if needed.
+remotemodel status
+remotemodel stop
+# Require prepared files; skip model/runtime preparation.
+remotemodel start deepseek --no-fetch
+```
+
+Each bootstrap invocation resolves the latest published `main` commit from
+`TharkunAB/localmodel`. It verifies and caches the required remote and shared
+files from that exact commit. Changes must be published to `main` before the
+bootstrap can use them. Future updates need no new upload.
+
+The bootstrap needs internet access even for help, status, previews, and
+`--no-fetch`. Preparation can download files; the inference process and its
+children run with outgoing connections blocked. To use checked-out code
+without bootstrap updates, run `remote/bin/remotemodel` from a source checkout.
+The [fixed-version workflow](remote/runpod.md#use-a-fixed-payload-or-start-offline)
+also retains the standalone `remote/start-remote-model.sh` interface.
 
 In another workstation terminal, keep the tunnel running:
 
