@@ -11,13 +11,17 @@
     "experiments",
     "qwen_strata.py",
     "strata_monitor.py",
-    "qwen_cache_reuse.py"
+    "qwen_cache_reuse.py",
+    "strata_tui.py",
+    "../remote/remotemodel.py",
+    "../remote/monitor.py"
   ],
   "exclude": [
     "experiments/**/patches",
     "experiments/**/upstream"
   ],
   "typeCheckingMode": "strict",
+  "extraPaths": ["../remote"],
   "pythonVersion": "3.12",
   "venvPath": ".",
   "venv": ".venv"

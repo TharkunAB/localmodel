@@ -67,6 +67,7 @@ if $execute; then
 fi
 launchers=("$root/bin/localmodel" "$root/bin/omp-local" "$root/bin/omp-remote"
            "$root/bin/searxng-local" "$root/bin/omp-collab"
+           "$root/../remote/bin/remotemodel"
            "$root/../start-remote.sh" "$root/../remote/start-remote-model.sh")
 if $opencode; then launchers+=("$root/bin/opencode-local" "$root/bin/opencode-remote"); fi
 for source in "${launchers[@]}"; do
