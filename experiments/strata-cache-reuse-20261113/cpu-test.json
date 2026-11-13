@@ -1,0 +1,5 @@
+{
+  "command": "/home/tritlo/Code/local-models/state/builds/strata-cache-reuse-20261113/serve_stop_bound_test",
+  "exit_code": 0,
+  "stdout": "SUMMARY stop_bound cases=2736 passed\n"
+}

@@ -16,6 +16,7 @@ import sys
 from typing import Any, cast
 
 from project_paths import CAPPED, read_manifest
+import qwen_cache_reuse
 
 ROOT = Path(__file__).resolve().parent
 NAME = "qwen3.8"
@@ -90,13 +91,15 @@ def fetch(speculative: str = "mtp") -> None:
                         "-B", str(HERE / "runtime.py"), "--run", "--speculative", speculative], env=environment(), check=True)
 
 
-def check_ready(speculative: str = "mtp") -> None:
+def check_ready(speculative: str = "mtp", cache_reuse_fix: bool = False) -> None:
     """Validate pinned artifacts before a server can start."""
     if speculative not in ("mtp", "dflash2"):
         raise RuntimeError("Qwen supports only mtp or dflash2 artifacts.")
     directory()
     subprocess.run([str(PYTHON), "-B", str(HERE / "runtime.py"), "--check", "--speculative", speculative],
                    env=environment(), check=True, stdout=subprocess.DEVNULL)
+    if cache_reuse_fix:
+        qwen_cache_reuse.verify()
 
 
 def remove(dry_run: bool = False, speculative: str = "mtp") -> None:
@@ -237,7 +240,8 @@ def settings(args: argparse.Namespace, item: dict[str, Any]) -> dict[str, Any]:
         raise RuntimeError("Use a thinking budget from 0 to 1048576 tokens.")
     info = manifest()
     source = Path(info["source_directory"])
-    binary = Path(info["runtime"]["binary"])
+    cache_reuse_fix = getattr(args, "cache_reuse_fix", False)
+    binary = qwen_cache_reuse.binary_path() if cache_reuse_fix else Path(info["runtime"]["binary"])
     native_args = ["--pack", info["pack_directory"], "--native", info["first_shard"],
                    "--ple-gguf", info["ple_shard"],
                    "--expert-profile", str(source / "data/expert-profile.bin"), "--expert-cache", "auto",
@@ -266,7 +270,7 @@ def settings(args: argparse.Namespace, item: dict[str, Any]) -> dict[str, Any]:
             "cwd": str(source), "tokenizer": str(Path(info["pack_directory"]) / "tokenizer"),
             "model_name": item["alias"], "gpu": [0], "log": str(ROOT / "state/qwen-engine.log"),
             "env": {"STRATA_ROUTE_PRIOR": "0", "STRATA_HC_Q8": "1", "STRATA_ROUTE_TAIL_SKIP": "0", "STRATA_ADAPT_FETCH": str(adaptive)},
-            "lib_dirs": [str(binary.parent)],
+            "lib_dirs": qwen_cache_reuse.lib_dirs() if cache_reuse_fix else [str(binary.parent)],
             "sampling": {"temperature": 1.0, "top_p": 0.95},
             "reasoning_effort": None if (args.reasoning_effort or "xhigh") == "xhigh" else args.reasoning_effort,
             "reasoning_budget_tokens": budget, "fit_max_tokens": True, "api_monitor": False,

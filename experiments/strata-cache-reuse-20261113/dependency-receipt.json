@@ -1,0 +1,104 @@
+{
+  "cmake_sha256": "234629339072edb0b3dd3f37b909c555f5b532fcfc13d86f1ab8f51c387496eb",
+  "cmake_version": "cmake version 4.1.3",
+  "cuda_record_files_verified": 1892,
+  "cxx_version": "c++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+  "dependency_pins_sha256": "4eadaca8d731430528de64cb7832bfa003e7b39ab8580679fc8733b87b210a32",
+  "ggml": "0.2.13 vendored third_party/strata-ggml",
+  "ninja_sha256": "696f9628a79d9ce50314cf9556d7cd1a1d1ec52b8fd52828f6f9db1719565b67",
+  "ninja_version": "1.13.0.git.kitware.jobserver-pipe-1",
+  "nvcc_version": "nvcc: NVIDIA (R) Cuda compiler driver\nCopyright (c) 2005-2025 NVIDIA Corporation\nBuilt on Wed_Aug_20_01:58:59_PM_PDT_2025\nCuda compilation tools, release 13.0, V13.0.88\nBuild cuda_13.0.r13.0/compiler.36424714_0\n",
+  "official_runtime_manifest_sha256": "076b8a35d5d16d78b55c485f50a9cdf7dc0e7904e15b5bb2d91ac47bccff8609",
+  "packages": [
+    {
+      "license": "LicenseRef-NVIDIA-Proprietary",
+      "licenses": [
+        {
+          "path": "nvidia_cublas-13.0.2.14.dist-info/licenses/License.txt",
+          "sha256": "ad6f5853fba0ca0d159d0f58d49ae49830c2f8c93f7a92648b9ce90adb4c6ccd"
+        }
+      ],
+      "name": "nvidia-cublas",
+      "record_files_verified": 15,
+      "version": "13.0.2.14",
+      "wheel_sha256": "0cf238ffdbe46c00cb9aa98e7bca745c223a5ca5a53e686ac8b3e5a08fe80d6c",
+      "wheel_size": 420882912,
+      "wheel_url": "https://files.pythonhosted.org/packages/28/d4/30e630055d8e0f7058cc0d39e562c965d692f4735537d3f02f45d579a280/nvidia_cublas-13.0.2.14-py3-none-manylinux_2_27_x86_64.whl"
+    },
+    {
+      "license": "LicenseRef-NVIDIA-Proprietary",
+      "licenses": [
+        {
+          "path": "nvidia_cuda_cccl-13.0.85.dist-info/licenses/License.txt",
+          "sha256": "ad6f5853fba0ca0d159d0f58d49ae49830c2f8c93f7a92648b9ce90adb4c6ccd"
+        }
+      ],
+      "name": "nvidia-cuda-cccl",
+      "record_files_verified": 1719,
+      "version": "13.0.85",
+      "wheel_sha256": "e0da7ad981f3a8aff08241b5bfc1af868742a63e2762f53a5171c492ef242649",
+      "wheel_size": 3120526,
+      "wheel_url": "https://files.pythonhosted.org/packages/ab/fb/0384bb2129bed6b1b39f8e44471c615ab5ab29b7e55817538a1d390d8f84/nvidia_cuda_cccl-13.0.85-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl"
+    },
+    {
+      "license": "LicenseRef-NVIDIA-Proprietary",
+      "licenses": [
+        {
+          "path": "nvidia_cuda_crt-13.0.88.dist-info/licenses/License.txt",
+          "sha256": "ad6f5853fba0ca0d159d0f58d49ae49830c2f8c93f7a92648b9ce90adb4c6ccd"
+        }
+      ],
+      "name": "nvidia-cuda-crt",
+      "record_files_verified": 31,
+      "version": "13.0.88",
+      "wheel_sha256": "2c8043c7c9e02492716426e9919fc78d2c5b3b2a7a768a88e952676b08aa55a4",
+      "wheel_size": 134086,
+      "wheel_url": "https://files.pythonhosted.org/packages/05/69/a1ec4d9f0747d85964206feb47bf359f48a2d6af74c0add8abba6efe3dda/nvidia_cuda_crt-13.0.88-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl"
+    },
+    {
+      "license": "LicenseRef-NVIDIA-Proprietary",
+      "licenses": [
+        {
+          "path": "nvidia_cuda_nvcc-13.0.88.dist-info/licenses/License.txt",
+          "sha256": "ad6f5853fba0ca0d159d0f58d49ae49830c2f8c93f7a92648b9ce90adb4c6ccd"
+        }
+      ],
+      "name": "nvidia-cuda-nvcc",
+      "record_files_verified": 17,
+      "version": "13.0.88",
+      "wheel_sha256": "56fe502eb77625a12f25172caa3cdddb4e4c8ba2c8c17dba44b164761b380f03",
+      "wheel_size": 37384532,
+      "wheel_url": "https://files.pythonhosted.org/packages/71/8b/a546c12881fffeba927d810598987df25d74b8b241788c7db8dfc93b0173/nvidia_cuda_nvcc-13.0.88-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl"
+    },
+    {
+      "license": "LicenseRef-NVIDIA-Proprietary",
+      "licenses": [
+        {
+          "path": "nvidia_cuda_runtime-13.0.88.dist-info/licenses/License.txt",
+          "sha256": "ad6f5853fba0ca0d159d0f58d49ae49830c2f8c93f7a92648b9ce90adb4c6ccd"
+        }
+      ],
+      "name": "nvidia-cuda-runtime",
+      "record_files_verified": 100,
+      "version": "13.0.88",
+      "wheel_sha256": "422a38f7c739ecbdd3a4b6ec7ed0a1d74db43d8e9bc26685f3d845638922b178",
+      "wheel_size": 2243181,
+      "wheel_url": "https://files.pythonhosted.org/packages/b1/1d/9ea7b0d420efcae3c546feb3ca14334c0d710ac19c156ac48fce07c3d6ae/nvidia_cuda_runtime-13.0.88-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl"
+    },
+    {
+      "license": "LicenseRef-NVIDIA-Proprietary",
+      "licenses": [
+        {
+          "path": "nvidia_nvvm-13.0.88.dist-info/licenses/License.txt",
+          "sha256": "ad6f5853fba0ca0d159d0f58d49ae49830c2f8c93f7a92648b9ce90adb4c6ccd"
+        }
+      ],
+      "name": "nvidia-nvvm",
+      "record_files_verified": 10,
+      "version": "13.0.88",
+      "wheel_sha256": "c5f41ffeb6466944a026dfa5317d7d85355c119bbec279205d22f1869d1054e0",
+      "wheel_size": 61601415,
+      "wheel_url": "https://files.pythonhosted.org/packages/15/b0/ee41e6d1108d959b5097163e7190c2d0f7857dea75606ce358f0275891b4/nvidia_nvvm-13.0.88-py3-none-manylinux2010_x86_64.manylinux_2_12_x86_64.whl"
+    }
+  ]
+}

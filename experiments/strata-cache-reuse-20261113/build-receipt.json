@@ -1,0 +1,97 @@
+{
+  "base_revision": "d2f096475817d4666c364c820b0ca830f751cfc5",
+  "binary_path": "/home/tritlo/Code/local-models/state/builds/strata-cache-reuse-20261113/native/strata",
+  "binary_sha256": "4219e2943ed362563d137c45566954387c472cf47d27b5199a81626d01a9c286",
+  "build_argv": [
+    "/home/tritlo/Code/local-models/.venv/bin/cmake",
+    "--build",
+    "/home/tritlo/Code/local-models/state/builds/strata-cache-reuse-20261113/native",
+    "--target",
+    "strata",
+    "--parallel",
+    "2"
+  ],
+  "build_helper_sha256": "867a413fbdc1c80aca584fccca30bbedc3819ccfa34cc7a0e4af587ba5903b43",
+  "build_plan_sha256": "66439f9bfcf3f5904f704e77de639c580b28a6058586321f06fbb9501129464d",
+  "comparison_limit": "The signed binary uses f-0213-rc 712fec6b4297; this source build uses d2f09647 plus 13eedf55. Compare this candidate with STRATA_SERVE_STOP_BOUND=0 and =1 to isolate the fix.",
+  "configure_argv": [
+    "/home/tritlo/Code/local-models/.venv/bin/cmake",
+    "-G",
+    "Ninja",
+    "-S",
+    "/home/tritlo/Code/local-models/state/sources/strata-cache-reuse-20261113",
+    "-B",
+    "/home/tritlo/Code/local-models/state/builds/strata-cache-reuse-20261113/native",
+    "-DCMAKE_BUILD_TYPE=Release",
+    "-DSTRATA_ENABLE_CUDA=ON",
+    "-DSTRATA_BUILD_TESTS=OFF",
+    "-DSTRATA_BUILD_DSV41=OFF",
+    "-DSTRATA_NATIVE_EXPERTS=ON",
+    "-DSTRATA_PORTABLE=ON",
+    "-DCMAKE_CUDA_ARCHITECTURES=89-real",
+    "-DCMAKE_CUDA_COMPILER=/home/tritlo/Code/local-models/state/builds/strata-cache-route-20261109/cuda-site/nvidia/cu13/bin/nvcc",
+    "-DCUDAToolkit_ROOT=/home/tritlo/Code/local-models/state/builds/strata-cache-route-20261109/cuda-site/nvidia/cu13",
+    "-DCMAKE_MAKE_PROGRAM=/home/tritlo/Code/local-models/.venv/bin/ninja",
+    "-DCMAKE_INSTALL_RPATH=/home/tritlo/Code/local-models/state/builds/strata-cache-reuse-20261113/native;/home/tritlo/Code/local-models/state/runtimes/strata-qwen-0.1.59/engine",
+    "-DCMAKE_BUILD_WITH_INSTALL_RPATH=ON",
+    "-DCMAKE_SKIP_BUILD_RPATH=OFF"
+  ],
+  "cpu_test_sha256": "486daa86ddecec3438065699ebab0453710f4e5200cc272502423d9c2e7b62b9",
+  "dependency_receipt_sha256": "98143f29c8bab5f45b674293e0787ea60b928c4a8600f8249ba7671924c0e716",
+  "effective_cgroup_limits": {
+    "memory.high": "17179869184",
+    "memory.max": "17179869184",
+    "memory.swap.max": "0"
+  },
+  "fix_revision": "13eedf552417a6a791a7d13c6597e24300ee3a09",
+  "gpu_tests": false,
+  "lib_dirs": [
+    "/home/tritlo/Code/local-models/state/builds/strata-cache-reuse-20261113/native",
+    "/home/tritlo/Code/local-models/state/runtimes/strata-qwen-0.1.59/engine",
+    "/usr/lib/wsl/lib"
+  ],
+  "libraries": [
+    {
+      "path": "/home/tritlo/Code/local-models/state/builds/strata-cache-reuse-20261113/native/libstrata_kq.so",
+      "sha256": "c4827172b885bd0b0254147b753cb93463637178c77cfb492fb9da73f84c75ee"
+    },
+    {
+      "path": "/home/tritlo/Code/local-models/state/runtimes/strata-qwen-0.1.59/engine/libcudart.so.13",
+      "sha256": "96c42e418cec19054186b9429c321603cc190bf26a18104e19408117a2a817b0"
+    },
+    {
+      "path": "/home/tritlo/Code/local-models/state/runtimes/strata-qwen-0.1.59/engine/libcublas.so.13",
+      "sha256": "25cde432108543626df85d887c730bf2cab96803ca16f9654e4abc8d2b45833e"
+    },
+    {
+      "path": "/home/tritlo/Code/local-models/state/runtimes/strata-qwen-0.1.59/engine/libcublasLt.so.13",
+      "sha256": "1489aeb75d55ee55782798343ac66f57771d561cc1fe1e0491568deefa0e6515"
+    }
+  ],
+  "memory_cap_bytes": 17179869184,
+  "nice": 19,
+  "official_binary_build": {
+    "archs": [
+      75,
+      86,
+      89,
+      120
+    ],
+    "cuda": "13.0",
+    "portable": true,
+    "ptx": true,
+    "source": "f-0213-rc 712fec6b4297",
+    "version": "0.1.59",
+    "vision": "cuda13.0",
+    "vision_archs": "75;86;89;120"
+  },
+  "official_source_receipt_sha256": "731a327b1779d142dcae124d750452b2bfc4f483c777a5abf54ca301a3c9d83b",
+  "parallel_jobs": 2,
+  "patch_sha256": "8290a289b0f30606a65ebd353bd0b63ff50b0545ecdc2643f0722b4781b746ec",
+  "source_directory": "/home/tritlo/Code/local-models/state/sources/strata-cache-reuse-20261113",
+  "source_files_count": 6112,
+  "source_files_sha256": "80910ce8d11fabc0fdb8b201844b6812038f6d628286cb8ff533f8bf6b08b284",
+  "status": "built",
+  "swap_max_bytes": 0,
+  "time_cap": "90m"
+}

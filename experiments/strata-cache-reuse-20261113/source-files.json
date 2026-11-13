@@ -1,0 +1,5 @@
+{
+  "include/strata/core/serve_stop_bound.hpp": "0e9a218c2ed924103bf208e033d61504e7052650db740127539bf79f1a9726f9",
+  "src/program/generate.cpp": "c542e60816916012b95aa0805858f920c748e5ef8b817b94ae7ba99a41ae20ce",
+  "tests/core/serve_stop_bound_test.cpp": "92fe955c51ec9d46c236d4ad209ac353dab66fa6b77aabe557f2239b10a28fab"
+}

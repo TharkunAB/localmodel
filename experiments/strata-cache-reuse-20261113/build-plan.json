@@ -1,0 +1,48 @@
+{
+  "base_revision": "d2f096475817d4666c364c820b0ca830f751cfc5",
+  "build_argv": [
+    "/home/tritlo/Code/local-models/.venv/bin/cmake",
+    "--build",
+    "/home/tritlo/Code/local-models/state/builds/strata-cache-reuse-20261113/native",
+    "--target",
+    "strata",
+    "--parallel",
+    "2"
+  ],
+  "configure_argv": [
+    "/home/tritlo/Code/local-models/.venv/bin/cmake",
+    "-G",
+    "Ninja",
+    "-S",
+    "/home/tritlo/Code/local-models/state/sources/strata-cache-reuse-20261113",
+    "-B",
+    "/home/tritlo/Code/local-models/state/builds/strata-cache-reuse-20261113/native",
+    "-DCMAKE_BUILD_TYPE=Release",
+    "-DSTRATA_ENABLE_CUDA=ON",
+    "-DSTRATA_BUILD_TESTS=OFF",
+    "-DSTRATA_BUILD_DSV41=OFF",
+    "-DSTRATA_NATIVE_EXPERTS=ON",
+    "-DSTRATA_PORTABLE=ON",
+    "-DCMAKE_CUDA_ARCHITECTURES=89-real",
+    "-DCMAKE_CUDA_COMPILER=/home/tritlo/Code/local-models/state/builds/strata-cache-route-20261109/cuda-site/nvidia/cu13/bin/nvcc",
+    "-DCUDAToolkit_ROOT=/home/tritlo/Code/local-models/state/builds/strata-cache-route-20261109/cuda-site/nvidia/cu13",
+    "-DCMAKE_MAKE_PROGRAM=/home/tritlo/Code/local-models/.venv/bin/ninja",
+    "-DCMAKE_INSTALL_RPATH=/home/tritlo/Code/local-models/state/builds/strata-cache-reuse-20261113/native;/home/tritlo/Code/local-models/state/runtimes/strata-qwen-0.1.59/engine",
+    "-DCMAKE_BUILD_WITH_INSTALL_RPATH=ON",
+    "-DCMAKE_SKIP_BUILD_RPATH=OFF"
+  ],
+  "effective_cgroup_limits": {
+    "memory.high": "17179869184",
+    "memory.max": "17179869184",
+    "memory.swap.max": "0"
+  },
+  "fix_revision": "13eedf552417a6a791a7d13c6597e24300ee3a09",
+  "gpu_tests": false,
+  "memory_cap_bytes": 17179869184,
+  "nice": 19,
+  "official_source_receipt_sha256": "731a327b1779d142dcae124d750452b2bfc4f483c777a5abf54ca301a3c9d83b",
+  "parallel_jobs": 2,
+  "patch_sha256": "8290a289b0f30606a65ebd353bd0b63ff50b0545ecdc2643f0722b4781b746ec",
+  "swap_max_bytes": 0,
+  "time_cap": "90m"
+}

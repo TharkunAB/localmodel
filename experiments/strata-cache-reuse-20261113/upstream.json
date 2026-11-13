@@ -1,0 +1,14 @@
+{
+  "commit": "13eedf552417a6a791a7d13c6597e24300ee3a09",
+  "url": "https://github.com/Niko1221/Strata/commit/13eedf552417a6a791a7d13c6597e24300ee3a09",
+  "message": "serve: the #4677 stop bound on every backend, not only HIP\n\nserve_stop_bound() caps the accepted rows a decode window commits at the rows the request can still emit (max_new) and at the first EOS, so the conversation the session keeps is exactly what the client got and the next continuation reuses it instead of falling back to the older checkpoint. It was compiled for HIP only, where it was measured (4 x R9700: 4 of 16 continuations fell back without it, 0 of 16 with it). It changes no emitted token; on CUDA it now applies too. STRATA_SERVE_STOP_BOUND=0 still turns it off (serve_stop_bound_on(), tested in serve_stop_bound_test). Host code only (generate.cpp is compiled as C++). The register entry's backend is now cuda-hip.",
+  "upstream_files": [
+    "data/settings-register.json",
+    "include/strata/core/serve_stop_bound.hpp",
+    "src/program/generate.cpp",
+    "tests/core/serve_stop_bound_test.cpp"
+  ],
+  "omitted_files": {
+    "data/settings-register.json": "Generated settings-register metadata only; the pinned 0.2.13 register remains unchanged."
+  }
+}
