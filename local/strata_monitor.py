@@ -3,22 +3,18 @@
 from __future__ import annotations
 
 import argparse
-import importlib
 import importlib.util
 import json
 import os
-import signal
 from pathlib import Path
 import subprocess
 import sys
-from types import FrameType
-from typing import Any, cast
-import urllib.error
-import urllib.request
+from typing import Any
 
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
 from project_paths import CAPPED, read_manifest  # noqa: E402
+from strata_tui import create_app as shared_create_app, run_app  # noqa: E402
 
 SOURCE = ROOT / "state/sources/strata-official-0.2.13"
 VENV = ROOT / "state/runtimes/strata-monitor-8.2.8"
@@ -73,92 +69,11 @@ def prepare() -> None:
         raise RuntimeError("The monitor Python packages differ from their pins.")
 
 
-class NoRedirect(urllib.request.HTTPRedirectHandler):
-    """Keep telemetry requests on the configured loopback endpoint."""
-
-    def redirect_request(self, req: Any, fp: Any, code: int, msg: str,
-                         headers: Any, newurl: str) -> None:
-        return None
-
-
 def create_app(port: int) -> Any:
-    """Create the read-only upstream app with local transport and quit actions."""
+    """Verify the local source before creating the shared telemetry display."""
     command(port)
     verify_source()
-    sys.path.insert(0, str(SOURCE))
-    client = importlib.import_module("strata_cli.client")
-    monitor = importlib.import_module("strata_cli.monitor")
-    binding = importlib.import_module("textual.binding")
-    rich_console = importlib.import_module("rich.console")
-    rich_text = importlib.import_module("rich.text")
-
-    class LocalEndpoint(client.Endpoint):
-        """Retain upstream normalization with proxy-free loopback requests."""
-
-        def get(self, path: str) -> dict[str, Any]:
-            if path not in ("/v1/telemetry", "/v1/status", "/metrics", "/health"):
-                raise ValueError("The monitor can read telemetry endpoints only.")
-            request = urllib.request.Request(f"http://127.0.0.1:{port}{path}",
-                                             headers={"Accept": "application/json"})
-            opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
-            try:
-                with opener.open(request, timeout=self.timeout) as response:
-                    if "application/json" not in response.headers.get("Content-Type", ""):
-                        raise client.ClientError("server did not return JSON telemetry")
-                    body = response.read(client.MAX_BODY + 1)
-                    if len(body) > client.MAX_BODY:
-                        raise client.ClientError("telemetry response exceeds the 2 MiB limit")
-            except urllib.error.HTTPError as error:
-                raise client.ClientError(f"telemetry request failed: HTTP {error.code}",
-                                         4 if error.code in (401, 403) else 3,
-                                         http_status=error.code) from error
-            except (urllib.error.URLError, TimeoutError, OSError) as error:
-                raise client.ClientError(f"cannot reach Strata server: {type(error).__name__}") from error
-            try:
-                data = json.loads(body)
-            except (ValueError, UnicodeDecodeError, RecursionError) as error:
-                raise client.ClientError("server returned malformed JSON telemetry") from error
-            if not isinstance(data, dict):
-                raise client.ClientError("server returned non-object telemetry")
-            return cast(dict[str, Any], data)
-
-    class TelemetryMonitor(monitor.MonitorApp):
-        """Detach on q and request server shutdown on Ctrl-C."""
-
-        ENABLE_COMMAND_PALETTE = False
-        BINDINGS = [
-            binding.Binding("ctrl+c", "interrupt", "Stop server", priority=True),
-            binding.Binding("b", "none", show=False),
-            binding.Binding("7", "none", show=False),
-        ]
-
-        def action_quit(self) -> None:
-            self.closing = True
-            self.exit(0)
-
-        def action_interrupt(self) -> None:
-            self.closing = True
-            self.exit(130)
-
-        def action_browser(self) -> None:
-            """Keep this monitor inside the terminal."""
-
-        def _paint(self, size: Any = None) -> None:
-            monitor.MonitorApp._paint(self, size)
-            widget = self.query_one("#content")
-            content = widget.content
-            if isinstance(content, rich_console.Group):
-                hint = content.renderables[-1]
-                if isinstance(hint, rich_text.Text) and "   b open in browser" in hint.plain:
-                    content.renderables[-1] = rich_text.Text(hint.plain.replace("   b open in browser", ""), style="dim")
-                    widget.update(content)
-
-        def _help_line(self) -> str:
-            return str(monitor.MonitorApp._help_line(self)) + "  Ctrl-C stop server"
-
-    app = TelemetryMonitor(LocalEndpoint(f"http://127.0.0.1:{port}"), None)
-    app.quiet_note = "Ctrl-C stops Strata"
-    return app
+    return shared_create_app(SOURCE, port)
 
 
 def main() -> int:
@@ -171,17 +86,7 @@ def main() -> int:
     if args.prepare:
         prepare()
         return 0
-    app = create_app(args.port)
-    def terminate(_signum: int, _frame: FrameType | None) -> None:
-        app.closing = True
-        app.exit(143)
-
-    previous = signal.signal(signal.SIGTERM, terminate)
-    try:
-        result = app.run()
-        return int(result) if result is not None else int(app.return_code or 0)
-    finally:
-        signal.signal(signal.SIGTERM, previous)
+    return run_app(create_app(args.port))
 
 
 if __name__ == "__main__":
