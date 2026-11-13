@@ -169,6 +169,31 @@ equivalent to `STRATA_GDN_TC=1` and `STRATA_GDN_CONVL2=2`. The tensor-core path
 needs about 57.5 MiB of extra GPU scratch space. See the
 [kernel review](docs/strata-0.2.9-review.md#qwen-linux-cuda-gdn-defaults).
 
+Add `--tui` to a Qwen or DeepSeek start command to show Strata telemetry:
+
+```bash
+localmodel start qwen3.8 --tui
+# Or, after stopping Qwen:
+localmodel start deepseek --tui
+```
+
+The dashboard opens when the server is ready. Press `q` to close the dashboard
+and keep serving in the same terminal. Press Ctrl-C to stop the server.
+`localmodel stop` also closes the dashboard and stops the server.
+Startup output goes to `state/qwen-console.log` or `state/deepseek-console.log`.
+Use at least 128 columns and 36 rows for the full dashboard.
+The first use installs pinned Textual dependencies in a separate environment.
+The dashboard reads loopback telemetry only. The model's memory cap and outgoing
+network block remain active. Upstream update, prompt-test, and configuration
+controls are not available from this dashboard.
+
+The optional `--cache-reuse-fix` flag selects a separately built Qwen CUDA
+backport. It limits speculative cache commits to the emitted response when
+generation reaches its output limit or EOS. It does not change DeepSeek or fix
+cache invalidation after edits to old conversation messages. Build and rollback
+instructions are in the [backport record](experiments/strata-cache-reuse-20261113/README.md).
+The official executable remains the default.
+
 The Strata 0.2.12 OMP comparison with a 36 GiB resident expert budget reached
 about **185K actual input tokens**.
 MTP4 averaged **52.17 decode tokens/s**. Tuned DFlash2 at confidence 0.8

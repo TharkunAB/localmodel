@@ -9,7 +9,9 @@
     "collab_local.py",
     "presets.py",
     "experiments",
-    "qwen_strata.py"
+    "qwen_strata.py",
+    "strata_monitor.py",
+    "qwen_cache_reuse.py"
   ],
   "exclude": [
     "experiments/**/patches",

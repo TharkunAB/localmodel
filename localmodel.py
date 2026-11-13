@@ -24,6 +24,7 @@ import urllib.request
 import presets
 import deepseek_strata
 import qwen_strata
+import strata_monitor
 
 ROOT = Path(__file__).resolve().parent
 STATE = ROOT / "state"
@@ -566,6 +567,59 @@ def calibrate(args: argparse.Namespace, item: dict[str, Any]) -> None:
     print(f"Saved {output}. Start with --kv-mean-center {output}.")
 
 
+def wait_with_monitor(process: subprocess.Popen[bytes], port: int, console: Path) -> int:
+    """Show telemetry after startup and retain server ownership after detaching."""
+    print(f"Starting Strata. Startup output: {console}", flush=True)
+    monitor: subprocess.Popen[bytes] | None = None
+    try:
+        while process.poll() is None:
+            try:
+                request(port, "/health")
+                break
+            except (OSError, ValueError):
+                time.sleep(0.5)
+        if process.poll() is not None:
+            return process.returncode
+        monitor = subprocess.Popen(strata_monitor.command(port))
+        while process.poll() is None:
+            if monitor.poll() is not None:
+                if monitor.returncode == 130:
+                    raise KeyboardInterrupt
+                if monitor.returncode != 0:
+                    raise RuntimeError(f"The Strata monitor exited with code {monitor.returncode}.")
+                print(f"Monitor detached. Strata is still running. Ctrl-C stops it. Output: {console}", flush=True)
+                return process.wait()
+            time.sleep(0.2)
+        return process.returncode
+    finally:
+        if monitor is not None and monitor.poll() is None:
+            monitor.terminate()
+            try:
+                monitor.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                monitor.kill()
+                monitor.wait()
+        if process.poll() is not None:
+            print(f"Strata exited with code {process.returncode}. Output: {console}", flush=True)
+
+
+def stop_child(process: subprocess.Popen[bytes]) -> None:
+    """Stop the owned server process group before releasing its metadata."""
+    for number, timeout in ((signal.SIGINT, 30), (signal.SIGTERM, 10), (signal.SIGKILL, 5)):
+        if process.poll() is not None:
+            return
+        try:
+            os.killpg(process.pid, number)
+        except ProcessLookupError:
+            return
+        try:
+            process.wait(timeout=timeout)
+            return
+        except subprocess.TimeoutExpired:
+            continue
+    raise RuntimeError(f"The server process group {process.pid} did not stop.")
+
+
 def serve(args: argparse.Namespace, item: dict[str, Any]) -> int:
     """Start one model and retain its metadata until the process stops."""
     strata = qwen_strata if item["runtime"] == "strata-qwen" else deepseek_strata
@@ -601,6 +655,7 @@ def serve(args: argparse.Namespace, item: dict[str, Any]) -> int:
     if args.dry_run:
         if item["runtime"] in ("strata", "strata-qwen"):
             print(json.dumps({"command": command, "settings_profile": args.settings_profile,
+                              **({"monitor_command": strata_monitor.command(args.port)} if args.tui else {}),
                               "configuration": strata.settings(args, item)}, indent=2))
             return 0
         variables = ([f"LLAMA_MTP_CHAIN={environment['LLAMA_MTP_CHAIN']}"] if mtp else [])
@@ -621,6 +676,8 @@ def serve(args: argparse.Namespace, item: dict[str, Any]) -> int:
         prefix = ["env", *unset, *variables] if unset or variables else []
         print(shlex.join(prefix + command))
         return 0
+    if args.tui and not (sys.stdin.isatty() and sys.stdout.isatty()):
+        raise RuntimeError("--tui requires an interactive terminal. Use --dry-run to preview the command.")
     weights = item["mtp_procreations" if args.mtp_head == "procreations" else "mtp"] if args.speculative == "mtp" and item["runtime"] != "strata-qwen" else item
     if not installed(args.model, weights):
         suffix = f" --speculative {args.speculative}" if args.speculative != "none" else ""
@@ -649,7 +706,9 @@ def serve(args: argparse.Namespace, item: dict[str, Any]) -> int:
             if item["runtime"] == "strata":
                 deepseek_strata.check_ready(args.speculative, model=args.model)
             else:
-                qwen_strata.check_ready(args.speculative)
+                qwen_strata.check_ready(args.speculative, args.cache_reuse_fix)
+            if args.tui:
+                strata_monitor.ensure()
             config_name = "qwen-server.json" if item["runtime"] == "strata-qwen" else "deepseek-server.json"
             strata_config = strata.settings(args, item)
             if item["runtime"] == "strata" and strata_config["env"]["STRATA_DS4_SLOT_KEEP"] == "1":
@@ -664,7 +723,10 @@ def serve(args: argparse.Namespace, item: dict[str, Any]) -> int:
             (STATE / config_name).write_text(json.dumps(strata_config, indent=2) + "\n")
         qwen_log = STATE / "qwen-engine.log"
         log_offset = qwen_log.stat().st_size if item["runtime"] == "strata-qwen" and qwen_log.exists() else 0
-        process = subprocess.Popen(command, env=environment, start_new_session=True)
+        console = STATE / ("qwen-console.log" if item["runtime"] == "strata-qwen" else "deepseek-console.log")
+        with console.open("a") if args.tui else nullcontext() as output:
+            process = subprocess.Popen(command, env=environment, start_new_session=True,
+                                       stdout=output, stderr=subprocess.STDOUT if args.tui else None)
         active = STATE / "active.json"
         active.write_text(json.dumps({"pid": process.pid, "controller_pid": os.getpid(), "profile": args.model,
             "command": command,
@@ -685,6 +747,8 @@ def serve(args: argparse.Namespace, item: dict[str, Any]) -> int:
             "speculative": args.speculative, "draft_tokens": args.draft_tokens,
             "draft_conf": (args.draft_conf if args.draft_conf is not None else 0.8) if args.speculative == "dflash2" else None,
             "adaptive_fetch": strata_config.get("adaptive_fetch"),
+            "tui": args.tui,
+            "cache_reuse_fix": args.cache_reuse_fix if item["runtime"] == "strata-qwen" else None,
             "engine_log_offset": log_offset if item["runtime"] == "strata-qwen" else None,
             "dspark_conf": (args.dspark_conf if args.dspark_conf is not None else 0.65) if args.speculative == "dspark" else None,
             "mtp_chain": environment.get("LLAMA_MTP_CHAIN") == "1" if mtp else None,
@@ -724,18 +788,13 @@ def serve(args: argparse.Namespace, item: dict[str, Any]) -> int:
 
         previous_handler = signal.signal(signal.SIGTERM, interrupt)
         try:
-            return process.wait()
+            return wait_with_monitor(process, args.port, console) if args.tui else process.wait()
         except KeyboardInterrupt:
             if process.poll() is not None:
                 return process.returncode
-            os.killpg(process.pid, signal.SIGINT)
-            try:
-                process.wait(timeout=30)
-            except subprocess.TimeoutExpired:
-                os.killpg(process.pid, signal.SIGTERM)
-                process.wait(timeout=10)
             return 130
         finally:
+            stop_child(process)
             signal.signal(signal.SIGTERM, previous_handler)
             if process.poll() is not None:
                 active.unlink(missing_ok=True)
@@ -973,6 +1032,10 @@ def main() -> int:
                        help="Model settings profile (default: default). Flash-Next also supports lowram; dense Qwen supports mtp. Use localmodel list to see available profiles.")
     start.add_argument("--context", "--ctx", type=tokens)
     start.add_argument("--port", type=int, default=8899)
+    start.add_argument("--tui", action="store_true",
+                       help="Show Strata telemetry in this terminal. q detaches; Ctrl-C stops the server.")
+    start.add_argument("--cache-reuse-fix", action=argparse.BooleanOptionalAction, default=False,
+                       help="Use the separately verified Qwen CUDA cache-reuse backport (default: off).")
     start.add_argument("--mem", type=memory_size,
                        help="Hard RAM cap for the model process and its children, including Linux file cache. Bare numbers use GiB, for example --mem 32. Swap is disabled for this process tree. Omit to keep the profile cap. This does not reduce --cache-ram automatically.")
     start.add_argument("--expert-memory", choices=("cache", "resident"),
@@ -1101,6 +1164,10 @@ def main() -> int:
     args.model = ALIASES.get(args.model, args.model)
     if args.model not in models:
         parser.error("Unknown model. Use localmodel list.")
+    if getattr(args, "tui", False) and models[args.model]["runtime"] not in ("strata", "strata-qwen"):
+        parser.error("--tui requires a Strata model.")
+    if getattr(args, "cache_reuse_fix", False) and args.model != qwen_strata.NAME:
+        parser.error("--cache-reuse-fix requires Strata Qwen.")
     if args.action in ("start", "serve") and args.settings_profile != "default":
         profiles = models[args.model].get("profiles", {})
         if args.settings_profile not in profiles:
