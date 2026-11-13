@@ -348,6 +348,10 @@ localmodel start qwen3.8 --ple-io mmap
 Stop the first server before starting another. These overrides are tuning
 examples, not claims that they outperform the defaults.
 
+The [November 13 Edge0 145B experiment](edge0-20261113.md) records three
+configurations on this GPU. The tested Q3_K/Q4 D/U configurations did not
+complete the OMP task. Qwen Flash-Next remains the normal choice.
+
 ## Set up Qwen3.8 27B
 
 `qwen3.8-27b` selects the dense model with the November 11 Unsloth Dynamic 3.1
