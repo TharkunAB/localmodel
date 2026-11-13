@@ -191,11 +191,11 @@ removes the shared table instead. Omit `--dry-run` from a reviewed removal
 command to delete its selected files.
 
 The larger quants have 42.87 GiB and 46.84 GiB of expert tensor data, respectively.
-Q2_K_XL defaults to a 48 GiB expert budget inside the 64 GiB process cap.
-The measured allocation was 42.44 GiB, including all prefill copies. It passed
+All Qwen quants default to a 48 GiB expert budget inside the 64 GiB process cap.
+Q2_K_XL's measured allocation was 42.44 GiB, including all prefill copies. It passed
 the repair, recall, and compaction checks through about 245K input tokens,
 with 39.32 tokens/s repair/resume decode. Compaction took 221.17 seconds.
-IQ1_M and IQ3_XXS retain a 36 GiB default. IQ3_XXS measurements are pending.
+IQ1_M and IQ3_XXS measurements at the new budget are pending.
 Use `--expert-ram-gb` to override the budget. The `lowram` profile still uses zero.
 Their size and SHA256 pins are recorded in `experiments/qwen-strata/q2_k_xl.json`
 and `iq3_xxs.json`. Both use Unsloth revision
@@ -210,7 +210,7 @@ localmodel start qwen3.8
 ```
 
 Fetch also prepares the Qwen engine and MTP artifacts. The IQ1_M defaults are
-**256K context, a 64K GPU KV window, a 64 GiB process cap, a 36 GiB resident
+**256K context, a 64K GPU KV window, a 64 GiB process cap, a 48 GiB resident
 expert budget, INT8 KV, four draft tokens, and a 1024 MiB VRAM reserve**.
 Adaptive fetch is off with resident experts.
 The rest of the KV cache uses RAM. Strata's native speculation value includes

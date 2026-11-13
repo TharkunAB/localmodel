@@ -843,7 +843,8 @@ def stop() -> None:
 def stats_text() -> str:
     """Show recorded measurements without starting a model."""
     return ("2026-11-13 Qwen Flash-Next IQ1_M v3.1, Strata 0.2.13/native 0.1.59, MTP4, 64G cap.\n"
-            "Defaults: Q8_0 Engram and 256K context. --engram iq4_nl selects the smaller bundled table; --context 192k restores the smaller capacity.\n"
+            "Defaults: Q8_0 Engram, 256K context and a 48 GiB expert budget for all Qwen quants. The following earlier runs used 36 GiB.\n"
+            "--engram iq4_nl selects the smaller bundled table; --context 192k restores the smaller capacity.\n"
             "Conversations through 64K: bundled table at 192/256K decoded at 51.35/51.75; Q8_0 at 51.23/53.82 tok/s.\n"
             "Q8_0 long conversations: 184030 input, 50.36 tok/s; 245433 input, 49.30 tok/s. All code/recall checks pass.\n"
             "256K uses 0.77 GiB more pinned host KV with the same 64K GPU window. Q8 adds 50.66 GiB disk and 80 MiB table-cache data.\n"
@@ -889,7 +890,7 @@ def stats_text() -> str:
             "One recovered read('.') refusal came from the unchanged benchmark guard. See docs/deepseek-full-0.2.12.md.\n\n"
             "2026-11-07 Strata 0.2.12 / native 0.1.58 comparison; 64G cap and zero swap.\n"
             "Qwen Unsloth IQ1_M, 192K capacity: normal default MTP4; optional tuned DFlash2 uses 5 drafts and confidence 0.8.\n"
-            "Qwen default: 36 GiB resident expert budget, adaptive fetch off. lowram profile: mapped experts, zero dedicated expert RAM, adaptive fetch 1. Both use a 64G cap.\n"
+            "Measured Qwen setting: 36 GiB resident expert budget, adaptive fetch off. lowram profile: mapped experts, zero dedicated expert RAM, adaptive fetch 1. Both use a 64G cap.\n"
             "Resident experts, growing 16K/32K/64K OMP: MTP4 53.63 decode / 1319.75 new-prefill tok/s; DFlash2 58.57 / 1452.02.\n"
             "Resident experts, matched 16K/64K/128K/180K: MTP4 52.17 decode / 1545.45 prefill; DFlash2 58.41 / 1701.80.\n"
             "Maximum actual input 185243 / 185415; both pass all code, recall, tool and strict JSON checks.\n"
@@ -1081,7 +1082,7 @@ def main() -> int:
     start.add_argument("--expert-memory", choices=("cache", "resident"),
                        help="DeepSeek CPU expert storage (default: profile). cache uses --expert-ram-gb. resident copies variable-size experts within the native RAM allowance, with an 8 GiB margin. Remaining experts and Engram can still use SSD.")
     start.add_argument("--expert-ram-gb", type=float,
-                       help="Strata expert RAM budget in GiB, inside --mem (Coder: 0; deepseek-full: 48; Qwen Q2_K_XL: 48; other Qwen quants: 36; lowram: 0). Zero leaves CPU expert caching to Linux. With --expert-memory resident, omit this flag or use 0. Separate from llama.cpp --cache-ram.")
+                       help="Strata expert RAM budget in GiB, inside --mem (Coder: 0; deepseek-full and all Qwen quants: 48; lowram: 0). Zero leaves CPU expert caching to Linux. With --expert-memory resident, omit this flag or use 0. Separate from llama.cpp --cache-ram.")
     start.add_argument("--cpu-threads", type=int, help="Strata CPU expert workers, 0-64 (DeepSeek default: 12; Qwen: automatic). 0 selects the automatic count. Qwen also uses the host thread. I/O threads are separate.")
     start.add_argument("--strata-slots", action=argparse.BooleanOptionalAction, default=None,
                        help="Retain DeepSeek Strata conversation checkpoints (default: on). Keeps one saved conversation in RAM and a 2 GiB disk-cache budget per weights/runtime/context configuration.")

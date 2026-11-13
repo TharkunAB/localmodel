@@ -230,8 +230,7 @@ def settings(args: argparse.Namespace, item: dict[str, Any]) -> dict[str, Any]:
     if args.replay or args.gdn_mma is not None:
         raise RuntimeError("Replay and GDN MMA controls require a Bonsai runtime.")
     quant = getattr(args, "quant", None) or "iq1_m"
-    default_ram = 48 if quant == "q2_k_xl" else 36
-    ram = args.expert_ram_gb if args.expert_ram_gb is not None else default_ram
+    ram = args.expert_ram_gb if args.expert_ram_gb is not None else 48
     adaptive = getattr(args, "adaptive_fetch", None)
     if adaptive is None:
         adaptive = 1 if ram == 0 else 0
