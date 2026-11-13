@@ -271,6 +271,10 @@ def settings(args: argparse.Namespace, item: dict[str, Any]) -> dict[str, Any]:
                    "--prefill", "auto" if chunk is None else str(chunk),
                    "--spec", str(drafts + 1), "--suffix-draft", "3" if args.prompt_lookup else "0",
                    "--max-context", str(context), "--kv", "int8", "--vram-reserve-mib", str(reserve)]
+    if engram == "q8_0":
+        # Keep the standalone PLE table out of the original dense shard set.
+        for entry in info["files"]:
+            native_args += ["--native-dense-gguf", str(Path(info["model_directory"]) / entry["name"])]
     native_args += ["--mmap-experts"] if ram == 0 else ["--resident-budget-gib", str(ram)]
     if dflash:
         native_args += ["--draft", "dflash2", "--draft-model",
