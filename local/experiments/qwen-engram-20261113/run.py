@@ -267,6 +267,19 @@ def compaction_probe(benchmark: Any) -> Record:
     config = json.loads(config_path.read_text())
     config['compaction']['enabled'] = True
     save(config_path, config)
+    private_path = WORK / 'state/omp-local/agent/config.yml'
+    if private_path.with_suffix('.yaml').exists():
+        raise RuntimeError('The benchmark expects its JSON-formatted private config.yml, not config.yaml.')
+    private_config = json.loads(private_path.read_text())
+    previously_enabled = private_config.get('compaction', {}).get('enabled')
+    private_config.setdefault('compaction', {})['enabled'] = True
+    save(private_path, private_config)
+    private_evidence = {'path': str(private_path), 'previously_enabled': previously_enabled,
+                        'enabled': json.loads(private_path.read_text())['compaction']['enabled'],
+                        'method_order': private_config['compaction'].get('methodOrder'),
+                        'model_thresholds': json.loads((WORK / 'state/omp-local/launcher.yml').read_text())
+                            .get('compaction', {}).get('modelThresholds', {})}
+    save(WORK / 'compaction-effective-config.json', private_evidence)
     before = len(benchmark.session.read_text().splitlines())
     target = benchmark.targets[-1]
     prompt = ('Resume the last checkpoint after automatic maintenance. Do not use tools. Return only JSON with '
@@ -281,7 +294,8 @@ def compaction_probe(benchmark: Any) -> Record:
         passed = json.loads(result['answer'].strip()) == expected and not result['tools']
     except ValueError:
         passed = False
-    return {**result, 'attempted': True, 'observed': bool(entries or evidence), 'events': evidence,
+    return {**result, 'attempted': True, 'observed': bool(entries), 'events': evidence,
+            'effective_private_config': private_evidence,
             'entry_types': [entry['type'] for entry in entries], 'retention_passed': passed,
             'note': 'Automatic maintenance uses normal OMP thresholds. A successful recall without an observed compaction is not a compaction result.'}
 
