@@ -845,12 +845,14 @@ Create a source-only archive from the committed repository root:
 
 ```bash
 cd ~/Code/local-models
-mkdir -p dist
+mkdir -p local/dist
 git archive --format=tar.gz --prefix=local-models/ \
-  --output=dist/local-models.tar.gz HEAD
+  --output=local/dist/local-models.tar.gz HEAD
 ```
 
 The archive contains committed files only. It has no models or conversations.
+CMake build caches can retain absolute paths after a directory move. Reconfigure
+the build cache before rebuilding. Keep the verified binaries and build receipts.
 See the [OpenCode](#optional-opencode) and
 [private collaboration](#optional-private-collaboration) setup sections above.
 Older Dory and legacy Bonsai profiles require
