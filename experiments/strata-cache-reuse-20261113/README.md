@@ -70,6 +70,55 @@ The CPU test and linker check establish bounded build evidence. They do not
 establish GPU correctness, emitted-token identity, or faster continuation.
 HIP, SYCL, Metal, and multi-GPU builds are outside this local backport check.
 
+## Local validation, November 13
+
+The guarded check used Unsloth IQ1_M, MTP4, 192K context capacity, a 64K GPU
+KV window, 36 GiB of resident expert budget, and a 64 GiB process cap.
+The first request contained 12,004 tokens. Sixteen requests used output limits
+of 1 to 16 tokens. The later requests grew to 12,475 input tokens.
+The candidate with the fix off, the candidate with it on, and the official
+binary each received the same recorded request bodies.
+
+All 16 outputs and output token-byte sequences matched across the three runs.
+Each run emitted 29 tokens in total. These truncated responses were code
+fences, so this sequence does not establish coding quality.
+The fix changed accepted draft rows from 12 of 28 to zero of 28 in this
+sequence. This confirms that it excludes rows beyond the output boundary.
+It did not disable MTP: a separate normal-budget request accepted 24 of 40
+drafts and returned the expected TypeScript sum function. The official binary
+returned the same complete function.
+
+All runs retained the long prefix. Continuations read 449 fresh tokens with
+the fix off and 459 with it on. The official binary matched the off case.
+This workload did not reproduce a full-prefix fallback or show a cache-reuse
+gain. The official executable remains the default. Use the verified candidate
+explicitly when needed:
+
+```sh
+localmodel start qwen3.8 --cache-reuse-fix --tui
+```
+
+A separate GHC build was active. The runs are correctness checks, not clean
+speed measurements. Peak model cgroup memory was approximately 64 GiB.
+Every run had zero swap and zero OOM events. Available Linux memory stayed
+above 61 GiB. The native processes retained the outgoing-network filter.
+All three controllers stopped and the previous server configuration was
+restored. Evidence and both driver versions are under
+`results/strata-cache-reuse-20261113/`.
+
+The initial runner mistook the idle Ollama service for an active model.
+The corrected check requires its `/api/ps` result to contain no loaded models.
+The first inter-run port check also rejected a socket in TIME_WAIT. It now
+checks for a listening server. These runner corrections did not change
+the request bodies, candidate executable, or inference settings.
+
+The live `--tui` check received telemetry from Qwen at the normal settings.
+Pressing `q` retained the server and its metadata. The terminal modes and
+alternate screen were restored. `localmodel stop` then stopped the controller
+and native engine. The previous configuration was restored. Separate PTY and
+fake-server checks covered Ctrl-C, external termination, startup failure,
+monitor failure, and server exit. Strict Pyright passed for the changed modules.
+
 The 2026-11-13 build passed all 171 compilation steps and peaked at 4,018 MiB.
 The final incremental link pass peaked at 253 MiB. Both runs exited with code
 zero. The effective memory limit was 16 GiB with zero swap. Readiness verified
