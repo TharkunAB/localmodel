@@ -24,6 +24,11 @@ BUILD = ROOT / 'state/builds/edge0-da9cc526'
 BINARY = BUILD / 'native/strata'
 MODEL = ROOT / 'models/edge0-145b-q3k'
 NAME = 'edge0-145b'
+MODES = {
+    'plain': {'draft_tokens': 0, 'vram_reserve_mib': 800, 'kv_vram_cells': 32768},
+    'mtp': {'draft_tokens': 3, 'vram_reserve_mib': 300, 'kv_vram_cells': 32768},
+    'mtp-small': {'draft_tokens': 3, 'vram_reserve_mib': 550, 'kv_vram_cells': 20480},
+}
 PYTHON = ROOT / 'state/venvs/strata-official-0.2.8/bin/python'
 sys.path.insert(0, str(ROOT))
 import localmodel
@@ -51,21 +56,29 @@ def protect_parent(expected: int) -> None:
         raise RuntimeError('The benchmark parent changed before Edge0 startup.')
 
 
-def configuration(context: int, output: Path, seed: int) -> dict[str, Any]:
+def configuration(context: int, output: Path, seed: int, mode: str = 'plain') -> dict[str, Any]:
     """Use explicit reviewed flags; do not execute downloaded model configuration."""
+    selected = MODES[mode]
+    drafts = selected['draft_tokens']
     args = ['--pack', str(MODEL), '--native', str(MODEL / 'model-skeleton.gguf'),
             '--native-dense-gguf', str(MODEL / 'model-skeleton.gguf'),
             '--ple-gguf', str(MODEL / 'ple-fp8.gguf'), '--ple-io', 'direct',
             '--expert-profile', str(output / 'profile.bin'), '--expert-cache', 'auto',
-            '--prefill', 'auto', '--spec', '4', '--spec-min-p', '0.5', '--mtp', str(MODEL / 'mtp'),
-            '--max-context', str(context), '--kv', 'int8', '--kv-resident', '32768',
-            '--resident-budget-gib', '40', '--vram-reserve-mib', '1024', '--suffix-draft', '0']
+            '--prefill', 'auto', '--spec', str(max(2, drafts + 1)),
+            '--max-context', str(context), '--kv', 'int8', '--kv-resident', str(selected['kv_vram_cells']),
+            '--resident-budget-gib', '40', '--vram-reserve-mib', str(selected['vram_reserve_mib']),
+            '--suffix-draft', '0', '--lookup-chain', '0']
+    if drafts:
+        args += ['--spec-min-p', '0.5', '--mtp', str(MODEL / 'mtp')]
+    if mode == 'mtp-small':
+        args += ['--mtp-draft-vocab', str(SOURCE / 'data/draft_vocab_en.bin')]
     env = {'STRATA_LATENT_A': str(MODEL / 'experts.bin'), 'STRATA_LATENT_LABELS': str(MODEL / 'labels.bin'),
            'STRATA_LATENT_DENSE': str(MODEL / 'latent_dense_q4.bin'), 'STRATA_LATENT_DENSE_FMT': '4',
-           'STRATA_EMBED_VRAM': '1', 'STRATA_LATENT_FUSED': '1', 'STRATA_LATENT_FUSED_DU': '1',
-           'STRATA_LATENT_U_GPU': '1', 'STRATA_LAT_FUSED_Q3K': '1'}
+           'STRATA_EMBED_VRAM': '0', 'STRATA_LATENT_FUSED': '1', 'STRATA_LATENT_FUSED_DU': '1',
+           'STRATA_LATENT_U_GPU': '1', 'STRATA_LAT_FUSED_Q3K': '1', 'STRATA_ROUTE_TAIL_SKIP': '0'}
     return {'exe': str(BINARY), 'args': args, 'cwd': str(SOURCE), 'tokenizer': str(MODEL / 'tokenizer'),
-            'model_name': NAME, 'arch': 'qwen4exp', 'gpu': [0], 'drafting': 'mtp', 'mtp': True,
+            'model_name': NAME, 'arch': 'qwen4exp', 'gpu': [0], 'drafting': 'mtp' if drafts else 'off',
+            'mtp': bool(drafts), 'experiment_mode': mode,
             'log': str(output / 'engine.log'), 'env': env, 'sampling': {'temperature': 1, 'top_p': 0.95, 'seed': seed},
             'fit_max_tokens': True, 'api_monitor': False, 'open_browser': False}
 
@@ -95,13 +108,14 @@ def verify() -> dict[str, Any]:
     return proof
 
 
-def run(context: int, output: Path, seed: int) -> int:
+def run(context: int, output: Path, seed: int, mode: str = 'plain') -> int:
     """Own one API process and its scope until cleanup finishes."""
     controller_scope = shared.scope_for(os.getpid())
     maximum = (controller_scope / 'memory.max').read_text().strip()
     if maximum == 'max' or int(maximum) > 4 * 2**30 or (controller_scope / 'memory.swap.max').read_text().strip() != '0':
         raise RuntimeError('Start Edge0 through run.py so its controller has a 4 GiB no-swap limit.')
     setattr(shared, 'WORK', output)
+    selected = MODES[mode]
     active = ROOT / 'state/active.json'
     with (ROOT / 'state/server.lock').open('a') as lock, (ROOT / 'state/models-edge0.lock').open('a') as model_lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -120,7 +134,7 @@ def run(context: int, output: Path, seed: int) -> int:
                       (HERE / 'run.py', HERE / 'server.py', shared.FIXTURE,
                        ROOT / 'experiments/qwen-engram-20261113/run.py', ROOT / 'config/omp-runtime.json')},
             'expert_profile_sha256': shared.digest(output / 'profile.bin')})
-        shared.save(output / 'launch-config.json', configuration(context, output, seed))
+        shared.save(output / 'launch-config.json', configuration(context, output, seed, mode))
         env = {key: value for key, value in os.environ.items() if not key.startswith(('STRATA_', 'MAYA_', 'DS4_'))}
         env.pop('CAPPED_UNIT', None)
         env.pop('LD_PRELOAD', None)
@@ -148,8 +162,9 @@ def run(context: int, output: Path, seed: int) -> int:
                 raise RuntimeError('The Edge0 API did not establish its memory and no-swap limits.')
             shared.save(active, {'pid': process.pid, 'controller_pid': os.getpid(), 'command': command,
                 'model': NAME, 'profile': NAME, 'runtime': 'strata-edge0', 'port': 8899, 'context': context,
-                'memory_limit': '64G', 'speculative': 'mtp', 'draft_tokens': 3, 'kv_cache': 'int8',
-                'kv_vram_cells': 32768, 'expert_ram_gb': 40, 'vram_reserve_mib': 1024,
+                'settings_profile': mode, 'memory_limit': '64G',
+                'speculative': 'mtp' if selected['draft_tokens'] else 'none', 'kv_cache': 'int8',
+                'expert_ram_gb': 40, 'expert_tail_skip': 0, **selected,
                 'reasoning_effort': 'xhigh', 'started': time.time()})
             return process.wait()
         finally:
@@ -175,6 +190,7 @@ def main() -> int:
     parser.add_argument('--context', type=localmodel.tokens, default=32768)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--seed', type=int, default=20261113)
+    parser.add_argument('--mode', choices=MODES, default='plain')
     parser.add_argument('--controller-marker', type=Path, required=True)
     parser.add_argument('--parent-pid', type=int, required=True)
     parser.add_argument('--run', action='store_true')
@@ -182,10 +198,10 @@ def main() -> int:
     if args.controller_marker != ROOT / 'localmodel.py' or args.context not in (32768, 196608, 262144):
         parser.error('Use the real localmodel controller marker and context 32K, 192K or 256K.')
     if not args.run:
-        print(json.dumps(configuration(args.context, args.output.absolute(), args.seed), indent=2))
+        print(json.dumps(configuration(args.context, args.output.absolute(), args.seed, args.mode), indent=2))
         return 0
     protect_parent(args.parent_pid)
-    return run(args.context, args.output.absolute(), args.seed)
+    return run(args.context, args.output.absolute(), args.seed, args.mode)
 
 
 if __name__ == '__main__':

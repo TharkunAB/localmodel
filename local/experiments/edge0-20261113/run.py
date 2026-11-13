@@ -42,9 +42,12 @@ def capped() -> None:
 def measure(args: argparse.Namespace, output: Path, targets: list[int]) -> None:
     preflight = shared.admission(args.quiet_seconds)
     WORK.mkdir()
-    report: Record = {'status': 'starting', 'model': server.NAME, 'case': args.case, 'seed': args.seed,
+    selected = server.MODES[args.mode]
+    speculative = 'mtp' if selected['draft_tokens'] else 'none'
+    report: Record = {'status': 'starting', 'model': server.NAME, 'case': args.case, 'seed': args.seed, 'mode': args.mode,
                      'context_capacity_tokens': args.context, 'targets': targets, 'memory_cap_gib': 64,
-                     'expert_cache_gib': 40, 'speculative': 'mtp', 'draft_tokens': 3, 'preflight': preflight}
+                     'expert_cache_gib': 40, 'speculative': speculative, 'expert_tail_skip': 0,
+                     **selected, 'preflight': preflight}
     protected = [Path.home() / '.omp/agent' / name for name in ('config.yml', 'config.yaml')]
     protected += [ROOT / 'state' / launcher / 'agent' / name
                   for launcher in ('omp-local', 'omp-remote') for name in ('config.yml', 'config.yaml')]
@@ -63,7 +66,7 @@ def measure(args: argparse.Namespace, output: Path, targets: list[int]) -> None:
     env.pop('CAPPED_UNIT', None)
     command = [str(server.PYTHON), '-B', str(HERE / 'server.py'), '--run', '--context', str(args.context),
                '--output', str(WORK), '--seed', str(args.seed), '--controller-marker', str(ROOT / 'localmodel.py'),
-               '--parent-pid', str(os.getpid())]
+               '--parent-pid', str(os.getpid()), '--mode', args.mode]
     shared.save(WORK / 'command.json', command)
     try:
         if shared.alive(8888):
@@ -103,6 +106,10 @@ def measure(args: argparse.Namespace, output: Path, targets: list[int]) -> None:
                 time.sleep(2)
         if status['model'] != server.NAME or status['context'] != args.context or status.get('runtime') != 'strata-edge0':
             raise RuntimeError('Live model identity or context differs from the Edge0 case.')
+        if (status.get('settings_profile') != args.mode or status.get('speculative') != speculative
+                or any(status.get(key) != value for key, value in selected.items())
+                or status.get('expert_tail_skip') != 0):
+            raise RuntimeError('Live Edge0 settings differ from the selected experiment mode.')
         status['backend'] = 'strata'
         if guard.scope is None:
             raise RuntimeError('The Edge0 64 GiB model scope was not observed.')
@@ -110,8 +117,11 @@ def measure(args: argparse.Namespace, output: Path, targets: list[int]) -> None:
         if report['limits'] != {'memory.max': str(64 * 2**30), 'memory.swap.max': '0'}:
             raise RuntimeError('Edge0 model memory limits differ from the plan.')
         log = (WORK / 'engine.log').read_text()
-        if 'strata mtp: draft layer loaded,' not in log or 'without draft layer' in log or 'without the draft layer' in log:
+        loaded = 'strata mtp: draft layer loaded,' in log
+        if selected['draft_tokens'] and (not loaded or 'without draft layer' in log or 'without the draft layer' in log):
             raise RuntimeError('Edge0 did not load the requested MTP layer.')
+        if not selected['draft_tokens'] and loaded:
+            raise RuntimeError('Plain Edge0 unexpectedly loaded an MTP layer.')
         report.update(live=status, startup_seconds=time.monotonic() - started)
         guard.ready = True
         fixture = shared.load('edge_filled', shared.FIXTURE)
@@ -126,7 +136,8 @@ def measure(args: argparse.Namespace, output: Path, targets: list[int]) -> None:
                 raise RuntimeError('The public extension corpus changed.')
             benchmark.corpus += '\nPublic source: strata expert_source.cpp\n' + shared.EXTRA.read_text()
             benchmark.report['sources'].append({'path': str(shared.EXTRA), 'sha256': shared.EXTRA_SHA})
-        benchmark.report.update(engine_version='edge0-da9cc526', expert_cache_gib=40, speculative='mtp')
+        benchmark.report.update(engine_version='edge0-da9cc526', expert_cache_gib=40,
+                                speculative=speculative, mode=args.mode, **selected)
         original = benchmark.run_omp
         def run_omp(prompt: str, phase: str, capture: bool = False) -> Record:
             result: Record = original(prompt, phase, capture)
@@ -140,9 +151,14 @@ def measure(args: argparse.Namespace, output: Path, targets: list[int]) -> None:
             report['compaction'] = shared.compaction_probe(benchmark)
         native = [json.loads(line) for line in (WORK / 'metrics-requests.jsonl').read_text().splitlines()]
         report.update(drafts_offered=sum(row.get('drafts_offered') or 0 for row in native),
-                      drafts_accepted=sum(row.get('drafts_accepted') or 0 for row in native))
-        if not report['drafts_offered'] or not report['drafts_accepted']:
+                      drafts_accepted=sum(row.get('drafts_accepted') or 0 for row in native),
+                      draft_counter_requests=sum(row.get('drafts_offered') is not None for row in native))
+        if not report['draft_counter_requests']:
+            raise RuntimeError('No native draft counters were recorded; zero drafts cannot be verified.')
+        if selected['draft_tokens'] and (not report['drafts_offered'] or not report['drafts_accepted']):
             raise RuntimeError('No positive native MTP offered/accepted counters were recorded.')
+        if not selected['draft_tokens'] and (report['drafts_offered'] or report['drafts_accepted']):
+            raise RuntimeError('Plain Edge0 unexpectedly offered or accepted speculative drafts.')
         report['status'] = 'completed'
     except BaseException as error:
         report.update(status='failed', error=str(error))
@@ -217,6 +233,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--context', type=server.localmodel.tokens, choices=(32768, 196608, 262144), default=32768)
     parser.add_argument('--case', choices=('short', 'matched64', 'long'), default='short')
+    parser.add_argument('--mode', choices=server.MODES, default='plain')
     parser.add_argument('--seed', type=int, default=20261113)
     parser.add_argument('--timeout', type=int, default=1200)
     parser.add_argument('--quiet-seconds', type=int, default=20)
@@ -227,18 +244,29 @@ def main() -> None:
                else [16384, 65536, 131072, 184320 if args.context == 196608 else 245760])
     if args.timeout < 60 or args.quiet_seconds < 10 or any(target + 4096 > args.context for target in targets):
         parser.error('Use a sufficient context, timeout >= 60 and quiet-seconds >= 10.')
-    output = BASE / f'q3k-q4-{args.context}-{args.case}-{args.seed}'
+    output = BASE / f'q3k-q4-{args.mode}-{args.context}-{args.case}-{args.seed}'
     if not args.run and not args.selftest:
-        print(json.dumps({'starts_inference': False, 'targets': targets, 'output': str(output),
-                          'configuration': server.configuration(args.context, WORK, args.seed)}, indent=2))
+        print(json.dumps({'starts_inference': False, 'mode': args.mode, 'targets': targets, 'output': str(output),
+                          'configuration': server.configuration(args.context, WORK, args.seed, args.mode)}, indent=2))
         return
     capped()
     if args.selftest:
         assert shared.guard_reason({'linux_available_bytes': 7 * 2**30})
-        config = server.configuration(32768, WORK, args.seed)
-        assert config['model_name'] == 'edge0-145b' and config['args'][config['args'].index('--spec') + 1] == '4'
-        assert config['env']['STRATA_LATENT_DENSE_FMT'] == '4' and config['api_monitor'] is False
-        print('CPU-only plan and guard checks passed. No GPU or model was queried.')
+        for mode, selected in server.MODES.items():
+            config = server.configuration(32768, WORK, args.seed, mode)
+            options = config['args']
+            assert config['model_name'] == 'edge0-145b' and config['experiment_mode'] == mode
+            assert options[options.index('--spec') + 1] == str(max(2, selected['draft_tokens'] + 1))
+            assert options[options.index('--suffix-draft') + 1] == '0'
+            assert options[options.index('--lookup-chain') + 1] == '0'
+            assert ('--mtp' in options) == bool(selected['draft_tokens']) == config['mtp']
+            assert config['drafting'] == ('mtp' if selected['draft_tokens'] else 'off')
+            assert options[options.index('--vram-reserve-mib') + 1] == str(selected['vram_reserve_mib'])
+            assert options[options.index('--kv-resident') + 1] == str(selected['kv_vram_cells'])
+            assert ('--mtp-draft-vocab' in options) == (mode == 'mtp-small')
+            assert config['env']['STRATA_ROUTE_TAIL_SKIP'] == '0'
+            assert config['env']['STRATA_EMBED_VRAM'] == '0' and config['env']['STRATA_LATENT_U_GPU'] == '1'
+        print('CPU-only checks passed for plain, mtp and mtp-small. No GPU or model was queried.')
         return
     BASE.mkdir(parents=True, exist_ok=True)
     with (BASE / 'benchmark.lock').open('a') as lock:
