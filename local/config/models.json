@@ -225,7 +225,7 @@
   "qwen3.8": {
     "alias": "qwen3.8",
     "runtime": "strata-qwen",
-    "context": 196608,
+    "context": 262144,
     "kv_cache": "int8",
     "kv_vram_cells": 65536,
     "draft_tokens": 4,

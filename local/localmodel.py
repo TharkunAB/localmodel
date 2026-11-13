@@ -834,7 +834,7 @@ def stop() -> None:
 def stats_text() -> str:
     """Show recorded measurements without starting a model."""
     return ("2026-11-13 Qwen Flash-Next IQ1_M v3.1, Strata 0.2.13/native 0.1.59, MTP4, 64G cap.\n"
-            "Q8_0 Engram is now the default; --engram iq4_nl selects the smaller bundled table. Context remains 192K.\n"
+            "Defaults: Q8_0 Engram and 256K context. --engram iq4_nl selects the smaller bundled table; --context 192k restores the smaller capacity.\n"
             "Conversations through 64K: bundled table at 192/256K decoded at 51.35/51.75; Q8_0 at 51.23/53.82 tok/s.\n"
             "Q8_0 long conversations: 184030 input, 50.36 tok/s; 245433 input, 49.30 tok/s. All code/recall checks pass.\n"
             "256K uses 0.77 GiB more pinned host KV with the same 64K GPU window. Q8 adds 50.66 GiB disk and 80 MiB table-cache data.\n"

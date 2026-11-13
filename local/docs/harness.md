@@ -176,7 +176,7 @@ localmodel start qwen3.8
 ```
 
 Fetch also prepares the Qwen engine and MTP artifacts. The defaults are
-**192K context, a 64K GPU KV window, a 64 GiB process cap, a 36 GiB resident
+**256K context, a 64K GPU KV window, a 64 GiB process cap, a 36 GiB resident
 expert budget, INT8 KV, four draft tokens, and a 1024 MiB VRAM reserve**.
 Adaptive fetch is off with resident experts.
 The rest of the KV cache uses RAM. Strata's native speculation value includes
@@ -269,8 +269,10 @@ The [earlier reserve comparison](qwen-unsloth-192k.md) and
 [Qwen and DeepSeek comparison](local-192k-comparison.md) retain the
 Strata 0.2.11 results.
 
-OMP discovers the 192K capacity and normally compacts near 157K input.
-The benchmark disabled automatic compaction to test the larger input directly.
+OMP discovers the served capacity. At the 256K default, its normal compaction
+threshold is 209,715 input tokens. Use `--context 192k` for the smaller capacity;
+OMP then uses a 157,286-token threshold. The filled-context benchmarks disabled
+automatic compaction during the repair checks and tested compaction separately.
 The [previous ISTA measurements](qwen-0.2.11-tuning.md) remain available.
 They are not a matched quantization comparison after the VM move and changes
 in desktop VRAM use.

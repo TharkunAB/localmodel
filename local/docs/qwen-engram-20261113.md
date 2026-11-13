@@ -6,12 +6,12 @@ Both table variants have 320,001,536 rows of 160 values. Q8_0 changes the precis
 
 The table is pinned to Unsloth revision `f5d175de2cf7f720d45d6064019a81fcf056e986`. Its size is 54,400,261,312 bytes and its SHA256 is `e3d76a2747c1fe53e3420d1bb7fd9593aafd03035fee4926317db80ad5c5296a`. Download verification established the file hash. The startup check verifies the recorded file identity and its Q8_0 tensor header. The file remains byte-for-byte unchanged. It is a standalone GGUF table, so the launcher passes all three original core shards explicitly through `--native-dense-gguf` and selects the table through `--ple-gguf`. This avoids using the standalone table as the original dense shard set. Native startup logs confirm the selected table path and the loaded MTP layer. The pin and checks are in `local/qwen_engram.py`; the installed receipt is `local/models/qwen38-engram/q8_0/verification.json`.
 
-The user selected Q8_0 as the start/fetch default. Context remains 192K. Use `--engram iq4_nl` for the smaller bundled table; explicit `--engram q8_0` also works. The recorded `default192` and `default256` cases refer to the previous IQ4_NL default.
+The user selected Q8_0 as the start/fetch default and 256K as the context default. Use `--context 192k` for the smaller capacity. Use `--engram iq4_nl` for the smaller bundled table; explicit `--engram q8_0` also works. The recorded `default192` and `default256` cases refer to the previous IQ4_NL default.
 
 ```sh
 localmodel fetch qwen3.8
 localmodel start qwen3.8
-localmodel start qwen3.8 --context 256k
+localmodel start qwen3.8 --context 192k
 localmodel start qwen3.8 --engram iq4_nl
 ```
 
