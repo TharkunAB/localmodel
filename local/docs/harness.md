@@ -164,6 +164,9 @@ This is a separate configuration; it does not reproduce the optimized timings.
 official Qwen MTP layer and the separate **Q8_0 Engram table**.
 The separate `qwen3.8-27b` option uses the dense model.
 
+The [Engram and context measurements](qwen-engram-20261113.md) cover both table
+precisions, 192K and 256K capacities, filled conversations, and compaction.
+
 ```bash
 bin/setup-localmodel --strata --dry-run
 bin/setup-localmodel --strata --run
