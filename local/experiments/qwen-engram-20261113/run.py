@@ -516,7 +516,7 @@ def benchmark_case(args: argparse.Namespace, output: Path, context: int, engram:
 def main() -> None:
     global WORK
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--quant', choices=localmodel.qwen_strata.QUANTS, default='iq1_m')
+    parser.add_argument('--quant', choices=localmodel.qwen_strata.QUANTS, default=None)
     parser.add_argument('--expert-ram-gb', type=float, default=36)
     parser.add_argument('--arm', choices=ARMS, default='default192')
     parser.add_argument('--case', choices=('matched64', 'long'), default='matched64')
@@ -527,6 +527,8 @@ def main() -> None:
     parser.add_argument('--selftest', action='store_true')
     parser.add_argument('--run', action='store_true')
     args = parser.parse_args()
+    explicit_quant = args.quant is not None
+    args.quant = args.quant or 'iq1_m'
     if args.selftest:
         safe = {'linux_available_bytes': 9 * 2**30, 'model_memory': {'memory.swap.current': '0', 'memory.events': 'max 12\noom 0\noom_kill 0\n'}}
         assert guard_reason(safe) is None
@@ -540,7 +542,7 @@ def main() -> None:
         parser.error('Use repeat >= 1, timeout >= 60, and quiet-seconds >= 10.')
     if not math.isfinite(args.expert_ram_gb) or not 0 <= args.expert_ram_gb < 64:
         parser.error('Use a finite expert RAM budget of at least 0 and below the 64 GiB model cap.')
-    quant_study = args.quant != 'iq1_m' or args.expert_ram_gb != 36
+    quant_study = explicit_quant or args.expert_ram_gb != 36
     base = ROOT / 'results' / ('qwen-quants-20261113' if quant_study else 'qwen-engram-20261113')
     # Keep the workspace hook used by the shared guard and cleanup functions.
     WORK = base / 'work'  # pyright: ignore[reportConstantRedefinition]
