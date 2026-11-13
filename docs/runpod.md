@@ -258,6 +258,44 @@ controls. An allocation failure does not select smaller weights or context.
 The official NVFP4 checkpoint does not fit the advertised single-B300 GPU and
 host memory allocation. This profile therefore uses GGUF with llama.cpp.
 
+## vLLM compatibility watch
+
+Reviewed on November 13, 2026. The daily research watch covers the remote
+launcher and official vLLM releases. The launcher does not yet have an enabled
+vLLM backend. Its current Strata and llama.cpp profiles remain available.
+
+The latest published release is named **v0.33.0**, with GitHub release tag
+`v0.33.0rc3`, published on November 2. GitHub marks that release as non-prerelease.
+The separate `v0.33.0` tag resolves to the same commit. Keep the artifact tag
+and display name distinct when checking an update.
+See the [official release](https://github.com/vllm-project/vllm/releases/tag/v0.33.0rc3).
+
+For `nvidia/Qwen3.8-Flash-Next-FP4-Local`, upstream
+[CSF scale decoding](https://github.com/vllm-project/vllm/pull/64312) merged
+on November 3. The checkpoint's shards are under `tensors/`. Loading that
+layout still requires the unmerged [shard-loader fix](https://github.com/vllm-project/vllm/pull/64739).
+Neither change is in the November 2 release. The `flash-next-fp4` profile
+therefore remains blocked. The older NVIDIA `NVFP4` checkpoint is a different
+artifact and must not be substituted without a separate profile review.
+
+[Mistral Large 4 support](https://github.com/vllm-project/vllm/pull/64534)
+merged on November 13. This is newer than the published release. The
+[official recipe](https://github.com/vllm-project/vllm/blob/main/recipes/models/mistralai/Mistral-Large-4-1T-A52B.yaml)
+still names the dedicated `mistral-large-4` image and lists multi-GPU layouts.
+It does not validate the launcher's single-B300 GGUF configuration.
+
+For DeepSeek, track the new [shared CPU KV change](https://github.com/vllm-project/vllm/pull/65373)
+and the [official deployment recipes](https://github.com/vllm-project/vllm/blob/main/recipes/models/deepseek-ai/DeepSeek-V4.1-Flash.yaml).
+The CPU KV improvement was measured with eight H100 GPUs and concurrent
+LongBench requests. It does not establish the same gain for a single coding
+conversation or the launcher's smaller allocations.
+
+Before enabling vLLM, pin a complete official runtime and checkpoint, check
+capacity, and test tools, reasoning, cache reuse, and shutdown. Validate a
+serving isolation path that permits its internal IPC while blocking external
+connections. The current guard denies `connect`, `sendmsg`, and `recvmsg`,
+including local sockets. It cannot be reused unchanged without those checks.
+
 ## Choose the Pod
 
 Use a Linux x86_64 GPU Pod with Python 3.10 or later. DeepSeek Strata uses a

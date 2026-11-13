@@ -27,12 +27,21 @@ The timer requests research even when the GPU is busy. It does not start inferen
 calendar day. A failed queue operation does not record that day.
 
 The search covers Strata, DeepSeek 1017, Qwen3.8 Flash-Next, Bonsai2 27B,
-and Basalt. For Basalt, check model and quantization support, conversion
+Basalt, and vLLM. For Basalt, check model and quantization support, conversion
 requirements, long-context performance, and coding-agent API compatibility.
 Distinguish support for a main GPU from support for an expert-cache peer GPU.
 The November 13 review found no standalone Ada support. Basalt PR
 [#343](https://github.com/jesdga95/basalt/pull/343) adds an Ada peer to a
 Blackwell main GPU. Research does not install Basalt or select it as a runtime.
+
+The vLLM watch also covers `bin/start-remote-model.sh`. Check official releases
+and recipes for checkpoint loading, CPU expert and KV offload, speculative
+decoding, long-context caching, and tool parsing. Track the Qwen FP4-Local
+scale decoder and shard loader, and Mistral Large 4 support. Check merged code
+separately from released artifacts. Record the exact tag; GitHub's release
+display name can differ from it. The [remote compatibility review](runpod.md#vllm-compatibility-watch)
+records the current prerequisites. Research does not enable a new remote
+backend, weaken its outgoing-network restriction, or deploy a server.
 
 Grok receives public project names and general research topics only. Do not send
 local hardware details, configuration, measurements, paths, code, credentials,

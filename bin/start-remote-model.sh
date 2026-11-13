@@ -47,7 +47,7 @@ import urllib.request
 import uuid
 from typing import Any
 
-VERSION = '2026-11-09-strata-0213-1'
+VERSION = '2026-11-13-vllm-review-1'
 GIB, MIB = 1024**3, 1024**2
 SOURCE = 'https://github.com/ggml-org/llama.cpp.git'
 STABLE = '620d2225cc436ab0b001e3200e590e3b286ef9ab'  # released v0.7.0
@@ -353,9 +353,11 @@ Q6_ENGRAM_SHARDS = {
 
 IQ2_CPU_EXPERT_BYTES_PER_LAYER = 3_000_000_000  # conservative budget, NOT measured
 FP4_BLOCK = (
-    'NVIDIA Qwen3.8-Flash-Next-FP4-Local remains BLOCKED. NVIDIA still says its '
-    'compressed NVFP4 scales require a community vLLM container. No verified, '
-    'unpatched vllm/vllm-openai release is enabled here. No community image will '
+    'NVIDIA Qwen3.8-Flash-Next-FP4-Local remains BLOCKED (reviewed 2026-11-13). '
+    'Upstream vLLM CSF scale decoding merged in PR #64312; loading the Hub '
+    'tensors/ shards still needs unmerged PR #64739. A complete released loader '
+    'and an isolated serving path must be verified before enabling this profile. '
+    'See https://github.com/vllm-project/vllm/pull/64739. No community image will '
     'be pulled and no substitute model will start. To deliberately run Qwen27B '
     'instead, use --profile qwen.'
 )
