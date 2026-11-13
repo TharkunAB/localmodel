@@ -5,6 +5,8 @@ It does not include model weights, native engine binaries, or installed package
 trees. Fetch and setup commands retrieve those files using their recorded pins.
 No general license for third-party code is implied by this package.
 
+Unless marked otherwise, source paths below are relative to `local/`.
+
 ## Included helper source
 
 - `libexec/capped` and `libexec/capped-record` are unchanged copies from
@@ -22,10 +24,11 @@ No general license for third-party code is implied by this package.
 - `collab/upstream` contains the selected OMP collaboration source and its
   upstream license files. `collab/upstream-revision.json` records its revision,
   selected paths, and local changes. See [the audit](../collab/AUDIT.md).
-- `bin/start-remote-model.sh` derives from the supplied standalone script.
+- `remote/start-remote-model.sh`, relative to the repository root, derives
+  from the supplied standalone script.
   Its DeepSeek profiles now use the same pinned Strata source and signed engine
   as the local setup. It embeds the outgoing-network guard and artifact checks.
-  Its [guide](runpod.md) records the attachment hash and validation limits.
+  Its [guide](../../remote/runpod.md) records the attachment hash and validation limits.
 
 ## Downloaded components
 
@@ -42,7 +45,7 @@ No general license for third-party code is implied by this package.
 
 Native manifests retain the original recorded paths because installed build
 receipts hash the complete manifest. `project_paths.read_manifest` resolves
-that recorded root to the current checkout after parsing. It does not change
+that recorded root to the current `local/` directory after parsing. It does not change
 the raw manifest or source-file hashes. Fresh prepared packs use the new path.
 This does not make already generated packs or file-identity receipts portable.
 

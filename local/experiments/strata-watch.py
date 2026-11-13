@@ -114,7 +114,7 @@ def research(thread: str, codex: str, check_only: bool) -> None:
         "each with an original post URL, date, the experimenter's stated hardware and quant, "
         "measurements, limitations and upstream PR/commit/release status. If search is unavailable, "
         "report that rather than inventing results. Afterward, verify the primary sources yourself "
-        "and compare with installed settings locally. Read docs/strata-watch.md. "
+        f"and compare with installed settings locally. Read {ROOT / 'docs/strata-watch.md'}. "
         "Report useful new findings or corrections here; avoid repeating unchanged claims. "
         "Do not install hacks, alter defaults, modify firmware or run inference from this research task. "
         "Official release updates and guarded measurements are handled by the separate release watch."

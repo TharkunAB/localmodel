@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import re
 from typing import Any, cast
 
 ROOT = Path(__file__).resolve().parent
@@ -14,9 +15,8 @@ RECORDED_ROOT = "/home/tritlo/Code/local-models"
 def _relocate(value: Any) -> Any:
     """Resolve project paths in JSON values and embedded command arguments."""
     if isinstance(value, str):
-        if value == RECORDED_ROOT:
-            return str(ROOT)
-        return value.replace(RECORDED_ROOT + "/", str(ROOT) + "/")
+        return re.sub(re.escape(RECORDED_ROOT) + r"(?:/local)?(?=/|$)",
+                      lambda _match: str(ROOT), value)
     if isinstance(value, list):
         return [_relocate(item) for item in cast(list[Any], value)]
     if isinstance(value, dict):

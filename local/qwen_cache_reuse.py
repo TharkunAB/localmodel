@@ -48,7 +48,7 @@ def verify() -> dict[str, Any]:
         receipt = HERE / "build-receipt.json"
         if digest(receipt) != pins["build_receipt_sha256"]:
             raise RuntimeError("The cache-reuse build receipt changed.")
-        record = cast(dict[str, Any], json.loads(receipt.read_text()))
+        record = read_manifest(receipt)
         if record["base_revision"] != BASE or record["fix_revision"] != FIX:
             raise RuntimeError("The cache-reuse source revisions changed.")
         if record["binary_path"] != str(binary_path()) or record["lib_dirs"] != lib_dirs():

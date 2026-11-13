@@ -34,12 +34,12 @@ The November 13 review found no standalone Ada support. Basalt PR
 [#343](https://github.com/jesdga95/basalt/pull/343) adds an Ada peer to a
 Blackwell main GPU. Research does not install Basalt or select it as a runtime.
 
-The vLLM watch also covers `bin/start-remote-model.sh`. Check official releases
+The vLLM watch also covers `remote/start-remote-model.sh`. Check official releases
 and recipes for checkpoint loading, CPU expert and KV offload, speculative
 decoding, long-context caching, and tool parsing. Track the Qwen FP4-Local
 scale decoder and shard loader, and Mistral Large 4 support. Check merged code
 separately from released artifacts. Record the exact tag; GitHub's release
-display name can differ from it. The [remote compatibility review](runpod.md#vllm-compatibility-watch)
+display name can differ from it. The [remote compatibility review](../../remote/runpod.md#vllm-compatibility-watch)
 records the current prerequisites. Research does not enable a new remote
 backend, weaken its outgoing-network restriction, or deploy a server.
 

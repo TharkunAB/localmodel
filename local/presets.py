@@ -7,7 +7,8 @@ import json
 from pathlib import Path
 from typing import Any, cast
 
-DATA = Path(__file__).resolve().parent / "config/presets.json"
+ROOT = Path(__file__).resolve().parent
+DATA = ROOT / "config/presets.json"
 
 
 def load() -> dict[str, dict[str, Any]]:
@@ -196,9 +197,9 @@ def stats_text() -> str:
               "Stock MTP depth 2 with chaining in that repeat: 53.8 tok/s before compaction; 87.9 tok/s after compaction at about 18000-20000 input tokens.",
               "Warm follow-ups including compaction: 72.1 s. Cold TTFT: 404.5 s; warm long-history TTFT: about 1.3 s.",
               "Depth 2 without chaining: 58.4/92.4 tok/s. Summary lengths differ, so workflow time does not isolate chain speed.",
-              "All six cases passed. Depth-1 control rates vary without chain execution. See README.md for limits.",
+              "All six cases passed. Depth-1 control rates vary without chain execution. See local/docs/harness.md for limits.",
               "Use: localmodel start. This selects 27b-256k-optimized, two draft tokens, chaining on, and a 16K draft window.",
               "Use --draft-tokens N to change depth and --no-mtp-chain to disable chaining. Depth 1 cannot chain.",
-              "Full depth 1/2/4 and chaining repeat: ~/Code/local-models/results/27b-mtp-chain-256k-rerun1/summary.md."]
-    lines.append("Full cache, OpenCode, RAM, and audit results: ~/Code/local-models/results/optimization-summary.md and README.md.")
+              f"Full depth 1/2/4 and chaining repeat: {ROOT}/results/27b-mtp-chain-256k-rerun1/summary.md."]
+    lines.append(f"Full cache, OpenCode, RAM, and audit results: {ROOT}/results/optimization-summary.md and {ROOT}/docs/harness.md.")
     return "\n".join(lines)

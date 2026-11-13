@@ -7,7 +7,7 @@ if [[ ${1:-} == --help || ${1:-} == -h ]]; then
     'Run SearXNG at http://127.0.0.1:8888 with engines from config/searxng.yml.' \
     'JSON API: POST /search with q=QUERY and format=json.' \
     'Runs in the foreground with a 1 GiB RAM cap and no swap. Stop it with Ctrl-C.' \
-    'Install dependencies with ~/Code/local-models/bin/setup-searxng.'
+    'Install dependencies with ~/Code/local-models/local/bin/setup-searxng.'
   exit 0
 fi
 if [[ $# != 0 ]]; then

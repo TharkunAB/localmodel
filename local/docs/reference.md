@@ -2,7 +2,7 @@
 
 # Historical reference and measurements
 
-For current installation instructions, use the [README](../README.md) and
+For current installation instructions, use the [README](../../README.md) and
 [harness guide](harness.md). This document preserves the earlier setup notes
 and measurements. Some paths refer to local artifacts that are excluded from
 the source package. Use `localmodel --stats` for the packaged measurements.
@@ -74,7 +74,7 @@ If model files are missing, run `localmodel fetch 27b-256k-optimized`
 before step 2. If the native runtime is missing, use the
 [native build command](../experiments/README.md#build-or-repeat-explicitly).
 If SearXNG's
-environment is missing, run `~/Code/local-models/bin/setup-searxng` before
+environment is missing, run `~/Code/local-models/local/bin/setup-searxng` before
 step 1. These dependencies are already installed on the current machine.
 
 To select another measured configuration, replace the model command in step 2:
@@ -1670,7 +1670,7 @@ The last matching permission rule wins. Use V2 `permissions`, not the V1
 The dependencies are installed. To install them again, run:
 
 ```sh
-~/Code/local-models/bin/setup-searxng
+~/Code/local-models/local/bin/setup-searxng
 ```
 
 The installer checks the pinned source revision. It records installed Python

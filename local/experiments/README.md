@@ -1,5 +1,8 @@
 # Long-context candidates
 
+Paths below are relative to `local/`. Links into `results/` refer to retained
+local measurements. Those ignored files are not included in a source checkout.
+
 The completed comparison covers nine 27B Bonsai configurations. All passed
 the six OpenCode phases, filled capacity, and 107-schema replay. See the
 [final measurements](../results/native-long-context-20261019/summary.md).
@@ -49,7 +52,7 @@ retain the exact benchmark source used by the runs.
 
 ## Print plans
 
-Run these commands from `~/Code/local-models`:
+Run these commands from `~/Code/local-models/local`:
 
 ```sh
 uv run --no-project --python .venv/bin/python python experiments/build-native.py bonsai-native
