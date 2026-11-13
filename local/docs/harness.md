@@ -191,8 +191,12 @@ removes the shared table instead. Omit `--dry-run` from a reviewed removal
 command to delete its selected files.
 
 The larger quants have 42.87 GiB and 46.84 GiB of expert tensor data, respectively.
-The default 36 GiB expert budget therefore leaves more experts backed by files.
-Their local throughput and coding quality have not been measured yet.
+Q2_K_XL defaults to a 48 GiB expert budget inside the 64 GiB process cap.
+The measured allocation was 42.44 GiB, including all prefill copies. It passed
+the repair, recall, and compaction checks through about 245K input tokens,
+with 39.32 tokens/s repair/resume decode. Compaction took 221.17 seconds.
+IQ1_M and IQ3_XXS retain a 36 GiB default. IQ3_XXS measurements are pending.
+Use `--expert-ram-gb` to override the budget. The `lowram` profile still uses zero.
 Their size and SHA256 pins are recorded in `experiments/qwen-strata/q2_k_xl.json`
 and `iq3_xxs.json`. Both use Unsloth revision
 `f5d175de2cf7f720d45d6064019a81fcf056e986`.
@@ -205,7 +209,7 @@ localmodel start qwen3.8 --dry-run
 localmodel start qwen3.8
 ```
 
-Fetch also prepares the Qwen engine and MTP artifacts. The defaults are
+Fetch also prepares the Qwen engine and MTP artifacts. The IQ1_M defaults are
 **256K context, a 64K GPU KV window, a 64 GiB process cap, a 36 GiB resident
 expert budget, INT8 KV, four draft tokens, and a 1024 MiB VRAM reserve**.
 Adaptive fetch is off with resident experts.

@@ -229,7 +229,9 @@ def settings(args: argparse.Namespace, item: dict[str, Any]) -> dict[str, Any]:
         raise RuntimeError("These DeepSeek or llama.cpp controls do not apply to Qwen. Use the Qwen controls described by localmodel start --help.")
     if args.replay or args.gdn_mma is not None:
         raise RuntimeError("Replay and GDN MMA controls require a Bonsai runtime.")
-    ram = args.expert_ram_gb if args.expert_ram_gb is not None else 36
+    quant = getattr(args, "quant", None) or "iq1_m"
+    default_ram = 48 if quant == "q2_k_xl" else 36
+    ram = args.expert_ram_gb if args.expert_ram_gb is not None else default_ram
     adaptive = getattr(args, "adaptive_fetch", None)
     if adaptive is None:
         adaptive = 1 if ram == 0 else 0
@@ -270,7 +272,6 @@ def settings(args: argparse.Namespace, item: dict[str, Any]) -> dict[str, Any]:
         raise RuntimeError("Use a positive --prefill-chunk token count.")
     if not 0 <= budget <= 1048576:
         raise RuntimeError("Use a thinking budget from 0 to 1048576 tokens.")
-    quant = getattr(args, "quant", None) or "iq1_m"
     info = manifest(quant)
     engram = getattr(args, "engram", None) or "q8_0"
     if engram not in ("default", "iq4_nl", "q8_0"):
