@@ -17,6 +17,7 @@ from typing import Any, cast
 
 from project_paths import CAPPED, read_manifest
 import qwen_cache_reuse
+import qwen_engram
 
 ROOT = Path(__file__).resolve().parent
 NAME = "qwen3.8"
@@ -77,10 +78,12 @@ def environment() -> dict[str, str]:
     return env
 
 
-def fetch(speculative: str = "mtp") -> None:
+def fetch(speculative: str = "mtp", engram: str = "default") -> None:
     """Download and verify the model, draft layer, and native runtime."""
     if speculative not in ("mtp", "dflash2"):
         raise RuntimeError("Qwen supports only mtp or dflash2 artifacts.")
+    if engram not in ("default", "q8_0"):
+        raise RuntimeError("Qwen Engram must be default or q8_0.")
     with model_lock():
         directory()
         if not PYTHON.exists():
@@ -89,9 +92,12 @@ def fetch(speculative: str = "mtp") -> None:
                            env=environment(), check=True)
         subprocess.run([str(CAPPED), "--mem", "4G", "--time", "12h", str(PYTHON),
                         "-B", str(HERE / "runtime.py"), "--run", "--speculative", speculative], env=environment(), check=True)
+        if engram == "q8_0":
+            subprocess.run([str(CAPPED), "--mem", "2G", "--time", "12h", str(PYTHON),
+                            "-B", str(ROOT / "qwen_engram.py")], env=environment(), check=True)
 
 
-def check_ready(speculative: str = "mtp", cache_reuse_fix: bool = False) -> None:
+def check_ready(speculative: str = "mtp", cache_reuse_fix: bool = False, engram: str = "default") -> None:
     """Validate pinned artifacts before a server can start."""
     if speculative not in ("mtp", "dflash2"):
         raise RuntimeError("Qwen supports only mtp or dflash2 artifacts.")
@@ -100,13 +106,22 @@ def check_ready(speculative: str = "mtp", cache_reuse_fix: bool = False) -> None
                    env=environment(), check=True, stdout=subprocess.DEVNULL)
     if cache_reuse_fix:
         qwen_cache_reuse.verify()
+    if engram == "q8_0":
+        qwen_engram.verify()
+    elif engram != "default":
+        raise RuntimeError("Qwen Engram must be default or q8_0.")
 
 
-def remove(dry_run: bool = False, speculative: str = "mtp") -> None:
+def remove(dry_run: bool = False, speculative: str = "mtp", engram: str = "default") -> None:
     """Remove only known model files after a locked inventory check."""
     if speculative not in ("mtp", "dflash2"):
         raise RuntimeError("Qwen supports only mtp or dflash2 artifacts.")
     with model_lock():
+        if engram == "q8_0":
+            qwen_engram.remove(dry_run)
+            return
+        if engram != "default":
+            raise RuntimeError("Qwen Engram must be default or q8_0.")
         model = directory()
         folder = model / "dflash2" if speculative == "dflash2" else model
         if folder.is_symlink():
@@ -157,7 +172,8 @@ def remove(dry_run: bool = False, speculative: str = "mtp") -> None:
 
 def runtime_status(offset: int) -> dict[str, Any]:
     """Read positive activation evidence from this server start only."""
-    result: dict[str, Any] = {"effective_speculative": None, "adaptive_fetch_active": None}
+    result: dict[str, Any] = {"effective_speculative": None, "adaptive_fetch_active": None,
+                              "effective_engram_type": None}
     try:
         with (ROOT / "state/qwen-engine.log").open("rb") as stream:
             stream.seek(offset)
@@ -175,6 +191,9 @@ def runtime_status(offset: int) -> dict[str, Any]:
         result["adaptive_fetch_active"] = int(active.group(1))
     elif "STRATA_ADAPT_FETCH is off (" in text:
         result["adaptive_fetch_active"] = 0
+    table = re.search(r"PLE on, table 320001536 rows of (\S+)", text)
+    if table:
+        result["effective_engram_type"] = table.group(1)
     return result
 
 
@@ -239,11 +258,15 @@ def settings(args: argparse.Namespace, item: dict[str, Any]) -> dict[str, Any]:
     if not 0 <= budget <= 1048576:
         raise RuntimeError("Use a thinking budget from 0 to 1048576 tokens.")
     info = manifest()
+    engram = getattr(args, "engram", "default")
+    if engram not in ("default", "q8_0"):
+        raise RuntimeError("Qwen Engram must be default or q8_0.")
+    ple_table = str(qwen_engram.table_path()) if engram == "q8_0" else info["ple_shard"]
     source = Path(info["source_directory"])
     cache_reuse_fix = getattr(args, "cache_reuse_fix", False)
     binary = qwen_cache_reuse.binary_path() if cache_reuse_fix else Path(info["runtime"]["binary"])
     native_args = ["--pack", info["pack_directory"], "--native", info["first_shard"],
-                   "--ple-gguf", info["ple_shard"],
+                   "--ple-gguf", ple_table,
                    "--expert-profile", str(source / "data/expert-profile.bin"), "--expert-cache", "auto",
                    "--prefill", "auto" if chunk is None else str(chunk),
                    "--spec", str(drafts + 1), "--suffix-draft", "3" if args.prompt_lookup else "0",
@@ -265,6 +288,7 @@ def settings(args: argparse.Namespace, item: dict[str, Any]) -> dict[str, Any]:
     # Keep explicit native DFlash2 arguments; do not let that policy select another pack.
     return {"exe": str(binary), "arch": "qwen4exp", **({} if dflash else {"drafting": "mtp"}), "args": native_args,
             "expert_memory": "cache" if ram == 0 else "resident", "expert_ram_gb": ram,
+            "engram": engram, "engram_type": "Q8_0" if engram == "q8_0" else "IQ4_NL", "engram_path": ple_table,
             "adaptive_fetch": adaptive, "vram_reserve_mib": reserve,
             "user_args": ["--kv-resident", str(kv_cells), "--vram-reserve-mib", str(reserve)],
             "cwd": str(source), "tokenizer": str(Path(info["pack_directory"]) / "tokenizer"),
