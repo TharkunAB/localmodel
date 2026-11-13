@@ -156,7 +156,7 @@ def current(port: int | None = None) -> dict[str, Any]:
         result["settings_profile"] = managed.get("settings_profile", "default")
         result["pid"] = managed.get("controller_pid")
         for key in ("cpu_offload_gb", "cpu_moe_layers", "gpu_layers", "moe_cache_mib", "batch_tokens", "ubatch_tokens", "command", "runtime", "rounds", "memory_limit",
-                    "expert_memory", "expert_ram_gb", "cpu_threads", "gpu_expert_cache_gb", "gpu_expert_fraction", "prefill_chunk", "vram_reserve_mib", "engram_cache_mib", "engram_threads", "thinking_budget", "strata_slots", "strata_slot_directory", "ple_io", "expert_tail_skip", "adaptive_fetch", "draft_conf", "engram", "engram_type", "engram_path"):
+                    "expert_memory", "expert_ram_gb", "cpu_threads", "gpu_expert_cache_gb", "gpu_expert_fraction", "prefill_chunk", "vram_reserve_mib", "engram_cache_mib", "engram_threads", "thinking_budget", "strata_slots", "strata_slot_directory", "ple_io", "expert_tail_skip", "adaptive_fetch", "draft_conf", "engram", "engram_type", "engram_path", "quant"):
             result[key] = managed.get(key)
         if result["backend"] == "dory":
             result["rounds"] = managed.get("rounds")
@@ -169,10 +169,10 @@ def current(port: int | None = None) -> dict[str, Any]:
     return result
 
 
-def installed(name: str, item: dict[str, Any]) -> bool:
+def installed(name: str, item: dict[str, Any], quant: str | None = None) -> bool:
     """Check whether the selected model files are present."""
     if item.get("runtime") == "strata-qwen":
-        return qwen_strata.installed()
+        return qwen_strata.installed(quant or "iq1_m")
     if item.get("runtime") == "strata":
         return deepseek_strata.installed(model=name)
     if name == "dory":
@@ -216,8 +216,10 @@ def fetch_runtime(runtime: str = "stock") -> None:
     print(f"Installed runtime {info['release']}. SHA256 verified.", flush=True)
 
 
-def fetch(name: str, item: dict[str, Any], speculative: str = "none", mtp_head: str = "teacher", engram: str | None = None) -> None:
+def fetch(name: str, item: dict[str, Any], speculative: str = "none", mtp_head: str = "teacher", engram: str | None = None, quant: str | None = None) -> None:
     """Fetch a pinned model and its required runtime."""
+    if quant is not None and item["runtime"] != "strata-qwen":
+        raise RuntimeError("--quant requires Strata Qwen Flash-Next.")
     if speculative == "dflash2" and item["runtime"] != "strata-qwen":
         raise RuntimeError("DFlash2 artifacts require Strata Qwen.")
     if engram is None:
@@ -227,7 +229,7 @@ def fetch(name: str, item: dict[str, Any], speculative: str = "none", mtp_head: 
     if item["runtime"] == "strata-qwen":
         if speculative not in ("none", "mtp", "dflash2"):
             raise RuntimeError("Qwen supports only none, mtp, or dflash2 artifacts.")
-        qwen_strata.fetch("dflash2" if speculative == "dflash2" else "mtp", engram)
+        qwen_strata.fetch("dflash2" if speculative == "dflash2" else "mtp", engram, quant or "iq1_m")
         return
     if item["runtime"] == "strata":
         deepseek_strata.fetch(speculative, model=name)
@@ -284,8 +286,10 @@ def fetch(name: str, item: dict[str, Any], speculative: str = "none", mtp_head: 
             fetch_runtime(item["runtime"] if item["runtime"] in ("flint", "llamacpp") else "stock")
 
 
-def remove(name: str, speculative: str = "none", dry_run: bool = False, mtp_head: str = "teacher", engram: str = "default") -> None:
+def remove(name: str, speculative: str = "none", dry_run: bool = False, mtp_head: str = "teacher", engram: str = "default", quant: str | None = None) -> None:
     """Delete selected weights and download data. Keep configuration and runtimes."""
+    if quant is not None and name != qwen_strata.NAME:
+        raise RuntimeError("--quant requires Strata Qwen Flash-Next.")
     if engram != "default" and name != qwen_strata.NAME:
         raise RuntimeError("--engram requires Strata Qwen.")
     if speculative == "dflash2" and name != qwen_strata.NAME:
@@ -293,7 +297,7 @@ def remove(name: str, speculative: str = "none", dry_run: bool = False, mtp_head
     if name == qwen_strata.NAME:
         if speculative not in ("none", "mtp", "dflash2"):
             raise RuntimeError("Qwen supports only none, mtp, or dflash2 artifacts.")
-        qwen_strata.remove(dry_run, "dflash2" if speculative == "dflash2" else "mtp", engram)
+        qwen_strata.remove(dry_run, "dflash2" if speculative == "dflash2" else "mtp", engram, quant or "iq1_m")
         return
     if name in deepseek_strata.NAMES:
         deepseek_strata.remove(dry_run, speculative, model=name)
@@ -344,6 +348,8 @@ def remove(name: str, speculative: str = "none", dry_run: bool = False, mtp_head
 
 def launch_command(args: argparse.Namespace, item: dict[str, Any]) -> list[str]:
     """Build a command with GPU weights and GPU KV cache."""
+    if getattr(args, "quant", None) is not None and item["runtime"] != "strata-qwen":
+        raise RuntimeError("--quant requires Strata Qwen Flash-Next.")
     if args.gpu_layers is not None and (item["runtime"] != "llamacpp" or "cpu_moe_layers" in item):
         raise RuntimeError("--gpu-layers requires a dense llama.cpp profile. Use --cpu-moe-layers for MoE profiles.")
     if item["runtime"] == "strata-qwen":
@@ -685,10 +691,12 @@ def serve(args: argparse.Namespace, item: dict[str, Any]) -> int:
     if args.tui and not (sys.stdin.isatty() and sys.stdout.isatty()):
         raise RuntimeError("--tui requires an interactive terminal. Use --dry-run to preview the command.")
     weights = item["mtp_procreations" if args.mtp_head == "procreations" else "mtp"] if args.speculative == "mtp" and item["runtime"] != "strata-qwen" else item
-    if not installed(args.model, weights):
+    if not installed(args.model, weights, getattr(args, "quant", None)):
         suffix = f" --speculative {args.speculative}" if args.speculative != "none" else ""
         if args.mtp_head == "procreations":
             suffix += " --mtp-head procreations"
+        if item["runtime"] == "strata-qwen":
+            suffix += f" --quant {getattr(args, 'quant', None) or 'iq1_m'}"
         raise RuntimeError(f"Model is missing. Run localmodel fetch {args.model}{suffix} first.")
     if args.speculative == "dflash" and not installed(args.model, item["dflash"]):
         raise RuntimeError(f"Optional weights are missing. Run localmodel fetch {args.model} --speculative {args.speculative}.")
@@ -712,7 +720,7 @@ def serve(args: argparse.Namespace, item: dict[str, Any]) -> int:
             if item["runtime"] == "strata":
                 deepseek_strata.check_ready(args.speculative, model=args.model)
             else:
-                qwen_strata.check_ready(args.speculative, args.cache_reuse_fix, args.engram)
+                qwen_strata.check_ready(args.speculative, args.cache_reuse_fix, args.engram, getattr(args, "quant", None) or "iq1_m")
             if args.tui:
                 strata_monitor.ensure()
             config_name = "qwen-server.json" if item["runtime"] == "strata-qwen" else "deepseek-server.json"
@@ -756,6 +764,7 @@ def serve(args: argparse.Namespace, item: dict[str, Any]) -> int:
             "engram": strata_config.get("engram"),
             "engram_type": strata_config.get("engram_type"),
             "engram_path": strata_config.get("engram_path"),
+            "quant": strata_config.get("quant"),
             "tui": args.tui,
             "cache_reuse_fix": args.cache_reuse_fix if item["runtime"] == "strata-qwen" else None,
             "engine_log_offset": log_offset if item["runtime"] == "strata-qwen" else None,
@@ -1051,6 +1060,9 @@ def main() -> int:
                        help=f"Model or preset to start (default: {DEFAULT_START_MODEL}).")
     start.add_argument("settings_profile", nargs="?", default="default", metavar="PROFILE",
                        help="Model settings profile (default: default). Flash-Next also supports lowram; dense Qwen supports mtp. Use localmodel list to see available profiles.")
+    for selection in (fetch_parser, removal, start):
+        selection.add_argument("--quant", choices=qwen_strata.QUANTS,
+                               help="Qwen Flash-Next weight precision (default: iq1_m). Each quant has separate core files; the Q8_0 Engram table is shared. remove deletes only the selected quant unless --engram q8_0 selects the shared table.")
     start.add_argument("--context", "--ctx", type=tokens)
     start.add_argument("--port", type=int, default=8899)
     start.add_argument("--tui", action="store_true",
@@ -1187,6 +1199,8 @@ def main() -> int:
     args.model = ALIASES.get(args.model, args.model)
     if args.model not in models:
         parser.error("Unknown model. Use localmodel list.")
+    if getattr(args, "quant", None) is not None and args.model != qwen_strata.NAME:
+        parser.error("--quant requires Strata Qwen Flash-Next.")
     if getattr(args, "tui", False) and models[args.model]["runtime"] not in ("strata", "strata-qwen"):
         parser.error("--tui requires a Strata model.")
     if getattr(args, "cache_reuse_fix", False) and args.model != qwen_strata.NAME:
@@ -1246,9 +1260,9 @@ def main() -> int:
         if args.action == "remove":
             if args.engram == "q8_0" and args.speculative != "none":
                 parser.error("Remove the optional Engram table or a speculative decoder in separate commands.")
-            remove(args.model, args.speculative, args.dry_run, args.mtp_head, args.engram)
+            remove(args.model, args.speculative, args.dry_run, args.mtp_head, args.engram, args.quant)
         else:
-            fetch(args.model, models[args.model], args.speculative, args.mtp_head, args.engram)
+            fetch(args.model, models[args.model], args.speculative, args.mtp_head, args.engram, args.quant)
         return 0
     if not 0 <= args.cpu_offload_gb < float("inf"):
         parser.error("CPU offload must be finite and nonnegative.")

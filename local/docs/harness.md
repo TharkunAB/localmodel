@@ -167,6 +167,36 @@ The separate `qwen3.8-27b` option uses the dense model.
 The [Engram and context measurements](qwen-engram-20261113.md) cover both table
 precisions, 192K and 256K capacities, filled conversations, and compaction.
 
+Use `--quant iq1_m`, `--quant q2_k_xl`, or `--quant iq3_xxs` on `fetch`,
+`start`, and `remove` to select the Flash-Next weights. IQ1_M remains the default.
+The quant selector also works with the `lowram` settings profile.
+These options use the same Strata runtime, Q8_0 Engram table, 256K context,
+and four MTP draft tokens. OMP still discovers the model as `qwen3.8`.
+`localmodel status --json` and `start --dry-run` report the selected quant.
+
+```bash
+localmodel fetch qwen3.8 --quant q2_k_xl
+localmodel start qwen3.8 --quant q2_k_xl --dry-run
+localmodel start qwen3.8 --quant q2_k_xl
+localmodel start qwen3.8 lowram --quant iq3_xxs --dry-run
+localmodel remove qwen3.8 --quant q2_k_xl --dry-run
+```
+
+Q2_K_XL needs 74.12 GiB for its four original shards. IQ3_XXS needs 77.88 GiB.
+The shared Q8_0 table needs another 50.66 GiB once. Fetch requires space for the
+missing shards plus 20 GiB for MTP preparation and headroom. Each quant has its
+own core directory and verification receipt. Removing one quant keeps the
+other quants and the shared table. `remove qwen3.8 --engram q8_0` explicitly
+removes the shared table instead. Omit `--dry-run` from a reviewed removal
+command to delete its selected files.
+
+The larger quants have 42.87 GiB and 46.84 GiB of expert tensor data, respectively.
+The default 36 GiB expert budget therefore leaves more experts backed by files.
+Their local throughput and coding quality have not been measured yet.
+Their size and SHA256 pins are recorded in `experiments/qwen-strata/q2_k_xl.json`
+and `iq3_xxs.json`. Both use Unsloth revision
+`f5d175de2cf7f720d45d6064019a81fcf056e986`.
+
 ```bash
 bin/setup-localmodel --strata --dry-run
 bin/setup-localmodel --strata --run
