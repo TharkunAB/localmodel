@@ -1,10 +1,11 @@
-"""Compare Qwen Engram precision and context with the measured OMP fixture."""
+"""Compare Qwen weights, Engram precision and context with the measured OMP fixture."""
 from __future__ import annotations
 import argparse
 import fcntl
 import hashlib
 import importlib.util
 import json
+import math
 import os
 from pathlib import Path
 import signal
@@ -50,19 +51,24 @@ def load(name: str, path: Path) -> ModuleType:
     return module
 
 
-def snapshot() -> Record:
+def snapshot(quant: str = 'iq1_m', expert_ram_gb: float = 36) -> Record:
     """Freeze current code, settings, corpus and runtime identities without hashing large weights."""
     files = [ROOT / name for name in ('localmodel.py', 'qwen_strata.py', 'qwen_engram.py',
              'omp_local.py', 'config/models.json', 'config/omp.json', 'experiments/qwen-strata/manifest.json')]
     files += list((ROOT / 'experiments/deepseek-strata/omp-filled').glob('*'))
     files += [FIXTURE, COMMON / 'collect.py', COMMON / 'sample_metrics.py', COMMON / 'benchmark_paths.py', EXTRA]
     files += list(ROOT.glob('state/sources/prism-e3de715-*.cpp')) + list(HERE.glob('*.py')) + [HERE / 'run-case.sh']
-    info = localmodel.qwen_strata.manifest()
-    paths = [Path(info[key]) for key in ('first_shard', 'ple_shard')]
+    info = localmodel.qwen_strata.manifest(quant)
+    selected_manifest = localmodel.qwen_strata.manifest_path(quant)
+    files += [selected_manifest]
+    paths = [Path(info['model_directory']) / item['name'] for item in info['files']]
     paths += [Path(info['runtime']['binary']), localmodel.qwen_strata.qwen_engram.verify()]
     files += [Path(info['source_directory']) / 'data/expert-profile.bin']
     files += list(ROOT.glob('*.py')) + [localmodel.qwen_strata.qwen_engram.table_path().parent / 'verification.json', ROOT / 'config/omp-runtime.json']
-    return {'files': {str(p.relative_to(ROOT)): digest(p) for p in sorted(set(files)) if p.is_file()},
+    return {'quant': quant, 'expert_ram_gb': expert_ram_gb,
+            'quant_manifest': str(selected_manifest.relative_to(ROOT)), 'quant_manifest_sha256': digest(selected_manifest),
+            'model_revision': info['model_revision'],
+            'files': {str(p.relative_to(ROOT)): digest(p) for p in sorted(set(files)) if p.is_file()},
             'runtime': info['runtime'], 'source_tag': info['source_tag'], 'source_revision': info['source_revision'],
             'large_files': {str(p): {'size': p.stat().st_size, 'mtime_ns': p.stat().st_mtime_ns} for p in paths},
             'note': 'Large weight identities are size and mtime. Fetch receipts verify the managed SHA256 pins separately.'}
@@ -300,19 +306,22 @@ def compaction_probe(benchmark: Any) -> Record:
             'note': 'Automatic maintenance uses normal OMP thresholds. A successful recall without an observed compaction is not a compaction result.'}
 
 
-def benchmark_case(args: argparse.Namespace, output: Path, context: int, engram: str, targets: list[int]) -> None:
-    expected = json.loads((BASE / 'provenance.json').read_text())
-    if snapshot() != expected:
+def benchmark_case(args: argparse.Namespace, output: Path, context: int, engram: str, targets: list[int], provenance: Path) -> None:
+    expected = json.loads(provenance.read_text())
+    if snapshot(args.quant, args.expert_ram_gb) != expected:
         raise RuntimeError('Frozen provenance changed. Review changes before creating a new study freeze.')
+    info = localmodel.qwen_strata.manifest(args.quant)
     preflight = admission(args.quiet_seconds)
     WORK.mkdir()
     save(WORK / 'provenance.json', expected)
     report: Record = {'status': 'starting', 'arm': args.arm, 'case': args.case, 'repeat': args.repeat,
         'seed': 20261113 + args.repeat - 1, 'engram': engram, 'context_capacity_tokens': context,
-        'targets': targets, 'memory_cap_gib': 64, 'speculative': 'mtp', 'draft_tokens': 4, 'preflight': preflight}
+        'targets': targets, 'quant': args.quant, 'expert_ram_gb': args.expert_ram_gb,
+        'model_revision': info['model_revision'], 'quant_manifest_sha256': expected['quant_manifest_sha256'],
+        'memory_cap_gib': 64, 'speculative': 'mtp', 'draft_tokens': 4, 'preflight': preflight}
     state = ROOT / 'state/qwen-server.json'
     original = state.read_bytes() if state.exists() else None
-    profile = Path(localmodel.qwen_strata.manifest()['source_directory']) / 'data/expert-profile.bin'
+    profile = Path(info['source_directory']) / 'data/expert-profile.bin'
     profile_before = profile.read_bytes()
     (WORK / 'expert-profile-before.bin').write_bytes(profile_before)
     protected = [Path.home() / '.omp/agent' / name for name in ('config.yml', 'config.yaml')]
@@ -334,8 +343,8 @@ def benchmark_case(args: argparse.Namespace, output: Path, context: int, engram:
     observer = load('qwen_metrics', COMMON / 'sample_metrics.py')
     collector = load('qwen_collect', COMMON / 'collect.py')
     command = [str(localmodel.qwen_strata.PYTHON), '-B', str(HERE / 'server.py'), '--controller-marker', str(ROOT / 'localmodel.py'),
-        '--seed', str(report['seed']), '--', 'start', 'qwen3.8', '--engram', engram, '--context', str(context),
-        '--mem', '64G', '--expert-ram-gb', '36', '--adaptive-fetch', '0', '--vram-reserve-mib', '1024',
+        '--seed', str(report['seed']), '--', 'start', 'qwen3.8', '--quant', args.quant, '--engram', engram, '--context', str(context),
+        '--mem', '64G', '--expert-ram-gb', str(args.expert_ram_gb), '--adaptive-fetch', '0', '--vram-reserve-mib', '1024',
         '--speculative', 'mtp', '--draft-tokens', '4', '--kv-vram-cells', '65536', '--ple-io', 'direct',
         '--no-prompt-lookup', '--reasoning-effort', 'xhigh']
     save(WORK / 'command.json', command)
@@ -371,7 +380,8 @@ def benchmark_case(args: argparse.Namespace, output: Path, context: int, engram:
                 break
             except (OSError, ValueError, RuntimeError):
                 time.sleep(2)
-        if status['context'] != context or status.get('speculative') != 'mtp' or status.get('expert_ram_gb') != 36:
+        if (status['context'] != context or status.get('speculative') != 'mtp'
+                or status.get('expert_ram_gb') != args.expert_ram_gb or status.get('quant') != args.quant):
             raise RuntimeError('Live model settings differ from the selected arm.')
         if guard.scope is None:
             raise RuntimeError('The owned model 64 GiB cgroup was not found.')
@@ -382,7 +392,7 @@ def benchmark_case(args: argparse.Namespace, output: Path, context: int, engram:
         markers = [line for line in current_log.splitlines() if 'draft layer' in line or 'draft head' in line or 'PLE on, table' in line]
         if 'strata mtp: draft layer loaded,' not in current_log or 'without the draft layer' in current_log or 'without draft layer' in current_log:
             raise RuntimeError('Native startup does not verify an active MTP draft layer.')
-        selected_table = localmodel.qwen_strata.qwen_engram.table_path() if engram == 'q8_0' else Path(localmodel.qwen_strata.manifest()['ple_shard'])
+        selected_table = localmodel.qwen_strata.qwen_engram.table_path() if engram == 'q8_0' else Path(info['ple_shard'])
         if 'PLE on, table 320001536 rows of ' + str(selected_table) not in current_log:
             raise RuntimeError('Native startup did not confirm the selected Engram artifact.')
         report.update(live=status, limits=limits, startup_seconds=time.monotonic() - started, mtp_startup_evidence=markers)
@@ -393,13 +403,16 @@ def benchmark_case(args: argparse.Namespace, output: Path, context: int, engram:
         guard.ready = True
         fixture = load('qwen_filled', FIXTURE)
         setattr(fixture, 'PYTHON', localmodel.qwen_strata.PYTHON)
-        benchmark = fixture.Benchmark(WORK, targets, args.timeout, model='qwen3.8', context=context)
+        benchmark = fixture.Benchmark(WORK, targets, args.timeout, model='qwen3.8', context=context,
+            source_directory=Path(info['source_directory']), tokenizer_directory=Path(info['pack_directory']) / 'tokenizer')
         benchmark.facts = {str(target): {'release_key': f'cedar-{target}-quartz', 'target_branch': f'release/qwen-{target}', 'deadline_tag': f'gate-{target}-amber'} for target in targets}
         if digest(EXTRA) != EXTRA_SHA:
             raise RuntimeError('The pinned public extension corpus changed.')
         benchmark.corpus += '\nPublic source file: strata-c3b3f5-expert_source.cpp\n' + EXTRA.read_text()
         benchmark.report['sources'].append({'path': str(EXTRA), 'sha256': EXTRA_SHA})
-        benchmark.report.update(server_context_capacity=context, expert_cache_gib=36, engine_version=expected['runtime']['version'], speculative='mtp')
+        benchmark.report.update(server_context_capacity=context, expert_cache_gib=args.expert_ram_gb,
+            quant=args.quant, model_revision=info['model_revision'], quant_manifest_sha256=expected['quant_manifest_sha256'],
+            engine_version=expected['runtime']['version'], speculative='mtp')
         original_run = benchmark.run_omp
         def run_omp(prompt: str, phase: str, capture: bool = False) -> Record:
             result: Record = original_run(prompt, phase, capture)
@@ -501,7 +514,10 @@ def benchmark_case(args: argparse.Namespace, output: Path, context: int, engram:
 
 
 def main() -> None:
+    global WORK
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--quant', choices=localmodel.qwen_strata.QUANTS, default='iq1_m')
+    parser.add_argument('--expert-ram-gb', type=float, default=36)
     parser.add_argument('--arm', choices=ARMS, default='default192')
     parser.add_argument('--case', choices=('matched64', 'long'), default='matched64')
     parser.add_argument('--repeat', type=int, default=1)
@@ -522,26 +538,38 @@ def main() -> None:
         return
     if args.repeat < 1 or args.timeout < 60 or args.quiet_seconds < 10:
         parser.error('Use repeat >= 1, timeout >= 60, and quiet-seconds >= 10.')
+    if not math.isfinite(args.expert_ram_gb) or not 0 <= args.expert_ram_gb < 64:
+        parser.error('Use a finite expert RAM budget of at least 0 and below the 64 GiB model cap.')
+    quant_study = args.quant != 'iq1_m' or args.expert_ram_gb != 36
+    base = ROOT / 'results' / ('qwen-quants-20261113' if quant_study else 'qwen-engram-20261113')
+    # Keep the workspace hook used by the shared guard and cleanup functions.
+    WORK = base / 'work'  # pyright: ignore[reportConstantRedefinition]
+    selection = f'{args.quant}-ram{args.expert_ram_gb:g}g'
+    provenance = base / (f'provenance-{selection}.json' if quant_study else 'provenance.json')
     engram, context = ARMS[args.arm]
     targets = [16384, 32768, 49152, 65536] if args.case == 'matched64' else [16384, 65536, 131072, 184320 if context == 196608 else 245760]
-    output = BASE / f'{args.arm}-{args.case}-r{args.repeat}'
+    output = base / f'{selection + "-" if quant_study else ""}{args.arm}-{args.case}-r{args.repeat}'
     if not args.run and not args.freeze:
-        print(json.dumps({'arm': args.arm, 'engram': engram, 'context_capacity': context, 'filled_targets': targets,
-                          'output': str(output), 'starts_inference': False}, indent=2))
+        info = localmodel.qwen_strata.manifest(args.quant)
+        print(json.dumps({'arm': args.arm, 'quant': args.quant, 'expert_ram_gb': args.expert_ram_gb,
+                          'engram': engram, 'context_capacity': context, 'filled_targets': targets,
+                          'source_directory': info['source_directory'],
+                          'tokenizer_directory': str(Path(info['pack_directory']) / 'tokenizer'),
+                          'provenance': str(provenance), 'output': str(output), 'starts_inference': False}, indent=2))
         return
-    BASE.mkdir(exist_ok=True, parents=True)
-    with (BASE / 'benchmark.lock').open('a') as lock:
+    base.mkdir(exist_ok=True, parents=True)
+    with (base / 'benchmark.lock').open('a') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         if args.freeze:
-            if (BASE / 'provenance.json').exists():
+            if provenance.exists():
                 raise RuntimeError('Provenance already exists; preserve it with its results.')
-            save(BASE / 'provenance.json', snapshot())
+            save(provenance, snapshot(args.quant, args.expert_ram_gb))
             print('Frozen current code and runtime identities without inference.')
             return
         if output.exists() or WORK.exists():
             raise RuntimeError('Case output or stable work directory exists; inspect it before another run.')
         signal.alarm(75 * 60)
-        benchmark_case(args, output, context, engram, targets)
+        benchmark_case(args, output, context, engram, targets, provenance)
 
 
 if __name__ == '__main__':
