@@ -20,7 +20,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
-from project_paths import read_manifest  # noqa: E402
+from qwen_strata import QUANTS, directory, manifest, manifest_path  # noqa: E402
 
 SPEC = importlib.util.spec_from_file_location(
     "stock_strata_runtime", ROOT / "experiments/deepseek-strata/runtime.py"
@@ -180,7 +180,7 @@ def engine(info: dict[str, Any], install: bool) -> Any:
     return index
 
 
-def prepare(info: dict[str, Any]) -> None:
+def prepare(info: dict[str, Any], quant: str = "iq1_m") -> None:
     """Prepare the native weight index and the pinned MTP tensors."""
     model = Path(info["model_directory"])
     source = Path(info["source_directory"])
@@ -268,6 +268,8 @@ def prepare(info: dict[str, Any]) -> None:
     receipt = dict(
         schema=1, manifest_sha256=digest(HERE / "manifest.json"), files=files
     )
+    if quant != "iq1_m":
+        receipt["quant_manifest_sha256"] = digest(manifest_path(quant))
     (model / "artifacts.json").write_text(json.dumps(receipt, indent=2) + "\n")
 
 
@@ -305,7 +307,7 @@ def draft(info: dict[str, Any], index: Any, install: bool) -> None:
         raise RuntimeError("Optional DFlash2 changed. Reverify it with localmodel fetch qwen3.8 --speculative dflash2.")
 
 
-def check(info: dict[str, Any]) -> None:
+def check(info: dict[str, Any], quant: str = "iq1_m") -> None:
     """Check recorded identities without rereading the large weight files."""
     model = Path(info["model_directory"])
     if model.is_symlink() or any(p.is_symlink() for p in model.rglob("*")):
@@ -313,6 +315,8 @@ def check(info: dict[str, Any]) -> None:
     receipt = json.loads((model / "artifacts.json").read_text())
     if receipt["manifest_sha256"] != digest(HERE / "manifest.json"):
         raise RuntimeError("Artifact receipt uses another manifest")
+    if quant != "iq1_m" and receipt.get("quant_manifest_sha256") != digest(manifest_path(quant)):
+        raise RuntimeError("Artifact receipt uses another quantization manifest")
     draft_inventory(info)
     actual = {str(p.relative_to(model)) for p in model.rglob("*") if p.is_file() and p.relative_to(model).parts[0] != "dflash2"}
     if actual != set(receipt["files"]) | {"artifacts.json"}:
@@ -348,9 +352,10 @@ def main() -> None:
     g.add_argument("--check", action="store_true")
     g.add_argument("--inventory", action="store_true")
     ap.add_argument("--speculative", choices=("mtp", "dflash2"), default="mtp")
+    ap.add_argument("--quant", choices=QUANTS, default="iq1_m")
     a = ap.parse_args()
-    info = read_manifest(HERE / "manifest.json")
-    model = Path(info["model_directory"])
+    info = manifest(a.quant)
+    model = directory(a.quant)
     if a.inventory and a.speculative == "dflash2":
         print(json.dumps(sorted(draft_inventory(info))))
         return
@@ -390,17 +395,17 @@ def main() -> None:
             required += max(0, f["size"] - have)
         if shutil.disk_usage(ROOT).free < required:
             raise RuntimeError(
-                f"Preparation requires {required / 1024**3:.1f} GiB free, including 10 GiB headroom"
+                f"Preparation requires {required / 1024**3:.1f} GiB free, including 20 GiB for preparation and headroom"
             )
     index = engine(info, a.run)
     if a.run:
         if (model / "artifacts.json").exists():
-            check(info)
+            check(info, a.quant)
         else:
             for f in info["files"]:
                 download(f, model / f["name"])
-            prepare(info)
-    check(info)
+            prepare(info, a.quant)
+    check(info, a.quant)
     if a.speculative == "dflash2":
         draft(info, index, a.run)
     print(
@@ -410,6 +415,7 @@ def main() -> None:
                 loads_model=False,
                 binary=info["runtime"]["binary"],
                 model_directory=str(model),
+                quant=a.quant,
             )
         )
     )

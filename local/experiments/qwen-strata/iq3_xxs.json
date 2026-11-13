@@ -1,0 +1,34 @@
+{
+  "model_revision": "f5d175de2cf7f720d45d6064019a81fcf056e986",
+  "model_directory": "/home/tritlo/Code/local-models/models/qwen38-unsloth-iq3-xxs",
+  "first_shard": "/home/tritlo/Code/local-models/models/qwen38-unsloth-iq3-xxs/Qwen3.8-Flash-Next-UD-IQ3_XXS-00001-of-00004.gguf",
+  "pack_directory": "/home/tritlo/Code/local-models/models/qwen38-unsloth-iq3-xxs/pack",
+  "mtp_directory": "/home/tritlo/Code/local-models/models/qwen38-unsloth-iq3-xxs/mtp/rt",
+  "ple_shard": "/home/tritlo/Code/local-models/models/qwen38-unsloth-iq3-xxs/Qwen3.8-Flash-Next-UD-IQ3_XXS-00004-of-00004.gguf",
+  "files": [
+    {
+      "name": "Qwen3.8-Flash-Next-UD-IQ3_XXS-00001-of-00004.gguf",
+      "size": 10946618,
+      "sha256": "9d5644b371ffac921427c8021cc7242dab8e3ba37d7b48d1e79fe3770fbf9915",
+      "url": "https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/resolve/f5d175de2cf7f720d45d6064019a81fcf056e986/UD-IQ3_XXS/Qwen3.8-Flash-Next-UD-IQ3_XXS-00001-of-00004.gguf"
+    },
+    {
+      "name": "Qwen3.8-Flash-Next-UD-IQ3_XXS-00002-of-00004.gguf",
+      "size": 49946027488,
+      "sha256": "aacaff3bdb9032c2c3be428167930809735f65d3cfb204eba07d85e421e7ddf4",
+      "url": "https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/resolve/f5d175de2cf7f720d45d6064019a81fcf056e986/UD-IQ3_XXS/Qwen3.8-Flash-Next-UD-IQ3_XXS-00002-of-00004.gguf"
+    },
+    {
+      "name": "Qwen3.8-Flash-Next-UD-IQ3_XXS-00003-of-00004.gguf",
+      "size": 4869325888,
+      "sha256": "ef8f14e790ab471b363f146d5e8664eefbaf03e5776f317a1fb96a2bc7707b07",
+      "url": "https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/resolve/f5d175de2cf7f720d45d6064019a81fcf056e986/UD-IQ3_XXS/Qwen3.8-Flash-Next-UD-IQ3_XXS-00003-of-00004.gguf"
+    },
+    {
+      "name": "Qwen3.8-Flash-Next-UD-IQ3_XXS-00004-of-00004.gguf",
+      "size": 28800138432,
+      "sha256": "5de8b5dbf89409acc39468decafd4a4a95b13c29d88a14b0356107897829ec36",
+      "url": "https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/resolve/f5d175de2cf7f720d45d6064019a81fcf056e986/UD-IQ3_XXS/Qwen3.8-Flash-Next-UD-IQ3_XXS-00004-of-00004.gguf"
+    }
+  ]
+}

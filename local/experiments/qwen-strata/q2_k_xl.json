@@ -1,0 +1,34 @@
+{
+  "model_revision": "f5d175de2cf7f720d45d6064019a81fcf056e986",
+  "model_directory": "/home/tritlo/Code/local-models/models/qwen38-unsloth-q2-k-xl",
+  "first_shard": "/home/tritlo/Code/local-models/models/qwen38-unsloth-q2-k-xl/Qwen3.8-Flash-Next-UD-Q2_K_XL-00001-of-00004.gguf",
+  "pack_directory": "/home/tritlo/Code/local-models/models/qwen38-unsloth-q2-k-xl/pack",
+  "mtp_directory": "/home/tritlo/Code/local-models/models/qwen38-unsloth-q2-k-xl/mtp/rt",
+  "ple_shard": "/home/tritlo/Code/local-models/models/qwen38-unsloth-q2-k-xl/Qwen3.8-Flash-Next-UD-Q2_K_XL-00004-of-00004.gguf",
+  "files": [
+    {
+      "name": "Qwen3.8-Flash-Next-UD-Q2_K_XL-00001-of-00004.gguf",
+      "size": 10946618,
+      "sha256": "297e174dc185f2bf3ab1856461059cb8a05aa741bc27edf42461cde87e5420af",
+      "url": "https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/resolve/f5d175de2cf7f720d45d6064019a81fcf056e986/UD-Q2_K_XL/Qwen3.8-Flash-Next-UD-Q2_K_XL-00001-of-00004.gguf"
+    },
+    {
+      "name": "Qwen3.8-Flash-Next-UD-Q2_K_XL-00002-of-00004.gguf",
+      "size": 49732486272,
+      "sha256": "a4782511810bb61bd6b3236607a0aad05b1bfa04b90356defd202bb17e7db16d",
+      "url": "https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/resolve/f5d175de2cf7f720d45d6064019a81fcf056e986/UD-Q2_K_XL/Qwen3.8-Flash-Next-UD-Q2_K_XL-00002-of-00004.gguf"
+    },
+    {
+      "name": "Qwen3.8-Flash-Next-UD-Q2_K_XL-00003-of-00004.gguf",
+      "size": 1037181344,
+      "sha256": "4dffc4a1cea7ad484f2d5c711b747840e459b040b636cc8ddaa524d01e60662e",
+      "url": "https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/resolve/f5d175de2cf7f720d45d6064019a81fcf056e986/UD-Q2_K_XL/Qwen3.8-Flash-Next-UD-Q2_K_XL-00003-of-00004.gguf"
+    },
+    {
+      "name": "Qwen3.8-Flash-Next-UD-Q2_K_XL-00004-of-00004.gguf",
+      "size": 28800138432,
+      "sha256": "5de8b5dbf89409acc39468decafd4a4a95b13c29d88a14b0356107897829ec36",
+      "url": "https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/resolve/f5d175de2cf7f720d45d6064019a81fcf056e986/UD-Q2_K_XL/Qwen3.8-Flash-Next-UD-Q2_K_XL-00004-of-00004.gguf"
+    }
+  ]
+}

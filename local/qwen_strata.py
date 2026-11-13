@@ -1,4 +1,4 @@
-"""Manage the pinned Qwen3.8 Unsloth UD-IQ1_M files and the Strata server."""
+"""Manage the pinned Qwen3.8 Unsloth files and the Strata server."""
 
 from __future__ import annotations
 
@@ -21,19 +21,29 @@ import qwen_engram
 
 ROOT = Path(__file__).resolve().parent
 NAME = "qwen3.8"
+QUANTS = ("iq1_m", "q2_k_xl", "iq3_xxs")
 HERE = ROOT / "experiments/qwen-strata"
 PYTHON = Path(read_manifest(HERE / "manifest.json")["runtime"]["venv"]) / "bin/python"
 
 
-def manifest() -> dict[str, Any]:
-    """Read the pinned model and runtime definitions."""
-    return read_manifest(HERE / "manifest.json")
+def manifest_path(quant: str = "iq1_m") -> Path:
+    """Select the pinned weight definition."""
+    if quant not in QUANTS:
+        raise ValueError(f"Unknown Qwen quantization: {quant}.")
+    return HERE / ("manifest.json" if quant == "iq1_m" else f"{quant}.json")
 
 
-def directory() -> Path:
+def manifest(quant: str = "iq1_m") -> dict[str, Any]:
+    """Use the shared runtime with the selected weight pins."""
+    path = manifest_path(quant)
+    base = read_manifest(HERE / "manifest.json")
+    return {**base, **read_manifest(path)} if quant != "iq1_m" else base
+
+
+def directory(quant: str = "iq1_m") -> Path:
     """Require the dedicated model directory without symbolic links."""
-    folder = ROOT / "models/qwen38-unsloth-iq1-m"
-    if Path(manifest()["model_directory"]) != folder:
+    folder = ROOT / "models" / ("qwen38-unsloth-" + quant.replace("_", "-"))
+    if Path(manifest(quant)["model_directory"]) != folder:
         raise RuntimeError("The Qwen model directory does not match its managed path.")
     if folder.parent.is_symlink() or folder.is_symlink() or (folder.exists() and not folder.is_dir()):
         raise RuntimeError("The Qwen model directory must be a regular directory.")
@@ -55,15 +65,15 @@ def model_lock(shared: bool = False) -> Generator[None]:
         yield
 
 
-def installed() -> bool:
+def installed(quant: str = "iq1_m") -> bool:
     """Check raw download sizes and the completed artifact receipt."""
-    folder = directory()
+    folder = directory(quant)
     receipt = folder / "artifacts.json"
     return receipt.is_file() and not receipt.is_symlink() and all(
         not (folder / entry["name"]).is_symlink()
         and (folder / entry["name"]).is_file()
         and (folder / entry["name"]).stat().st_size == entry["size"]
-        for entry in manifest()["files"]
+        for entry in manifest(quant)["files"]
     )
 
 
@@ -78,31 +88,32 @@ def environment() -> dict[str, str]:
     return env
 
 
-def fetch(speculative: str = "mtp", engram: str = "q8_0") -> None:
+def fetch(speculative: str = "mtp", engram: str = "q8_0", quant: str = "iq1_m") -> None:
     """Download and verify the model, draft layer, and native runtime."""
     if speculative not in ("mtp", "dflash2"):
         raise RuntimeError("Qwen supports only mtp or dflash2 artifacts.")
     if engram not in ("default", "iq4_nl", "q8_0"):
         raise RuntimeError("Qwen Engram must be q8_0 or iq4_nl; default is a legacy alias for iq4_nl.")
     with model_lock():
-        directory()
+        directory(quant)
         if not PYTHON.exists():
             subprocess.run([str(CAPPED), "--mem", "2G", "--time", "15m", sys.executable,
                             "-B", str(ROOT / "experiments/deepseek-strata/runtime.py"), "--run"],
                            env=environment(), check=True)
         subprocess.run([str(CAPPED), "--mem", "4G", "--time", "12h", str(PYTHON),
-                        "-B", str(HERE / "runtime.py"), "--run", "--speculative", speculative], env=environment(), check=True)
+                        "-B", str(HERE / "runtime.py"), "--run", "--speculative", speculative,
+                        "--quant", quant], env=environment(), check=True)
         if engram == "q8_0":
             subprocess.run([str(CAPPED), "--mem", "2G", "--time", "12h", str(PYTHON),
                             "-B", str(ROOT / "qwen_engram.py")], env=environment(), check=True)
 
 
-def check_ready(speculative: str = "mtp", cache_reuse_fix: bool = False, engram: str = "q8_0") -> None:
+def check_ready(speculative: str = "mtp", cache_reuse_fix: bool = False, engram: str = "q8_0", quant: str = "iq1_m") -> None:
     """Validate pinned artifacts before a server can start."""
     if speculative not in ("mtp", "dflash2"):
         raise RuntimeError("Qwen supports only mtp or dflash2 artifacts.")
-    directory()
-    subprocess.run([str(PYTHON), "-B", str(HERE / "runtime.py"), "--check", "--speculative", speculative],
+    directory(quant)
+    subprocess.run([str(PYTHON), "-B", str(HERE / "runtime.py"), "--check", "--speculative", speculative, "--quant", quant],
                    env=environment(), check=True, stdout=subprocess.DEVNULL)
     if cache_reuse_fix:
         qwen_cache_reuse.verify()
@@ -112,24 +123,25 @@ def check_ready(speculative: str = "mtp", cache_reuse_fix: bool = False, engram:
         raise RuntimeError("Qwen Engram must be q8_0 or iq4_nl; default is a legacy alias for iq4_nl.")
 
 
-def remove(dry_run: bool = False, speculative: str = "mtp", engram: str = "default") -> None:
+def remove(dry_run: bool = False, speculative: str = "mtp", engram: str = "default", quant: str = "iq1_m") -> None:
     """Remove only known model files after a locked inventory check."""
     if speculative not in ("mtp", "dflash2"):
         raise RuntimeError("Qwen supports only mtp or dflash2 artifacts.")
     with model_lock():
+        manifest_path(quant)
         if engram == "q8_0":
             qwen_engram.remove(dry_run)
             return
         if engram not in ("default", "iq4_nl"):
             raise RuntimeError("Qwen Engram must be q8_0 or iq4_nl; default is a legacy alias for iq4_nl.")
-        model = directory()
+        model = directory(quant)
         folder = model / "dflash2" if speculative == "dflash2" else model
         if folder.is_symlink():
             raise RuntimeError("The optional draft directory must not be a symbolic link.")
         if not folder.exists():
-            print("Qwen weights are already absent.")
+            print(f"Qwen {quant} weights are already absent.")
             return
-        result = subprocess.run([str(PYTHON), "-B", str(HERE / "runtime.py"), "--inventory", "--speculative", speculative],
+        result = subprocess.run([str(PYTHON), "-B", str(HERE / "runtime.py"), "--inventory", "--speculative", speculative, "--quant", quant],
                                 env=environment(), check=True, capture_output=True, text=True)
         inventory: object = json.loads(result.stdout)
         if not isinstance(inventory, list):
@@ -166,7 +178,8 @@ def remove(dry_run: bool = False, speculative: str = "mtp", engram: str = "defau
             except OSError:
                 continue
         shutil.rmtree(folder)
-        suffix = " --speculative dflash2" if speculative == "dflash2" else ""
+        suffix = f" --quant {quant}" if quant != "iq1_m" else ""
+        suffix += " --speculative dflash2" if speculative == "dflash2" else ""
         print(f"Deleted {folder}. Restore it with localmodel fetch qwen3.8{suffix}. Freed {size / 2**30:.2f} GiB.")
 
 
@@ -200,7 +213,7 @@ def runtime_status(offset: int) -> dict[str, Any]:
 def settings(args: argparse.Namespace, item: dict[str, Any]) -> dict[str, Any]:
     """Build Qwen engine settings from the supported launcher controls."""
     if args.no_offload:
-        raise RuntimeError("Qwen UD-IQ1_M needs system RAM for experts on this GPU. --no-offload cannot fit its weights.")
+        raise RuntimeError("Qwen Flash-Next needs system RAM for experts on this GPU. --no-offload cannot fit its weights.")
     if args.runtime != "stock" or args.speculative not in ("mtp", "dflash2"):
         raise RuntimeError("This Qwen profile requires pinned Strata with --speculative mtp or dflash2.")
     dflash = args.speculative == "dflash2"
@@ -257,7 +270,8 @@ def settings(args: argparse.Namespace, item: dict[str, Any]) -> dict[str, Any]:
         raise RuntimeError("Use a positive --prefill-chunk token count.")
     if not 0 <= budget <= 1048576:
         raise RuntimeError("Use a thinking budget from 0 to 1048576 tokens.")
-    info = manifest()
+    quant = getattr(args, "quant", None) or "iq1_m"
+    info = manifest(quant)
     engram = getattr(args, "engram", None) or "q8_0"
     if engram not in ("default", "iq4_nl", "q8_0"):
         raise RuntimeError("Qwen Engram must be q8_0 or iq4_nl; default is a legacy alias for iq4_nl.")
@@ -278,7 +292,7 @@ def settings(args: argparse.Namespace, item: dict[str, Any]) -> dict[str, Any]:
     native_args += ["--mmap-experts"] if ram == 0 else ["--resident-budget-gib", str(ram)]
     if dflash:
         native_args += ["--draft", "dflash2", "--draft-model",
-                        str(directory() / "dflash2" / info["dflash2"]["name"]),
+                        str(directory(quant) / "dflash2" / info["dflash2"]["name"]),
                         "--draft-fallback", "none", "--draft-conf", str(confidence),
                         "--mtp-draft-vocab", str(Path(info["mtp_directory"]) / "draft_vocab.bin")]
     else:
@@ -291,7 +305,7 @@ def settings(args: argparse.Namespace, item: dict[str, Any]) -> dict[str, Any]:
     # The public alias is outside the upstream automatic drafter policy.
     # Keep explicit native DFlash2 arguments; do not let that policy select another pack.
     return {"exe": str(binary), "arch": "qwen4exp", **({} if dflash else {"drafting": "mtp"}), "args": native_args,
-            "expert_memory": "cache" if ram == 0 else "resident", "expert_ram_gb": ram,
+            "quant": quant, "expert_memory": "cache" if ram == 0 else "resident", "expert_ram_gb": ram,
             "engram": engram, "engram_type": "Q8_0" if engram == "q8_0" else "IQ4_NL", "engram_path": ple_table,
             "adaptive_fetch": adaptive, "vram_reserve_mib": reserve,
             "user_args": ["--kv-resident", str(kv_cells), "--vram-reserve-mib", str(reserve)],
@@ -308,8 +322,9 @@ def settings(args: argparse.Namespace, item: dict[str, Any]) -> dict[str, Any]:
 def command(args: argparse.Namespace, item: dict[str, Any]) -> list[str]:
     """Build the local API command with the existing outgoing connection guard."""
     settings(args, item)
-    source = Path(manifest()["source_directory"])
-    return [str(CAPPED), "--mem", str(manifest()["memory_limit"]), str(PYTHON), "-I", "-B",
+    info = manifest(getattr(args, "quant", None) or "iq1_m")
+    source = Path(info["source_directory"])
+    return [str(CAPPED), "--mem", str(info["memory_limit"]), str(PYTHON), "-I", "-B",
             str(ROOT / "experiments/deepseek-strata/network_guard.py"),
             str(PYTHON), "-I", "-B", str(source / "serve/server.py"),
             "--engine", "strata", "--config", str(ROOT / "state/qwen-server.json"),
