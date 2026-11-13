@@ -124,7 +124,8 @@ remotemodel start deepseek --no-fetch
 Each bootstrap invocation resolves the latest published `main` commit from
 `TharkunAB/localmodel`. It verifies and caches the required remote and shared
 files from that exact commit. Changes must be published to `main` before the
-bootstrap can use them. Future updates need no new upload.
+bootstrap can use them. `remote/package.json` lists the required files, so
+future code and module updates need no new upload.
 
 The bootstrap needs internet access even for help, status, previews, and
 `--no-fetch`. Preparation can download files; the inference process and its

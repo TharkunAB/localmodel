@@ -477,7 +477,9 @@ the link to the retained `/workspace/start-remote.sh` file.
 
 Each invocation resolves `TharkunAB/localmodel`'s latest published `main`
 commit. The bootstrap verifies the Git blob hash of each required remote
-and shared file at that exact commit. Code is cached under
+and shared file at that exact commit. The verified `remote/package.json`
+lists these files, so new modules do not require a new bootstrap upload.
+Code is cached under
 `/workspace/remote-models/launcher/<commit>`; `REMOTEMODEL_CODE_DIR` can select
 a different code-cache directory. Fetch or verification failure stops the
 bootstrap. It does not silently run an older cached release.

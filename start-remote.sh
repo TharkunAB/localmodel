@@ -10,23 +10,20 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import re
 import signal
 import sys
 import tempfile
 import urllib.error
 import urllib.request
-from typing import Any
+from typing import Any, cast
 
 REPO = 'TharkunAB/localmodel'
 API = f'https://api.github.com/repos/{REPO}'
 MAX_BYTES = 16 * 1024 * 1024
-PACKAGE = (
-    'remote/bin/remotemodel', 'remote/remotemodel.py', 'remote/monitor.py',
-    'remote/start-remote-model.sh', 'local/strata_tui.py',
-    'local/config/strata-monitor-requirements.txt',
-)
+ENTRYPOINT = 'remote/bin/remotemodel'
+MANIFEST = 'remote/package.json'
 
 
 class RejectRedirect(urllib.request.HTTPRedirectHandler):
@@ -72,25 +69,40 @@ def check_package(directory: Path, entries: dict[str, Any]) -> None:
     """Reject altered cached files and symbolic links before execution."""
     if directory.is_symlink() or not directory.is_dir():
         raise ValueError('The cached remote package must be a regular directory.')
-    directories = {str(parent) for name in PACKAGE for parent in Path(name).parents if str(parent) != '.'}
+    directories = {str(parent) for name in entries for parent in Path(name).parents if str(parent) != '.'}
     for path in directory.rglob('*'):
         name = str(path.relative_to(directory))
-        if path.is_symlink() or (name not in directories if path.is_dir() else name not in PACKAGE):
+        if path.is_symlink() or (name not in directories if path.is_dir() else name not in entries):
             raise ValueError(f'The cached remote package contains an unexpected entry: {path}')
-    for name in PACKAGE:
+    for name in entries:
         path = directory / name
         if any(parent.is_symlink() for parent in path.parents if parent != directory.parent):
             raise ValueError('The cached remote package contains a directory link.')
         if path.is_symlink() or not path.is_file() or path.stat().st_size > MAX_BYTES:
             raise ValueError(f'The cached remote package is incomplete or linked: {path}')
         verify(path.read_bytes(), entries[name])
-    if (directory / PACKAGE[0]).read_bytes().split(b'\n', 1)[0] not in (b'#!/usr/bin/env bash', b'#!/bin/bash'):
+    if (directory / ENTRYPOINT).read_bytes().split(b'\n', 1)[0] not in (b'#!/usr/bin/env bash', b'#!/bin/bash'):
         raise ValueError('The remote package entry point is not a Bash script.')
 
 
 def package(revision: str, entries: dict[str, Any]) -> Path:
     """Cache a complete verified package; keep weights and builds separate."""
-    selected = {name: entry_for(entries, name) for name in PACKAGE}
+    manifest_entry = entry_for(entries, MANIFEST)
+    manifest = fetch(f'https://raw.githubusercontent.com/{REPO}/{revision}/{MANIFEST}')
+    verify(manifest, manifest_entry)
+    names_value: Any = json.loads(manifest)['files']
+    if not isinstance(names_value, list):
+        raise ValueError('The remote package manifest has an invalid file list.')
+    items = cast(list[object], names_value)
+    if not 1 <= len(items) <= 128 or not all(isinstance(name, str) for name in items):
+        raise ValueError('The remote package manifest has an invalid file list.')
+    names = cast(list[str], items)
+    if ENTRYPOINT not in names or MANIFEST in names or len(names) != len(set(names)):
+        raise ValueError('The remote package manifest has a missing entry point or duplicate files.')
+    if any(not name.startswith(('remote/', 'local/')) or '..' in PurePosixPath(name).parts
+           or str(PurePosixPath(name)) != name or '\\' in name for name in names):
+        raise ValueError('The remote package manifest contains an unsafe path.')
+    selected = {MANIFEST: manifest_entry, **{name: entry_for(entries, name) for name in names}}
     cache = Path(os.environ.get('REMOTEMODEL_CODE_DIR', '/workspace/remote-models/launcher')).expanduser().absolute()
     if cache.is_symlink():
         raise ValueError('The remote code cache must not be a symbolic link.')
@@ -100,7 +112,7 @@ def package(revision: str, entries: dict[str, Any]) -> Path:
         with tempfile.TemporaryDirectory(prefix='.fetch-', dir=cache) as temporary:
             stage = Path(temporary) / 'package'
             for name, entry in selected.items():
-                payload = fetch(f'https://raw.githubusercontent.com/{REPO}/{revision}/{name}')
+                payload = manifest if name == MANIFEST else fetch(f'https://raw.githubusercontent.com/{REPO}/{revision}/{name}')
                 verify(payload, entry)
                 target = stage / name
                 target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -113,7 +125,7 @@ def package(revision: str, entries: dict[str, Any]) -> Path:
                     raise
                 # Another bootstrap may have published the same complete commit.
     check_package(destination, selected)
-    return destination / PACKAGE[0]
+    return destination / ENTRYPOINT
 
 
 def main() -> None:
@@ -132,7 +144,7 @@ def main() -> None:
     args = sys.argv[1:]
     if not args or args[0] in ('start', 'fetch', 'list', 'status', 'stop', 'help', '-h', '--help', '--backend-help', '--version'):
         launcher = package(revision, entries)
-        print(f'Launching {REPO}@{revision}:{PACKAGE[0]}', file=sys.stderr, flush=True)
+        print(f'Launching {REPO}@{revision}:{ENTRYPOINT}', file=sys.stderr, flush=True)
         os.execvp('bash', ['bash', str(launcher), *args])
     path = 'remote/start-remote-model.sh'
     if path not in entries:

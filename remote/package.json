@@ -1,0 +1,10 @@
+{
+  "files": [
+    "remote/bin/remotemodel",
+    "remote/remotemodel.py",
+    "remote/monitor.py",
+    "remote/start-remote-model.sh",
+    "local/strata_tui.py",
+    "local/config/strata-monitor-requirements.txt"
+  ]
+}
