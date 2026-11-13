@@ -227,7 +227,8 @@ class Guard:
                     if self.scope:
                         row['model_memory'] = {key: (self.scope / key).read_text().strip() for key in
                             ('memory.current', 'memory.peak', 'memory.max', 'memory.swap.current', 'memory.swap.max', 'memory.events', 'memory.stat')}
-                        row['model_io'] = (self.scope / 'io.stat').read_text()
+                        io_path = self.scope / 'io.stat'
+                        row['model_io'] = io_path.read_text() if io_path.exists() else None
                     critical = guard_reason(row)
                     if critical:
                         self.abort(critical)
