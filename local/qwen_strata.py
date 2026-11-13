@@ -173,7 +173,7 @@ def remove(dry_run: bool = False, speculative: str = "mtp", engram: str = "defau
 def runtime_status(offset: int) -> dict[str, Any]:
     """Read positive activation evidence from this server start only."""
     result: dict[str, Any] = {"effective_speculative": None, "adaptive_fetch_active": None,
-                              "effective_engram_type": None}
+                              "effective_engram_path": None}
     try:
         with (ROOT / "state/qwen-engine.log").open("rb") as stream:
             stream.seek(offset)
@@ -191,9 +191,9 @@ def runtime_status(offset: int) -> dict[str, Any]:
         result["adaptive_fetch_active"] = int(active.group(1))
     elif "STRATA_ADAPT_FETCH is off (" in text:
         result["adaptive_fetch_active"] = 0
-    table = re.search(r"PLE on, table 320001536 rows of (\S+)", text)
+    table = re.search(r"PLE on, table 320001536 rows of ([^\r\n]+)", text)
     if table:
-        result["effective_engram_type"] = table.group(1)
+        result["effective_engram_path"] = table.group(1)
     return result
 
 
