@@ -10,7 +10,7 @@ import time
 import urllib.request
 from typing import Any
 
-from benchmark_paths import HERE, ROOT
+ROOT = Path(__file__).resolve().parents[3]
 ACTIVE = ROOT / 'state/active.json'
 stop_requested = False
 
@@ -73,6 +73,8 @@ def sample(active: dict[str, Any], case: Path, seen: set[str]) -> None:
 
 
 def main() -> None:
+    from benchmark_paths import HERE
+
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--seconds', type=int, default=21600)
     parser.add_argument('--interval', type=float, default=2)
