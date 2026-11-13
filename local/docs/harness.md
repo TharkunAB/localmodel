@@ -192,10 +192,15 @@ command to delete its selected files.
 
 The larger quants have 42.87 GiB and 46.84 GiB of expert tensor data, respectively.
 All Qwen quants default to a 48 GiB expert budget inside the 64 GiB process cap.
-Q2_K_XL's measured allocation was 42.44 GiB, including all prefill copies. It passed
-the repair, recall, and compaction checks through about 245K input tokens,
-with 39.32 tokens/s repair/resume decode. Compaction took 221.17 seconds.
-IQ1_M and IQ3_XXS measurements at the new budget are pending.
+IQ1_M remains the default quant. With Q8_0 Engram and MTP4, IQ1_M, Q2_K_XL and
+IQ3_XXS decoded at 50.86, 39.32 and 37.11 tokens/s through about 245K input.
+They pinned 32.01, 42.44 and 46.44 GiB of experts, including the prefill copies.
+All passed the code, recall and compaction-retention checks. Compaction took
+160.73, 221.17 and 221.22 seconds. These single trials had different generated
+outputs; strict repair-final JSON formatting failed for all three.
+See the [quant comparison](qwen-quants-20261113.md) for timings, published scores
+and limits. IQ1_M weights are installed. The larger quant profiles remain available
+for fetch, start and remove; their experimental weights were removed after testing.
 Use `--expert-ram-gb` to override the budget. The `lowram` profile still uses zero.
 Their size and SHA256 pins are recorded in `experiments/qwen-strata/q2_k_xl.json`
 and `iq3_xxs.json`. Both use Unsloth revision

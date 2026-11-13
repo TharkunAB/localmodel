@@ -842,8 +842,16 @@ def stop() -> None:
 
 def stats_text() -> str:
     """Show recorded measurements without starting a model."""
-    return ("2026-11-13 Qwen Flash-Next IQ1_M v3.1, Strata 0.2.13/native 0.1.59, MTP4, 64G cap.\n"
-            "Defaults: Q8_0 Engram, 256K context and a 48 GiB expert budget for all Qwen quants. The following earlier runs used 36 GiB.\n"
+    return ("2026-11-13/14 Qwen Flash-Next quant comparison, Strata 0.2.13/native 0.1.59.\n"
+            "IQ1_M remains the default. All Qwen quants now use a 48 GiB expert budget, 64G process cap, Q8_0 Engram, 256K capacity and MTP4. lowram stays at zero expert RAM.\n"
+            "IQ1_M / Q2_K_XL / IQ3_XXS: repair/resume decode 50.86 / 39.32 / 37.11 tok/s; first cold prefill 1327 / 1203 / 1361 tok/s.\n"
+            "Pinned experts: 32.01 / 42.44 / 46.44 GiB. Each process peaked at 64 GiB including file cache; no OOM or swap.\n"
+            "Repair/resume wall time: 331.43 / 311.36 / 341.69 s. Actual compaction: 160.73 / 221.17 / 221.22 s.\n"
+            "All code, recall and strict-resume checks pass through about 245K input; all three compactions preserve the tested facts. Strict repair JSON fails on fenced/prose replies.\n"
+            "IQ3 decode is 27% lower than IQ1; combined repair/resume plus compaction took 14% longer in these single trials. IQ1's initial date and generated histories differ.\n"
+            "Only IQ1_M core weights are retained. Q2/IQ3 profiles remain fetchable with --quant. All owned services stopped. See docs/qwen-quants-20261113.md.\n\n"
+            "2026-11-13 Qwen Flash-Next IQ1_M v3.1 Engram comparison, Strata 0.2.13/native 0.1.59, MTP4, 64G cap.\n"
+            "These earlier runs used a 36 GiB expert budget. Q8_0 Engram and 256K context remain the defaults.\n"
             "--engram iq4_nl selects the smaller bundled table; --context 192k restores the smaller capacity.\n"
             "Conversations through 64K: bundled table at 192/256K decoded at 51.35/51.75; Q8_0 at 51.23/53.82 tok/s.\n"
             "Q8_0 long conversations: 184030 input, 50.36 tok/s; 245433 input, 49.30 tok/s. All code/recall checks pass.\n"
