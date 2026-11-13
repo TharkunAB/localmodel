@@ -833,7 +833,15 @@ def stop() -> None:
 
 def stats_text() -> str:
     """Show recorded measurements without starting a model."""
-    return ("2026-11-11 dense Qwen3.8-27B Dynamic 3.1 UD-Q4_K_M, llama.cpp b11946.\n"
+    return ("2026-11-13 Qwen Flash-Next IQ1_M v3.1, Strata 0.2.13/native 0.1.59, MTP4, 64G cap.\n"
+            "Q8_0 Engram is now the default; --engram iq4_nl selects the smaller bundled table. Context remains 192K.\n"
+            "Conversations through 64K: bundled table at 192/256K decoded at 51.35/51.75; Q8_0 at 51.23/53.82 tok/s.\n"
+            "Q8_0 long conversations: 184030 input, 50.36 tok/s; 245433 input, 49.30 tok/s. All code/recall checks pass.\n"
+            "256K uses 0.77 GiB more pinned host KV with the same 64K GPU window. Q8 adds 50.66 GiB disk and 80 MiB table-cache data.\n"
+            "Actual compaction at 256K took 180.95 s and preserved facts; fenced JSON failed strict formatting checks.\n"
+            "A resume at 246K also spent 16.40 s saving its snapshot. No OOM or swap. Single trials with variable output.\n"
+            "See docs/qwen-engram-20261113.md for denominators, formatting scores and memory-cache limits.\n\n"
+            "2026-11-11 dense Qwen3.8-27B Dynamic 3.1 UD-Q4_K_M, llama.cpp b11946.\n"
             "192K capacity, Q4 KV, auto GPU fitting, 48G cap, xhigh; same 15997-token initial OMP input.\n"
             "Standard / MTP2: decode 2.99 / 5.37 tok/s; initial prefill 383.90 / 310.31 tok/s.\n"
             "Repair plus strict resume: 340.07 / 210.04 s, with 842 / 698 generated tokens. Both pass all checks.\n"
