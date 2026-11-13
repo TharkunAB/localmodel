@@ -213,6 +213,10 @@ def check_pack(speculative: str = "none", model: str = NAME) -> None:
             raise ValueError("Draft pins changed.")
         if set(record["files"]) != set(PACK_ASSETS) or set(paths) - {"expert-profile.bin"} != set(PACK_ASSETS) | {"localmodel-pack.json"}:
             raise ValueError("The pack asset list is incomplete.")
+        model_dirs = [line.removeprefix("model_dir ") for line in paths["ds4.txt"].read_text().splitlines()
+                      if line.startswith("model_dir ")]
+        if model_dirs != [str(directory(model))]:
+            raise ValueError(f"The pack model_dir must be {directory(model)}; rebuild the pack after moving weights.")
         for name, expected in record["files"].items():
             with paths[name].open("rb") as stream:
                 if hashlib.file_digest(stream, "sha256").hexdigest() != expected:
@@ -226,7 +230,7 @@ def check_pack(speculative: str = "none", model: str = NAME) -> None:
             raise ValueError("The pack references unexpected weight files.")
     except (OSError, ValueError, KeyError, TypeError) as error:
         suffix = " --speculative dspark" if speculative == "dspark" else ""
-        raise RuntimeError(f"DeepSeek pack is missing or changed. Remove {pack_directory(speculative, model).name}/localmodel-pack.json and run localmodel fetch {model}{suffix}.") from error
+        raise RuntimeError(f"DeepSeek pack is missing or changed: {error} Remove {pack_directory(speculative, model) / 'localmodel-pack.json'} and run localmodel fetch {model}{suffix}.") from error
 
 
 def fetch(speculative: str = "none", model: str = NAME) -> None:
