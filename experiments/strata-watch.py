@@ -99,9 +99,11 @@ def research(thread: str, codex: str, check_only: bool) -> None:
     message = (
         "Scheduled public-source research authorized by Matti. Use the council's ask_grok tool "
         "to search public X/Twitter posts from the last seven days about Strata, "
-        "DeepSeek-V4.1-Flash-1017 GSQ-RCO Coder, Qwen3.8-Flash-Next and Bonsai2 27B. "
+        "DeepSeek-V4.1-Flash-1017 GSQ-RCO Coder, Qwen3.8-Flash-Next, Bonsai2 27B and Basalt. "
         "Look for reproducible MTP/DFlash optimizations, expert-cache and SSD-offload improvements, "
-        "long-context prefill, and coding-agent fixes. Send Grok only these public project names "
+        "long-context prefill, and coding-agent fixes. For Basalt, also check supported models, "
+        "quantizations and GPU architectures; distinguish main-GPU support from peer-only support. "
+        "Send Grok only these public project names "
         "and general research topics. Do not send local hardware, memory limits, settings, "
         "benchmark results, paths, code, credentials or remote-deployment details. "
         "Tell Grok to use public web/X search only and not inspect local files or tools, post, "

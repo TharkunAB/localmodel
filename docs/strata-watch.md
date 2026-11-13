@@ -26,6 +26,14 @@ The timer requests research even when the GPU is busy. It does not start inferen
 `research_date` in the watch state prevents duplicate requests on the same local
 calendar day. A failed queue operation does not record that day.
 
+The search covers Strata, DeepSeek 1017, Qwen3.8 Flash-Next, Bonsai2 27B,
+and Basalt. For Basalt, check model and quantization support, conversion
+requirements, long-context performance, and coding-agent API compatibility.
+Distinguish support for a main GPU from support for an expert-cache peer GPU.
+The November 13 review found no standalone Ada support. Basalt PR
+[#343](https://github.com/jesdga95/basalt/pull/343) adds an Ada peer to a
+Blackwell main GPU. Research does not install Basalt or select it as a runtime.
+
 Grok receives public project names and general research topics only. Do not send
 local hardware details, configuration, measurements, paths, code, credentials,
 or remote deployment details. Ask for original X posts and linked primary
@@ -50,6 +58,9 @@ official updates under the procedure below.
    Review relevant source changes. Keep signature and checksum verification.
    Update the local source, engines, packer, and remote launcher pins together
    where the release applies. Preserve the inference network restrictions.
+   Recheck the terminal monitor source pin and dependency lock. Retest its
+   shutdown behavior. Check whether the Qwen cache-reuse backport is included
+   upstream before retaining or retiring the separate candidate.
    Do not deploy to a remote server or push Git commits.
 3. Recheck GPU processes and memory, CPU load, Linux memory, and free disk space.
    Defer if another model or a heavy job is running. Do not stop user processes.
