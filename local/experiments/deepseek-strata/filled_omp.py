@@ -130,10 +130,15 @@ class Benchmark:
     """Run serial OMP checkpoints with exact request sizing and saved evidence."""
 
     def __init__(self, output: Path, targets: list[int], timeout: int, *, model: str = MODEL,
-                 context: int = 262144):
+                 context: int = 262144, source_directory: Path | None = None,
+                 tokenizer_directory: Path | None = None):
         self.output, self.targets, self.timeout = output, targets, timeout
-        if model not in (MODEL, 'qwen3.8'):
-            raise ValueError('Select the pinned DeepSeek or Qwen3.8 Strata model.')
+        if model not in (MODEL, 'qwen3.8', 'edge0-145b'):
+            raise ValueError('Select the pinned DeepSeek, Qwen3.8 or Edge0 Strata model.')
+        if (source_directory is None) != (tokenizer_directory is None):
+            raise ValueError('Provide both source and tokenizer directory overrides.')
+        if model == 'edge0-145b' and source_directory is None:
+            raise ValueError('Edge0 requires its reviewed source and tokenizer directories.')
         if context < 1024 or any(target + 4096 > context for target in targets):
             raise ValueError('Context must hold each target and the 4096-token response budget.')
         self.model = model
@@ -148,7 +153,9 @@ class Benchmark:
             'thinking': 'xhigh', 'output_limit': 4096, 'checks': [],
             'history': 'Constructed OMP history from pinned public source; no private conversations.',
             'memory_floor_gib': 8, 'server_context_capacity': context, 'model': model}
-        if model == 'qwen3.8':
+        if source_directory is not None and tokenizer_directory is not None:
+            source, pack = source_directory, tokenizer_directory
+        elif model == 'qwen3.8':
             info = localmodel.qwen_strata.manifest()
             source = Path(info['source_directory'])
             pack = Path(info['pack_directory']) / 'tokenizer'
@@ -171,8 +178,10 @@ class Benchmark:
             template = dsml.pick_template(template)[0]
         self.service: Any = api.Service(api.MockEngine(self.tokenizer, '', max_context=context), self.tokenizer,
             frontend.ChatTemplate(template), model_name=model)
-        self.service.model_arch = 'qwen4exp' if model == 'qwen3.8' else 'deepseek41'
-        self.service.set_family(None if model == 'qwen3.8' else 'deepseek41')
+        qwen_family = model in ('qwen3.8', 'edge0-145b')
+        self.service.model_arch = 'qwen4exp' if qwen_family else 'deepseek41'
+        self.service.set_family(None if qwen_family else 'deepseek41')
+        self.report['source_directory'] = str(source)
         self.report['tokenizer_directory'] = str(pack)
         self.report['chat_template_sha256'] = hashlib.sha256(template.read_bytes()).hexdigest()
         paths = sorted((ROOT / 'state/sources').glob('prism-e3de715-*.cpp'))
