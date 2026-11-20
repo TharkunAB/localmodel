@@ -1,4 +1,4 @@
-"""Block outbound sockets before the Strata server or its children start."""
+"""Block outbound sockets before the model server or its children start."""
 
 from __future__ import annotations
 
@@ -80,7 +80,7 @@ def main() -> None:
         except OSError:
             pass
     restrict_network()
-    print("[localmodel] Strata: outgoing connections blocked for the server and its children.",
+    print("[localmodel] Outgoing connections blocked for the server and its children.",
           file=sys.stderr, flush=True)
     os.execv(sys.argv[1], sys.argv[1:])
 
@@ -89,4 +89,4 @@ if __name__ == "__main__":
     try:
         main()
     except (OSError, ValueError, RuntimeError) as error:
-        sys.exit(f"Strata isolation failed. The server was not started: {error}")
+        sys.exit(f"Network isolation failed. The server was not started: {error}")

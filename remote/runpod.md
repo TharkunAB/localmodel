@@ -19,7 +19,7 @@ profile serves Qwen3.8-27B; the local harness uses a separate
 Qwen3.8-Flash-Next profile. `remotemodel` does not connect to a Pod over SSH.
 Run it on the GPU host; run `omp-remote` on your workstation.
 
-All remote DeepSeek profiles now use the unmodified official Strata source
+The [one-card DeepSeek trial](#one-card-deepseek-trial) has explicit Basalt and Strata profiles. The automatic DeepSeek profiles use the unmodified official Strata source
 `d2f096475817d4666c364c820b0ca830f751cfc5` (0.2.13), Control 0.1.59, and signed
 CUDA 13 engine 0.1.59. This includes the official API server and GGUF packer.
 See the [update review](../local/docs/strata-0.2.13-review.md) for checks and known parser behavior.
@@ -442,6 +442,33 @@ preview and launch commands. Network-backed Engram random reads can be slow.
 A successful preview checks filesystem type; it does not measure storage
 throughput or perform the later manifest-based free-disk check.
 
+## One-card DeepSeek trial
+
+Use one **RTX PRO 6000 Blackwell 96 GB** with an Ubuntu 24.04 x86-64 CUDA 13 image that includes cuBLAS and a compatible NVIDIA driver (R580.95.05 or later). Both profiles use DeepSeek-V4.1-Flash-1017, Unsloth Dynamic V3.1 UD-IQ1_M, DSpark with up to three proposed tokens, and a 1,048,576-token context window. The first trial uses a shorter prompt at this serving capacity. [Basalt release](https://github.com/jesdga95/basalt/releases/tag/v0.5.0) · [DeepSeek pack](https://huggingface.co/jesdga/DeepSeek-V4.1-Flash-1017-Basalt)
+
+Allocate **container disk** for the weights. Basalt needs 242.12 GiB for the pack plus the runtime and 20 GiB free. Allow at least **510 GiB free** to hold both engines' weights together, including Strata's 240.63 GiB of weights and drafter. Both profiles use `/opt/remote-models` by default and reject weights under `/workspace`. Replacing the container can require downloading the weights again. Strata budgets about 47 GiB for off-GPU experts on a full card if host RAM also covers 24.25 GiB of headroom.
+
+Run on the pod:
+
+```sh
+curl -fL --retry 3 https://raw.githubusercontent.com/TharkunAB/localmodel/main/start-remote.sh -o /workspace/start-remote.sh
+export REMOTEMODEL_CODE_DIR=/root/.cache/remotemodel/launcher
+bash /workspace/start-remote.sh start deepseek --profile deepseek-basalt-pro6000 --dry-run
+bash /workspace/start-remote.sh start deepseek --profile deepseek-basalt-pro6000 --install-deps --tui
+```
+
+The first start fetches missing files. Use a terminal for `--tui`. Press **q** to close the monitor and keep serving. Press **Ctrl-C** to stop the server. After it stops, start the comparator with `--profile deepseek-strata-pro6000` and the same flags. To prepare files without loading a model, replace `start` with `fetch`. For a smaller capacity, pass `--context 64K` explicitly to both.
+
+On the workstation keep the [SSH tunnel](#connect-the-client) open and start `pi-remote` with local SearXNG running. Pi discovers the served model and context on port 8898. Both backends serve on pod port 8897 with outbound connections blocked.
+
+For the matched single-agent workload run the following on the workstation, once for each running engine. Choose a new output directory each time. It uses a long public Python prompt, a file read and a second Pi process that resumes the same session. Compare the verified grades and elapsed time, along with the actual input/output counts. A configured 1M limit does not measure speed at 1M filled tokens.
+
+```sh
+python3 remote/bench_pi.py basalt --expect-context 1048576 --output ~/benchmarks/basalt-pro6000
+# After switching the pod to the Strata profile:
+python3 remote/bench_pi.py strata --expect-context 1048576 --output ~/benchmarks/strata-pro6000
+```
+
 ## Install remotemodel once and preview
 
 Add your public SSH key in RunPod and select a template with full SSH access.
@@ -459,21 +486,16 @@ scp -P PORT -i ~/.ssh/id_ed25519 start-remote.sh root@IP:/workspace/start-remote
 ssh -p PORT -i ~/.ssh/id_ed25519 root@IP
 ```
 
-On the Pod, keep the bootstrap on persistent storage and link the command:
+On the Pod, keep the bootstrap on persistent storage. For a short command in the current shell:
 
 ```sh
-chmod +x /workspace/start-remote.sh
-mkdir -p ~/.local/bin
-ln -s /workspace/start-remote.sh ~/.local/bin/remotemodel
-export PATH="$HOME/.local/bin:$PATH"
+alias remotemodel='bash /workspace/start-remote.sh'
 remotemodel --help
 remotemodel list
 remotemodel start deepseek --dry-run
 ```
 
-Add the `PATH` setting to your shell configuration. A root user can link
-`/usr/local/bin/remotemodel` instead. If the container is replaced, recreate
-the link to the retained `/workspace/start-remote.sh` file.
+Add the alias to your shell configuration for new terminals, or use the full Bash command.
 
 Each invocation resolves `TharkunAB/localmodel`'s latest published `main`
 commit. The bootstrap verifies the Git blob hash of each required remote
@@ -532,12 +554,12 @@ remotemodel start deepseek --tui --no-fetch
 This flag does not disable the bootstrap's GitHub request. Use a fixed source
 checkout to start fully offline. The monitor must already be prepared when
 combining `--tui` with `--no-fetch`.
-The shared TUI dependencies require Python 3.11 or later with `venv` support.
+The shared Strata TUI dependencies require Python 3.11 or later with `venv` support.
 The launcher checks for that interpreter before preparing model files.
 
 The Strata monitor is read-only. Press `t` to cycle terminal, dark, and light
 colors. Press `q` to close the display while the server stays in the foreground.
-Press Ctrl-C to stop the server. `--tui` is rejected for non-Strata profiles.
+Press Ctrl-C to stop the server. The Basalt trial uses its own read-only terminal monitor.
 Detach from tmux with Ctrl-b then d; reconnect with `tmux attach -t remote-model`.
 
 In another terminal on the Pod:

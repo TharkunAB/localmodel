@@ -57,12 +57,16 @@ def current() -> dict[str, Any]:
 
     context = CONTEXT
     capacity = info.get("max_model_len", info.get("max_context_length", info.get("context_length")))
+    if capacity is None and info.get("owned_by") == "basalt" and isinstance(info.get("meta"), dict):
+        capacity = info["meta"].get("n_ctx")
     if capacity is None:
         try:
             props = request(base_url, "/props")
             capacity = props["default_generation_settings"]["n_ctx"]
         except (OSError, ValueError, KeyError, TypeError):
             pass
+    if capacity is None and info.get("owned_by") == "basalt":
+        raise ValueError("Basalt did not report the loaded context capacity.")
     if capacity is not None:
         if type(capacity) is not int or capacity < 2:
             raise ValueError("The remote server reported an invalid context capacity.")

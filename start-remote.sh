@@ -116,8 +116,9 @@ def package(revision: str, entries: dict[str, Any]) -> Path:
                 verify(payload, entry)
                 target = stage / name
                 target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-                target.write_bytes(payload)
-                target.chmod(0o700 if entry['mode'] == '100755' else 0o600)
+                # Bash and Python read these files directly on noexec RunPod volumes.
+                with os.fdopen(os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), 'wb') as output:
+                    output.write(payload)
             try:
                 stage.rename(destination)
             except OSError:
@@ -168,8 +169,8 @@ try:
     main()
 except urllib.error.HTTPError as error:
     sys.exit(f'ERROR: GitHub HTTP {error.code}; no launcher was started. Check access and API limits.')
-except (urllib.error.URLError, OSError):
-    sys.exit('ERROR: Could not fetch or start the remote launcher. No cached launcher was used.')
+except (urllib.error.URLError, OSError) as error:
+    sys.exit(f'ERROR: Could not fetch or start the remote launcher: {error}. No cached launcher was used.')
 except (KeyError, TypeError, AttributeError):
     sys.exit('ERROR: GitHub returned invalid launcher metadata.')
 except ValueError as error:

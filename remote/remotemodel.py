@@ -21,6 +21,7 @@ HERE = Path(__file__).resolve().parent
 BACKEND = HERE / "start-remote-model.sh"
 sys.path.insert(0, str(HERE))
 MODELS = {"auto": "auto", "deepseek": "deepseek-auto", "mistral": "mistral-b300"}
+PRO6000_TRIAL = {"deepseek-basalt-pro6000", "deepseek-strata-pro6000"}
 HELP = """remotemodel COMMAND [MODEL] [options]
 
 Commands:
@@ -31,11 +32,15 @@ Commands:
   stop                         Stop only that verified controller and its children.
 
 Options:
-  --root DIRECTORY             Persistent data/build root (default /workspace/remote-models).
+  --root DIRECTORY             Data/build root and controller directory. The one-card trial
+                               uses /opt/remote-models on the container for weights by default.
+                               Other profiles default to /workspace/remote-models.
   --port PORT                  Loopback API port (default 8897).
   --profile PROFILE            Use an existing hardware profile for this model family.
+                               One RTX PRO 6000 Blackwell: deepseek-basalt-pro6000
+                               or deepseek-strata-pro6000 (IQ1_M, DSpark, 1M context).
   --dry-run, --show-config     Preview the backend plan and stages without writes/downloads.
-  --tui                        Show the shared Strata monitor; fetch also prepares its dependencies.
+  --tui                        Show the read-only Strata or Basalt terminal monitor.
   --no-fetch                   Start only from prepared files, without preparation downloads/builds.
   --install-deps               Allow the backend to install system dependencies during preparation.
   --backend-help               Show every existing hardware, quantization, cache and build flag.
@@ -44,7 +49,7 @@ Existing backend flags pass through, including --context 1M, --quant NAME,
 --spec dspark/none, --dspark N, --expert-ram-gb N, --gpu-count N and --build-jobs N.
 Explicit --root overrides REMOTEMODEL_ROOT, then QWEN_ROOT. Build archives retain
 the backend default /workspace/archive. Preparation reuses verified weights and builds.
-Start does not set up SSH. DeepSeek/Strata and Mistral serving retain the backend's
+Start does not set up SSH. DeepSeek/Strata, DeepSeek/Basalt and Mistral serving retain the backend's
 outgoing-network block. There is no automatic fallback after startup fails.
 With --tui: q closes the monitor; Ctrl-C stops this launcher's server.
 Legacy invocations beginning with backend options retain the old script interface.
@@ -54,7 +59,7 @@ Legacy invocations beginning with backend options retain the old script interfac
 def parser() -> argparse.ArgumentParser:
     """Parse wrapper controls while retaining backend options unchanged."""
     result = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
-    result.add_argument("--root", default=os.environ.get("REMOTEMODEL_ROOT", os.environ.get("QWEN_ROOT", "/workspace/remote-models")))
+    result.add_argument("--root", default=os.environ.get("REMOTEMODEL_ROOT", os.environ.get("QWEN_ROOT")))
     result.add_argument("--port", type=int, default=int(os.environ.get("QWEN_PORT", "8897")))
     result.add_argument("--profile")
     result.add_argument("--dry-run", "--show-config", dest="dry_run", action="store_true")
@@ -254,7 +259,7 @@ def serve(command: list[str], path: Path, record: dict[str, Any], monitor_comman
                 if result == 130:
                     return 130
                 if result:
-                    raise RuntimeError(f"The Strata monitor exited with status {result}.")
+                    raise RuntimeError(f"The monitor exited with status {result}.")
                 print("Monitor closed. The server is still running; Ctrl-C stops it.", flush=True)
             return child.wait()
         finally:
@@ -288,13 +293,13 @@ def main(argv: list[str] | None = None) -> int:
         return subprocess.call(["bash", str(BACKEND), "--help"])
     if not 1024 <= args.port <= 65535:
         raise RuntimeError("The API port must be between 1024 and 65535.")
-    root = Path(str(args.root)).expanduser().absolute()
+    root = Path(args.root or "/workspace/remote-models").expanduser().absolute()
     path = root / "state" / f"remotemodel-{args.port}.json"
     if action in ("list", "status", "stop"):
         if extra or args.profile or args.tui or args.no_fetch or args.install_deps or args.dry_run:
             raise RuntimeError(f"{action} accepts only --root and --port.")
         if action == "list":
-            print("auto       Detect DeepSeek/Strata or single-B300 Mistral.\ndeepseek   DeepSeek 1017 on Strata-supported GPUs.\nmistral    Mistral Large 4 on one B300.\nUse --profile for existing explicit hardware/legacy profiles; see --backend-help.")
+            print("auto       Detect DeepSeek/Strata or single-B300 Mistral.\ndeepseek   DeepSeek 1017 on Strata-supported GPUs.\n           One RTX PRO 6000 Blackwell trial: --profile deepseek-basalt-pro6000 or deepseek-strata-pro6000.\nmistral    Mistral Large 4 on one B300.")
         elif action == "stop":
             stop(path)
         else:
@@ -311,21 +316,26 @@ def main(argv: list[str] | None = None) -> int:
     if args.tui and action == "start" and not args.dry_run and not sys.stdin.isatty():
         raise RuntimeError("--tui requires an interactive terminal. Run without it or use SSH with a TTY.")
     profile = str(args.profile or MODELS[model])
-    command = ["bash", str(BACKEND), "--root", str(root), "--port", str(args.port), "--profile", profile, "--no-ssh", *extra]
+    # Keep status/stop on the same control record for every profile on this port.
+    data_root = Path("/opt/remote-models") if profile in PRO6000_TRIAL and not args.root else root
+    if profile in PRO6000_TRIAL and data_root.resolve().is_relative_to(Path("/workspace").resolve()):
+        raise RuntimeError("The single-card trial stores weights on the container disk. Use --root /opt/remote-models.")
+    backend = [sys.executable, "-I", "-B", str(HERE / "basalt.py")] if profile == "deepseek-basalt-pro6000" else ["bash", str(BACKEND)]
+    command = [*backend, "--root", str(data_root), "--port", str(args.port), "--profile", profile, "--no-ssh", *extra]
     preview = read_plan(command)
     plan = cast(dict[str, Any], preview["plan"])
     if model != "auto" and not str(plan["profile"]).startswith(model):
         raise RuntimeError(f"The selected profile does not serve {model}; no model was prepared or started.")
-    if args.tui and plan["engine"] != "strata":
-        raise RuntimeError("--tui currently requires a Strata profile. This hardware/profile uses another engine.")
-    if args.no_fetch and plan["engine"] != "strata" and plan["profile"] != "mistral-b300":
-        raise RuntimeError("--no-fetch requires Strata or Mistral; legacy profiles can build or download during serving.")
+    if args.tui and plan["engine"] not in ("strata", "basalt"):
+        raise RuntimeError("--tui requires a Strata or Basalt profile.")
+    if args.no_fetch and plan["engine"] not in ("strata", "basalt") and plan["profile"] != "mistral-b300":
+        raise RuntimeError("--no-fetch requires Strata, Basalt or Mistral; legacy profiles can build or download during serving.")
     preparation = [*command, "--prepare-only", *(["--install-deps"] if args.install_deps else [])]
     if args.dry_run:
         print(json.dumps({"backend": preview, "prepare": None if args.no_fetch else preparation,
                           "serve": command if action == "start" else None, "tui": bool(args.tui)}, indent=2))
         return 0
-    if args.tui and not args.no_fetch:
+    if args.tui and plan["engine"] == "strata" and not args.no_fetch:
         import monitor
         monitor.creation_python()
     with controller(path, plan, "preparing" if not args.no_fetch else "starting") as record:
@@ -338,7 +348,9 @@ def main(argv: list[str] | None = None) -> int:
             if result:
                 return result
         monitor_command = None
-        if args.tui:
+        if args.tui and plan["engine"] == "basalt":
+            monitor_command = [sys.executable, "-I", "-B", str(HERE / "basalt_tui.py"), "--port", str(args.port)]
+        elif args.tui:
             import monitor
             monitor_command = monitor.prepare(preview, install=not args.no_fetch)
         if action == "fetch":

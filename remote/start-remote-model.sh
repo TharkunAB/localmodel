@@ -562,6 +562,11 @@ def select(gpus: list[GPU], mode: str, gpu_count: int | None) -> tuple[str, list
                 or not all(is_a40(g) and g.cc == 86 for g in gpus)):
             raise Error('deepseek-a40-quad requires exactly four CUDA-visible full-memory A40 GPUs (sm_86)')
         return mode, gpus
+    if mode == 'deepseek-strata-pro6000':
+        if len(gpus) != 1 or gpu_count not in (None, 1) or not pro6000(gpus[0]):
+            raise Error(f'{mode} requires exactly one CUDA-visible physical RTX PRO 6000 Blackwell '
+                        '(sm_120, at least 90000 MiB). Use CUDA_VISIBLE_DEVICES to select the card.')
+        return mode, gpus
     if mode in GSQ_PROFILES:
         info=GSQ_PROFILES[mode];need=info['count']
         valid={'a40':lambda g:is_a40(g) and g.cc==86,'ampere48':lambda g:is_ampere_48(g) and g.cc==86,
@@ -1744,7 +1749,8 @@ def build(plan: Plan, args, env: dict[str, str]) -> tuple[Path, str]:
     return binary, help_text
 
 def hub_python(args, env: dict[str, str]) -> Path:
-    base = Path(args.root).expanduser().absolute()
+    base = (strata_runtime_dir(args) if args.profile == 'deepseek-strata-pro6000'
+            else Path(args.root).expanduser().absolute())
     base.mkdir(parents=True, exist_ok=True)
     with (base / '.hub-setup.lock').open('a') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
@@ -3023,6 +3029,9 @@ If no target fits, auto uses GSQ IQ1_M with RAM/SSD expert offload. DSpark is au
 only when its additional first-GPU weights fit; explicit --spec dspark/none wins.
 Quad A40 defaults: pinned Unsloth Dynamic v3.1 UD-IQ1_M, 1M context and DSpark.
 Profile deepseek-a40-quad uses computed layer counts (10,12,9,9 on 46068 MiB cards).
+The explicit deepseek-strata-pro6000 comparison uses one 96 GB RTX PRO 6000 Blackwell,
+Unsloth UD-IQ1_M, 1M context and DSpark (up to 3 proposed tokens). Use --context 64K for a smaller trial.
+Its expert RAM budget covers estimated off-GPU experts when host headroom permits.
 Explicit deepseek-gsq-a40-quad retains the old GSQ checkpoint and placement for rollback.
 --reuse prefers complete existing IQ2_XXS files, with SHA checks at preparation/serving.
 Explicit --quant wins. Qwen/Flint/Ornith/MiniMax retain their previous defaults.
@@ -3034,7 +3043,8 @@ No CUDA compiler is needed for Strata; the host driver must support its CUDA 13 
 Strata uses contiguous layer placement and --tp 1 across all selected GPUs.
 Planning reserves 3.5 GiB plus --vram-reserve-mib per GPU. It is not a benchmark.
 --expert-ram-gb is a soft RAM cache in GiB; --gpu-expert-fraction is a 0..1 fraction.
-The default RAM cache is min(36 GiB, available RAM minus 24.25 GiB), rounded down.
+Except for the single-PRO-6000 comparison, the default RAM cache is at most 36 GiB.
+All automatic cache budgets leave 24 GiB plus the Engram row cache (default 256 MiB) for the host.
 These do not create a hard process limit. Leave host RAM for the OS and other weights.
 --cpu-moe-layers, --tensor-split, --gsq-engram, --engram-ram, llama.cpp KV/cache/batch
 controls and build-archive flags are rejected for DeepSeek. Use --spec dspark/none.
@@ -3062,7 +3072,7 @@ The Qwen profile is Qwen3.8-27B. All API endpoints bind to 127.0.0.1, default 88
     p.add_argument('--version',action='version',version=VERSION)
     p.add_argument('--profile',choices=('auto','mistral-b300','deepseek-auto','flint','qwen','ornith','deepseek','deepseek-a40-quad',
                    'deepseek-h200-iq2','deepseek-h200-dual-iq3','deepseek-b300-iq3',
-                   'deepseek-b200-iq2','deepseek-pro6000-quad-q8',
+                   'deepseek-b200-iq2','deepseek-pro6000-quad-q8','deepseek-strata-pro6000',
                    *MINIMAX_PROFILES,*GSQ_PROFILES,
                    'flash-next-fp4'),default=os.environ.get('QWEN_PROFILE','auto'))
     p.add_argument('--root',default=os.environ.get('QWEN_ROOT','/opt/qwen'))
@@ -3096,7 +3106,7 @@ The Qwen profile is Qwen3.8-27B. All API endpoints bind to 127.0.0.1, default 88
     p.add_argument('--gpu-count',type=int,help='Auto: select the first N CUDA-visible GPUs, 1..40; explicit profiles retain their count requirements')
     p.add_argument('--cpu-moe-layers',type=int,
                    help='H200 IQ2: existing early-layer setting (default 18); MiniMax: explicitly offload 0..57 routed-expert layers (default 0)')
-    p.add_argument('--expert-ram-gb',type=float,help='Strata expert RAM cache in GiB; defaults to at most 36 after host headroom; not a process cap')
+    p.add_argument('--expert-ram-gb',type=float,help='Soft Strata RAM cache in GiB. Defaults to 36 or less, except the single-PRO-6000 comparison sizes it for offloaded experts. Both leave host headroom.')
     p.add_argument('--gpu-expert-fraction',type=float,default=1.0,help='Strata fraction of automatically available GPU expert capacity, 0..1')
     p.add_argument('--vram-reserve-mib',type=int,default=2048,help='Strata free VRAM reserve per GPU in MiB (default 2048)')
     p.add_argument('--prefill-chunk',type=int,default=4096,help='Strata prompt chunk size in tokens (default 4096)')
@@ -3528,6 +3538,37 @@ def strata_draft_path(args) -> Path:
     return Path(args.root).expanduser().absolute()/'strata-drafts'/STRATA_DSPARK['revision']/STRATA_DSPARK['name']
 
 
+def check_pro6000_weight_storage(plan: Plan, args) -> None:
+    """Keep trial weights and partial downloads off the RunPod workspace volume."""
+    workspace = Path('/workspace')
+    resolved_workspace = workspace.resolve()
+    workspace_dev = workspace.stat().st_dev if workspace.exists() else None
+    root_dev = Path('/').stat().st_dev
+
+    def check(path: Path) -> None:
+        resolved = path.resolve()
+        if (path.is_relative_to(workspace) or resolved.is_relative_to(resolved_workspace)
+                or (workspace_dev is not None and workspace_dev != root_dev
+                    and existing_parent(resolved).stat().st_dev == workspace_dev)):
+            raise Error(f'{plan.profile} keeps weights on the container disk. {path} uses the /workspace volume. '
+                        'Select a container-local root and model directory, such as /opt/remote-models.')
+
+    folder, pack = model_folder(plan), strata_pack_path(plan)
+    cache = folder / '.cache/huggingface'
+    for path in (Path(args.root).expanduser().absolute(), plan.root, folder, pack, cache):
+        check(path)
+    for name in DS_NATIVE[plan.quant]['files']:
+        check(folder/name)
+    if plan.spec == 'dspark':
+        draft = strata_draft_path(args)
+        check(draft)
+        check(draft.with_name(draft.name + '.part'))
+    for directory in (pack, cache):
+        for entry in directory.rglob('*'):
+            if entry.is_symlink():
+                check(entry)
+
+
 def strata_draft(args) -> None:
     """Download the exact draft only during preparation, then verify its bytes."""
     path = strata_draft_path(args)
@@ -3568,9 +3609,15 @@ def strata_draft(args) -> None:
             say('Verified pinned DSpark draft SHA-256')
 
 
+def strata_runtime_dir(args) -> Path:
+    if args.profile == 'deepseek-strata-pro6000':
+        return Path(os.environ.get('REMOTEMODEL_RUNTIME_DIR', '~/.cache/remotemodel/runtimes')).expanduser().absolute()
+    return Path(args.root).expanduser().absolute() / 'runtimes'
+
+
 def strata_paths(args) -> tuple[Path, Path, Path]:
     """Keep the official runtime separate from all llama.cpp builds."""
-    base = Path(args.root).expanduser().absolute() / 'runtimes' / (
+    base = strata_runtime_dir(args) / (
         'strata-' + STRATA_PINS['source_revision'] + '-engine-' + STRATA_PINS['runtime']['version'])
     return base, base / 'venv/bin/python', base / 'source'
 
@@ -3592,10 +3639,7 @@ def strata_options(args) -> None:
         raise Error('--dspark-conf must be 0..1')
     if args.prepare_assets_only and (not args.prepare_only or args.install_deps or args.setup_ssh or args.ssh_only):
         raise Error('--prepare-assets-only requires --prepare-only and cannot install dependencies or set up SSH')
-    if args.expert_ram_gb is None:
-        headroom = 24 * GIB + args.engram_cache_mib * MIB
-        args.expert_ram_gb = max(0, min(36, (available_ram() - headroom) // GIB))
-    if not math.isfinite(args.expert_ram_gb) or not 0 <= args.expert_ram_gb <= 1024:
+    if args.expert_ram_gb is not None and (not math.isfinite(args.expert_ram_gb) or not 0 <= args.expert_ram_gb <= 1024):
         raise Error('--expert-ram-gb must be 0..1024 GiB; it is a soft cache budget, not a process RAM cap')
     if not math.isfinite(args.gpu_expert_fraction) or not 0 <= args.gpu_expert_fraction <= 1:
         raise Error('--gpu-expert-fraction must be 0..1')
@@ -3611,6 +3655,7 @@ STRATA_AUTO_QUANTS = ('UD-Q8_K_XL', 'UD-Q4_K_XL', 'UD-Q3_K_XL', 'UD-IQ3_S', 'UD-
                       'IQ2_XS', 'IQ2_XXS', 'IQ1_M')
 # Keep explicit profile identities, quant choices and directory overrides.
 STRATA_PROFILES = {
+    'deepseek-strata-pro6000': ('DS_STRATA_PRO6000', 'deepseek-v4.1-1017-strata-pro6000-iq1m', 'UD-IQ1_M', ('UD-IQ1_M',)),
     'deepseek-a40-quad': ('DS_A40_QUAD', 'deepseek-v4.1-1017-a40-quad-v31-iq1m', 'UD-IQ1_M', ('UD-IQ1_M',)),
     'deepseek': ('DS', 'deepseek-v4.1-flash-1017', 'UD-Q8_K_XL', ('UD-Q8_K_XL', 'UD-Q4_K_XL', 'UD-Q2_K_XL')),
     'deepseek-pro6000-quad-q8': ('DS_PRO6000_QUAD', 'deepseek-v4.1-1017-quad-pro6000-q8', 'UD-Q8_K_XL', ('UD-Q8_K_XL', 'UD-Q4_K_XL', 'UD-Q2_K_XL')),
@@ -3695,6 +3740,7 @@ def strata_plan(args, mode: str, gpus: list[GPU]) -> Plan:
             mode = 'deepseek-auto'
     base = Path(args.root).expanduser().absolute()
     generic = mode == 'deepseek-auto'
+    single_pro6000 = mode == 'deepseek-strata-pro6000'
     quad = mode == 'deepseek-gsq-a40-quad'
     split = args.layer_split if args.layer_split is not None else ('9,11,10,10' if quad else 'auto')
     counts = None
@@ -3749,7 +3795,7 @@ def strata_plan(args, mode: str, gpus: list[GPU]) -> Plan:
     calibrated_quad = (quad and quant == 'IQ2_XS' and args.layer_split is None
                        and all(g.total >= 46068 for g in gpus) and args.gpu_expert_fraction == 1
                        and args.vram_reserve_mib == 2048 and args.prefill_chunk == 4096)
-    spec = args.spec or ('dspark' if calibrated_quad or drafted['all_target_weights_fit'] else 'none')
+    spec = args.spec or ('dspark' if single_pro6000 or calibrated_quad or drafted['all_target_weights_fit'] else 'none')
     if args.dspark is not None:
         requested = 'dspark' if args.dspark else 'none'
         if args.spec is not None and args.spec != requested:
@@ -3761,7 +3807,13 @@ def strata_plan(args, mode: str, gpus: list[GPU]) -> Plan:
         spec = 'none'
     if spec == 'none' and args.dspark_conf is not None:
         raise Error('--dspark-conf requires DSpark')
+    if single_pro6000 and spec == 'dspark' and args.dspark is None:
+        args.dspark = 3
     args.strata_budget = drafted if spec == 'dspark' else ordinary
+    if args.expert_ram_gb is None:
+        headroom = 24 * GIB + args.engram_cache_mib * MIB
+        target = math.ceil(sum(args.strata_budget['expected_expert_offload_bytes']) / GIB) if single_pro6000 else 36
+        args.expert_ram_gb = max(0, min(target, (available_ram() - headroom) // GIB))
     if calibrated_quad and spec == 'dspark' and not drafted['all_target_weights_fit']:
         args.strata_budget['policy_exception'] = 'retained quad-A40 IQ2_XS/DSpark configuration; the conservative estimate includes expert offload'
     args.strata_budget['placement_control'] = ('native auto; displayed counts are estimates'
@@ -3809,6 +3861,8 @@ def strata_plan(args, mode: str, gpus: list[GPU]) -> Plan:
 
 def strata_preflight(plan: Plan, args) -> None:
     """Check headroom without claiming a hard cap or precomputed GPU fit."""
+    if plan.profile == 'deepseek-strata-pro6000':
+        check_pro6000_weight_storage(plan, args)
     if platform.system() != 'Linux' or platform.machine() not in ('x86_64', 'AMD64'):
         raise Error('The pinned Strata engine requires Linux x86_64')
     minimum = (4 * GIB if args.prepare_assets_only else
@@ -3940,6 +3994,9 @@ def strata_main(plan: Plan, args) -> int:
     env = {k:v for k,v in os.environ.items() if not k.startswith(('LLAMA_ARG_', 'GGML_', 'LLAMA_DSV', 'STRATA_', 'MAYA_', 'DS4_'))
            and k not in ('PYTHONPATH', 'PYTHONHOME')}
     env['CUDA_VISIBLE_DEVICES'] = settings['env']['CUDA_VISIBLE_DEVICES']
+    if plan.profile == 'deepseek-strata-pro6000':
+        cache = model_folder(plan) / '.cache/huggingface'
+        env.update(HF_HUB_CACHE=str(cache/'hub'), HF_XET_CACHE=str(cache/'xet'))
     if args.install_deps:
         if not args.prepare_only:
             raise Error('Strata --install-deps requires --prepare-only; serving never installs dependencies')
