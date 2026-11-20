@@ -16,6 +16,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import time
 import uuid
 
 
@@ -28,7 +29,10 @@ ARCHIVE_SIZE = 67_579_415
 ARCHIVE_SHA256 = "dbf744069b72c4b15e32480ff32c49caf906556f52b64b5ff766924e27e28b49"
 REVISION = "621661e913cb76e363bf14235667d3b5c0f787d4"
 PACK = "DeepSeek-V4.1-Flash-1017-UD-IQ1_M.basalt"
-PACK_URL = f"https://huggingface.co/jesdga/DeepSeek-V4.1-Flash-1017-Basalt/resolve/{REVISION}/{PACK}"
+PACK_REPO = "jesdga/DeepSeek-V4.1-Flash-1017-Basalt"
+PACK_URL = f"https://huggingface.co/{PACK_REPO}/resolve/{REVISION}/{PACK}"
+HUB_VERSION = "2.4.0"
+XET_VERSION = "1.8.0"
 PACK_SIZE = 259_973_824_987
 PACK_SHA256 = "1cd706a3de0dca2623e7461c9eb2f4c916aa26a3ad9e3d90ee10e5730f8ae942"
 GUARD = Path(__file__).resolve().parents[1] / "local/experiments/deepseek-strata/network_guard.py"
@@ -109,9 +113,17 @@ def pro6000() -> dict[str, int | str]:
 
 def digest(path: Path) -> str:
     sha = hashlib.sha256()
+    size = path.stat().st_size
+    if size >= GIB:
+        print(f"Verifying SHA-256 of {path.name} ({size/GIB:.2f} GiB)...", file=sys.stderr, flush=True)
+    next_update = time.monotonic() + 10
     with path.open("rb") as stream:
         while chunk := stream.read(8 * 2**20):
             sha.update(chunk)
+            if size >= GIB and time.monotonic() >= next_update:
+                print(f"SHA-256: {stream.tell()/size:.1%} ({stream.tell()/GIB:.1f}/{size/GIB:.1f} GiB)",
+                      file=sys.stderr, flush=True)
+                next_update = time.monotonic() + 10
     return sha.hexdigest()
 
 
@@ -120,7 +132,25 @@ def identity(path: Path, sha: str) -> list[int | str]:
     return [sha, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns, stat.st_dev, stat.st_ino]
 
 
-def artifact(path: Path, url: str, size: int, sha: str, *, prepare: bool, reverify: bool) -> None:
+def fetch_hf_pack(partial: Path, download_venv: Path, size: int, sha: str) -> None:
+    """Run the ordered Xet transfer in a preparation-only environment."""
+    python = download_venv / "bin/python"
+    if not python.is_file():
+        subprocess.run([sys.executable, "-m", "venv", str(download_venv)], check=True)
+    subprocess.run([str(python), "-Im", "pip", "--isolated", "install", "--only-binary=:all:",
+                    f"huggingface-hub=={HUB_VERSION}", f"hf-xet=={XET_VERSION}"], check=True)
+    cache = partial.parent / ".hf-xet"
+    require_container_weights(cache)
+    env = dict(os.environ, HF_ENDPOINT="https://huggingface.co", HF_HOME=str(cache),
+               HF_XET_CACHE=str(cache / "xet"), HF_HUB_OFFLINE="0", HF_HUB_DISABLE_XET="0",
+               HF_XET_HIGH_PERFORMANCE="1", HF_HUB_DISABLE_TELEMETRY="1", HF_HUB_DISABLE_IMPLICIT_TOKEN="1")
+    print("Downloading with Hugging Face Xet and verifying SHA-256 as bytes arrive.", flush=True)
+    subprocess.run([str(python), "-I", "-B", str(Path(__file__).with_name("basalt_xet.py")),
+                    PACK_REPO, REVISION, PACK, str(partial), str(size), sha], env=env, check=True)
+
+
+def artifact(path: Path, url: str, size: int, sha: str, *, prepare: bool, reverify: bool,
+             hf_venv: Path | None = None) -> None:
     """Resume interrupted HTTPS downloads. Publish the asset only after a full checksum."""
     partial = path.with_name(path.name + ".part")
     stamp = path.with_name(path.name + ".verified.json")
@@ -134,17 +164,24 @@ def artifact(path: Path, url: str, size: int, sha: str, *, prepare: bool, reveri
         offset = partial.stat().st_size if partial.exists() else 0
         if offset > size:
             raise RuntimeError(f"Partial download exceeds its pin: {partial}")
-        if shutil.disk_usage(path.parent).free < size - offset + 20 * GIB:
+        if offset < size and shutil.disk_usage(path.parent).free < size - offset + 20 * GIB:
             raise RuntimeError(f"{path.parent} needs at least {(size-offset)/GIB:.1f} GiB for the remaining "
                                "download, plus 20 GiB free after preparation.")
-        if offset < size:
+        transfer_venv = hf_venv if offset == 0 else None
+        if transfer_venv is not None:
+            fetch_hf_pack(partial, transfer_venv, size, sha)
+        elif offset < size:
+            if offset:
+                print(f"Resuming {path.name} with curl at {offset/GIB:.2f} GiB.", flush=True)
             subprocess.run(["curl", "--fail", "--show-error", "--location", "--proto", "=https",
                             "--proto-redir", "=https", "--retry", "3", "--continue-at", "-",
                             "--output", str(partial), url], check=True)
-        if partial.stat().st_size != size or digest(partial) != sha:
+        if partial.stat().st_size != size or ((transfer_venv is None or reverify) and digest(partial) != sha):
             partial.unlink()
             raise RuntimeError(f"Discarded the failed download of {path.name}; size or SHA-256 differs from its pin.")
         partial.replace(path)
+        if size >= GIB:
+            print(f"SHA-256 verified: {path.name}", flush=True)
         verified_download = True
     if path.stat().st_size != size:
         raise RuntimeError(f"Installed file has the wrong size: {path}")
@@ -229,6 +266,8 @@ def main() -> None:
     parser.add_argument("--prepare-only", action="store_true")
     parser.add_argument("--install-deps", action="store_true")
     parser.add_argument("--reverify", action="store_true", help="Hash the complete archive and pack even with a verified receipt.")
+    parser.add_argument("--download-method", choices=("hf", "curl"), default="hf",
+                        help="Fresh pack transport (default: Hugging Face Xet). Existing curl partials resume with curl.")
     parser.add_argument("--no-ssh", action="store_true")
     args = parser.parse_args()
     if not 1024 <= args.port <= 65535 or (args.install_deps and not args.prepare_only):
@@ -252,6 +291,7 @@ def main() -> None:
                          "root": str(root), "port": args.port, "context": args.context, "quant": "UD-IQ1_M",
                          "spec": "dspark", "draft_tokens": 3, "parallel": 1, "gpus": [gpu],
                          "model_revision": REVISION, "pack": str(pack), "pack_bytes": PACK_SIZE,
+                         "fresh_pack_download_method": args.download_method,
                          "release_archive": str(archive), "runtime_directory": str(runtime),
                          "serving_python": str(python),
                          "pack_sha256": PACK_SHA256, "release_sha256": ARCHIVE_SHA256,
@@ -301,7 +341,9 @@ def main() -> None:
         if not args.prepare_only:
             verify_command = [sys.executable, "-I", "-B", str(GUARD), *verify_command]
         subprocess.run(verify_command, env=env, check=True)
-        artifact(pack, PACK_URL, PACK_SIZE, PACK_SHA256, prepare=args.prepare_only, reverify=args.reverify)
+        download_venv = base / f"hf-{HUB_VERSION}-xet-{XET_VERSION}" if args.download_method == "hf" else None
+        artifact(pack, PACK_URL, PACK_SIZE, PACK_SHA256, prepare=args.prepare_only, reverify=args.reverify,
+                 hf_venv=download_venv)
     if not args.prepare_only:
         os.chdir(runtime)
         os.execve(sys.executable, [sys.executable, "-I", "-B", str(GUARD), *command], env)

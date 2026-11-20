@@ -3,6 +3,7 @@
     "remote/bin/remotemodel",
     "remote/remotemodel.py",
     "remote/basalt.py",
+    "remote/basalt_xet.py",
     "remote/basalt_tui.py",
     "remote/monitor.py",
     "remote/start-remote-model.sh",

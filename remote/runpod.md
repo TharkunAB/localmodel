@@ -457,7 +457,9 @@ bash /workspace/start-remote.sh start deepseek --profile deepseek-basalt-pro6000
 bash /workspace/start-remote.sh start deepseek --profile deepseek-basalt-pro6000 --install-deps --tui
 ```
 
-The first start fetches missing files. Use a terminal for `--tui`. Press **q** to close the monitor and keep serving. Press **Ctrl-C** to stop the server. After it stops, start the comparator with `--profile deepseek-strata-pro6000` and the same flags. To prepare files without loading a model, replace `start` with `fetch`. For a smaller capacity, pass `--context 64K` explicitly to both.
+The first start fetches missing files. Basalt uses Hugging Face Xet for a fresh pack. It transfers ranges in parallel, hashes the bytes as it writes them to the container disk, and checks the pinned SHA-256 before serving. The download and checksum share one progress display. A verified pack is reused. An interrupted sequential `.part` file resumes with curl and gets a full disk checksum. Use `--download-method curl` for a fresh curl transfer or `--reverify` for an independent disk checksum. The downloader is installed only during preparation. [Xet high-performance mode](https://huggingface.co/docs/huggingface_hub/en/package_reference/environment_variables#hfxethighperformance)
+
+Use a terminal for `--tui`. Press **q** to close the monitor and keep serving. Press **Ctrl-C** to stop the server. After it stops, start the comparator with `--profile deepseek-strata-pro6000` and the same flags. To prepare files without loading a model, replace `start` with `fetch`. For a smaller capacity, pass `--context 64K` explicitly to both.
 
 On the workstation keep the [SSH tunnel](#connect-the-client) open and start `pi-remote` with local SearXNG running. Pi discovers the served model and context on port 8898. Both backends serve on pod port 8897 with outbound connections blocked.
 
