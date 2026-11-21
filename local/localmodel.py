@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import argparse
-from contextlib import nullcontext
+from collections.abc import Generator
+from contextlib import contextmanager, nullcontext
 import fcntl
 import hashlib
 import json
@@ -29,13 +30,17 @@ import strata_monitor
 ROOT = Path(__file__).resolve().parent
 STATE = ROOT / "state"
 CAPPED = ROOT / "libexec/capped"
-ALIASES = {"bonsai": "bonsai2-27b", "bonsai2": "bonsai2-27b", "bonsai-ptq2": "bonsai-pq2",
+ALIASES = {"inkling-2-mini": "inkling", "bonsai": "bonsai2-27b", "bonsai2": "bonsai2-27b", "bonsai-ptq2": "bonsai-pq2",
            "groot": "groot-19b", "lfm": "lfm3-1.7b", "lfm3": "lfm3-1.7b",
            "deepseek": deepseek_strata.NAME, "deepseek-full": deepseek_strata.NAME,
            "deepseek-coder": deepseek_strata.CODER_NAME, "deepseek-iq1-s": deepseek_strata.NAME, "strata": deepseek_strata.NAME}
 DEFAULT_CACHE_RAM_MIB = 32768
 DEFAULT_REASONING_EFFORT = "xhigh"
-DEFAULT_START_MODEL = "27b-256k-optimized"
+DEFAULT_START_MODEL = "inkling"
+INKLING_PREPARE = ROOT / "experiments/inkling-mini/prepare.sh"
+INKLING_UNSLOTH_PREPARE = INKLING_PREPARE.with_name("prepare-dspark.py")
+INKLING_QUANTS = ("iq1_s", "iq2_xxs")
+GGUF_RUNTIMES = ("flint", "llamacpp", "inkling")
 
 
 def native_runtime_path(name: str) -> Path:
@@ -68,14 +73,15 @@ def catalog() -> dict[str, dict[str, Any]]:
     return {"dory": {"context": 262144, "alias": "dory", "runtime": "dory"}, **entries}
 
 
-def tokens(value: str) -> int:
-    """Read a context count. A k suffix means 1024 tokens."""
+def tokens(value: str, maximum: int = 262144) -> int:
+    """Read a token count with an optional binary K or M suffix."""
+    multiplier = {"k": 1024, "m": 1024**2}.get(value[-1:].lower(), 1)
     try:
-        count = int(value[:-1]) * 1024 if value.lower().endswith("k") else int(value)
+        count = int(value[:-1] if multiplier > 1 else value) * multiplier
     except ValueError as error:
         raise argparse.ArgumentTypeError("Use a token count such as 65536 or 256k.") from error
-    if not 1 <= count <= 262144:
-        raise argparse.ArgumentTypeError("Use 1 to 262144 tokens.")
+    if not 1 <= count <= maximum:
+        raise argparse.ArgumentTypeError(f"Use 1 to {maximum} tokens.")
     return count
 
 
@@ -119,9 +125,10 @@ def endpoint(port: int) -> dict[str, Any]:
         context = props["default_generation_settings"]["n_ctx"]
     if not isinstance(context, int) or context < 1:
         raise RuntimeError(f"The model at port {port} did not report a context capacity.")
-    settings = next((item for item in catalog().values() if item["alias"] == model), dict[str, Any]())
+    settings = next((item for item in catalog().values() if item["alias"] == model or item.get("iq2_xxs", {}).get("alias") == model), dict[str, Any]())
     return {
         "running": True, "model": model, "context": context,
+        **({"quant": "iq1_s" if model == settings["alias"] else "iq2_xxs"} if settings.get("runtime") == "inkling" else {}),
         "base_url": f"http://127.0.0.1:{port}/v1", "port": port,
         "backend": backend, "output": min(32768 if "flint" in model.lower() else 16000, max(1, context // 2)),
         "temperature": settings.get("temperature", 0.6 if "saluki" in model else 1.0),
@@ -155,6 +162,9 @@ def current(port: int | None = None) -> dict[str, Any]:
         result["profile"] = managed.get("profile")
         result["settings_profile"] = managed.get("settings_profile", "default")
         result["pid"] = managed.get("controller_pid")
+        if managed.get("profile") == "inkling":
+            result["kv_device"] = managed.get("kv_device")
+            result["fit_target_mib"] = managed.get("fit_target_mib")
         for key in ("cpu_offload_gb", "cpu_moe_layers", "gpu_layers", "moe_cache_mib", "batch_tokens", "ubatch_tokens", "command", "runtime", "rounds", "memory_limit",
                     "expert_memory", "expert_ram_gb", "cpu_threads", "gpu_expert_cache_gb", "gpu_expert_fraction", "prefill_chunk", "vram_reserve_mib", "engram_cache_mib", "engram_threads", "thinking_budget", "strata_slots", "strata_slot_directory", "ple_io", "expert_tail_skip", "adaptive_fetch", "draft_conf"):
             result[key] = managed.get(key)
@@ -169,6 +179,19 @@ def current(port: int | None = None) -> dict[str, Any]:
     return result
 
 
+@contextmanager
+def inkling_weight_lock(name: str) -> Generator[None, None, None]:
+    """Keep the selected weights installed while Inkling serves requests."""
+    directory = ROOT / "bonsai/state"
+    directory.mkdir(parents=True, exist_ok=True)
+    with (directory / f"models-{name}.lock").open("a") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_SH | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise RuntimeError(f"{name} weights are being fetched or removed.") from None
+        yield
+
+
 def installed(name: str, item: dict[str, Any]) -> bool:
     """Check whether the selected model files are present."""
     if item.get("runtime") == "strata-qwen":
@@ -178,19 +201,35 @@ def installed(name: str, item: dict[str, Any]) -> bool:
     if name == "dory":
         snapshots = ROOT / "dory/.cache/huggingface/hub/models--nvidia--NVIDIA-Nemotron-Labs-Dory1.0-4B-NVFP4/snapshots"
         return any(snapshots.glob("*/*.safetensors"))
-    path = ROOT / "bonsai/models" / item["directory"] / item["filename"]
+    directory = ROOT / ("models" if name == "inkling" else "bonsai/models")
+    path = directory / item["directory"] / item["filename"]
     return path.is_file() and path.stat().st_size == item["size"]
 
 
 def runtime_path(runtime: str = "stock") -> Path:
     """Return the pinned runtime directory for the selected model family."""
+    if runtime == "inkling":
+        return STATE / "runtimes/inkling-mini-6196d98-scales/bin"
+    if runtime == "inkling-unsloth":
+        return STATE / "runtimes/inkling-unsloth-b12588-mix-c0c3de8"
     info = read_json(ROOT / "config" / (f"{runtime}-runtime.json" if runtime in ("flint", "llamacpp") else "runtime.json"))
     directory = STATE / "runtimes" / runtime if runtime in ("flint", "llamacpp") else ROOT / "bonsai/runtime"
     return directory / info["release"] / ("llama-" + info["release"])
 
 
+def inkling_runtime(args: argparse.Namespace) -> str:
+    """Use the pinned Unsloth build for profiles that request it, DSpark or automatic placement."""
+    return "inkling-unsloth" if getattr(args, "unsloth_runtime", False) or args.speculative == "dspark" or args.moe_cache_mib == "auto" else "inkling"
+
+
 def fetch_runtime(runtime: str = "stock") -> None:
     """Download and verify the pinned CUDA runtime."""
+    if runtime == "inkling":
+        subprocess.run(["bash", str(INKLING_PREPARE)], check=True)
+        return
+    if runtime == "inkling-unsloth":
+        subprocess.run([sys.executable, str(INKLING_UNSLOTH_PREPARE)], check=True)
+        return
     target = runtime_path(runtime)
     if (target / "llama-server").is_file():
         return
@@ -216,7 +255,8 @@ def fetch_runtime(runtime: str = "stock") -> None:
     print(f"Installed runtime {info['release']}. SHA256 verified.", flush=True)
 
 
-def fetch(name: str, item: dict[str, Any], speculative: str = "none", mtp_head: str = "teacher") -> None:
+def fetch(name: str, item: dict[str, Any], speculative: str = "none", mtp_head: str = "teacher",
+          *, quant: str | None = None, unsloth_runtime: bool = False) -> None:
     """Fetch a pinned model and its required runtime."""
     if speculative == "dflash2" and item["runtime"] != "strata-qwen":
         raise RuntimeError("DFlash2 artifacts require Strata Qwen.")
@@ -242,7 +282,9 @@ def fetch(name: str, item: dict[str, Any], speculative: str = "none", mtp_head: 
     if speculative != "none" and speculative not in item:
         raise RuntimeError(f"{name} has no pinned {speculative} artifact.")
     variant_name = "mtp_procreations" if speculative == "mtp" and mtp_head == "procreations" else speculative
-    variants = [None, "dflash"] if speculative == "dflash" else [None if speculative == "none" else variant_name]
+    variants = [None, speculative] if speculative in ("dflash", "dspark") else [None if speculative == "none" else variant_name]
+    if name == "inkling" and quant == "iq2_xxs":
+        variants[0] = "iq2_xxs"
     for variant in variants:
         if variant == "mtp_procreations":
             output = item["mtp_procreations"]
@@ -274,13 +316,15 @@ def fetch(name: str, item: dict[str, Any], speculative: str = "none", mtp_head: 
         if variant:
             command += ["--variant", variant]
         subprocess.run(command, check=True)
-    if item["runtime"] in ("prism", "flint", "llamacpp"):
+    if item["runtime"] == "prism" or item["runtime"] in GGUF_RUNTIMES:
         with (STATE / "runtime.lock").open("w") as lock:
             fcntl.flock(lock, fcntl.LOCK_EX)
-            fetch_runtime(item["runtime"] if item["runtime"] in ("flint", "llamacpp") else "stock")
+            fetch_runtime("inkling-unsloth" if name == "inkling" and (speculative == "dspark" or unsloth_runtime)
+                          else "stock" if item["runtime"] == "prism" else item["runtime"])
 
 
-def remove(name: str, speculative: str = "none", dry_run: bool = False, mtp_head: str = "teacher") -> None:
+def remove(name: str, speculative: str = "none", dry_run: bool = False, mtp_head: str = "teacher",
+           *, quant: str | None = None) -> None:
     """Delete selected weights and download data. Keep configuration and runtimes."""
     if speculative == "dflash2" and name != qwen_strata.NAME:
         raise RuntimeError("DFlash2 artifacts require Strata Qwen.")
@@ -327,6 +371,8 @@ def remove(name: str, speculative: str = "none", dry_run: bool = False, mtp_head
         return
     variant_name = "mtp_procreations" if speculative == "mtp" and mtp_head == "procreations" else speculative
     variants = [None, "dflash"] if speculative == "dflash" else [None if speculative == "none" else variant_name]
+    if name == "inkling" and quant == "iq2_xxs" and speculative == "none":
+        variants = ["iq2_xxs"]
     for variant in variants:
         command = [str(ROOT / ".venv/bin/python"), str(ROOT / "libexec/bonsai2-models"), "delete", name]
         if variant:
@@ -348,7 +394,7 @@ def launch_command(args: argparse.Namespace, item: dict[str, Any]) -> list[str]:
     cpu_moe_layers = getattr(args, "cpu_moe_layers", None)
     if args.runtime != "stock" and item["runtime"] != "prism":
         raise RuntimeError("--runtime selects an alternate Bonsai Prism runtime.")
-    if item["runtime"] not in ("prism", "dory-native", "flint", "llamacpp") and (args.speculative != "none" or args.prompt_lookup or args.cache_ram is not None or args.kv_mean_center or args.kv_cache or args.reasoning_effort):
+    if item["runtime"] not in ("prism", "dory-native", *GGUF_RUNTIMES) and (args.speculative != "none" or args.prompt_lookup or args.cache_ram is not None or args.kv_mean_center or args.kv_cache or args.reasoning_effort):
         raise RuntimeError("These runtime controls require a new Bonsai profile.")
     if any(value is not None for value in (args.draft_window, args.kv_vram_cells, args.mma_decode_min_kv)) and args.runtime not in ("bonsai-native", "bonsai-next"):
         raise RuntimeError("Draft windows, active KV spill, and MMA controls require a native Bonsai runtime.")
@@ -366,19 +412,48 @@ def launch_command(args: argparse.Namespace, item: dict[str, Any]) -> list[str]:
         raise RuntimeError(f"Use at most {item.get('layers', 49)} CPU expert layers for this model.")
     if args.lookup_min_tokens is not None and (not args.prompt_lookup or args.lookup_type != "ngram-mod"):
         raise RuntimeError("--lookup-min-tokens requires --prompt-lookup --lookup-type ngram-mod.")
-    if item["runtime"] in ("flint", "llamacpp"):
-        if args.speculative != "none" and (args.speculative != "mtp" or "mtp" not in item):
+    if item["runtime"] in GGUF_RUNTIMES:
+        allowed_draft = "dspark" if item["runtime"] == "inkling" else "mtp"
+        if args.speculative != "none" and (args.speculative != allowed_draft or allowed_draft not in item):
             raise RuntimeError("This profile has no configured artifact for the selected draft decoder.")
         if args.kv_mean_center or (args.reasoning_effort and "reasoning_effort" not in item):
             raise RuntimeError("This profile has no configured KV calibration or reasoning-effort control.")
         if args.cpu_offload_gb or args.kv_offload_gb:
             raise RuntimeError("Use --cpu-moe-layers for MoE profiles. Attention and KV stay on the GPU.")
         cpu_moe = 0 if args.no_offload else cpu_moe_layers if cpu_moe_layers is not None else item.get("cpu_moe_layers", 0)
-        if args.moe_cache_mib and cpu_moe < 3:
-            raise RuntimeError("The MoE cache needs routed experts in RAM. Use --cpu-moe-layers 3 or more and omit --no-offload.")
         cache_ram = args.cache_ram if args.cache_ram is not None else item.get("cache_ram", DEFAULT_CACHE_RAM_MIB)
         weights = item["mtp"] if args.speculative == "mtp" else item
-        model = ROOT / "bonsai/models" / weights["directory"] / weights["filename"]
+        directory = ROOT / ("models" if item["runtime"] == "inkling" else "bonsai/models")
+        model = directory / weights["directory"] / weights["filename"]
+        if item["runtime"] == "inkling":
+            host_kv = getattr(args, "host_kv", False)
+            if host_kv and args.no_offload:
+                raise RuntimeError("The Inkling 1M placement keeps KV in RAM and cannot use --no-offload.")
+            placement = ".*=CUDA0" if args.no_offload else getattr(args, "tensor_placement", ".*=CUDA0")
+            auto_fit = args.moe_cache_mib == "auto"
+            if not auto_fit and args.moe_cache_mib and not (cpu_moe or "_exps" in placement):
+                raise RuntimeError("The Inkling MoE cache requires routed experts in RAM. Select a host-expert profile or use --cpu-moe-layers.")
+            fit = (["--gpu-layers", "auto", "--fit", "on", "--fit-ctx", str(context), "--fit-target", str(args.fit_target_mib)]
+                   if auto_fit else ["--gpu-layers", "999", "--fit", "off", "--n-cpu-moe", str(cpu_moe), "--override-tensor", placement])
+            draft = ["--spec-type", "none"]
+            if args.speculative == "dspark":
+                artifact = item["dspark"]
+                draft = ["--spec-type", "draft-dspark", "--model-draft", str(directory / artifact["directory"] / artifact["filename"]),
+                         "--spec-draft-n-max", str(args.draft_tokens), "--n-gpu-layers-draft", "99", "--spec-draft-p-min", "0",
+                         "--cache-type-k-draft", args.draft_kv_cache, "--cache-type-v-draft", args.draft_kv_cache]
+            return [str(CAPPED), "--mem", f"{item['memory_mib']}M", sys.executable,
+                    str(ROOT / "experiments/deepseek-strata/network_guard.py"),
+                    str(runtime_path(inkling_runtime(args)) / "llama-server"), "--model", str(model), "--alias", item["alias"],
+                    "--host", "127.0.0.1", "--port", str(args.port), *fit,
+                    "--load-mode", "none" if auto_fit else getattr(args, "load_mode", "auto"),
+                    "--parallel", "1", "--ctx-size", str(context),
+                    "--cache-type-k", args.kv_cache or item["kv_cache"], "--cache-type-v", args.kv_cache or item["kv_cache"],
+                    "--flash-attn", "auto", "--batch-size", str(args.batch_tokens or item["batch_tokens"]),
+                    "--ubatch-size", str(args.ubatch_tokens), "--threads", "4", "--jinja", "--offline", "--no-webui",
+                    "--cache-ram", str(cache_ram), "--moe-cache-mib", str(args.moe_cache_mib or 0),
+                    *(["--no-kv-offload"] if host_kv else []), *draft]
+        if args.moe_cache_mib and cpu_moe < 3:
+            raise RuntimeError("The MoE cache needs routed experts in RAM. Use --cpu-moe-layers 3 or more and omit --no-offload.")
         gpu_layers = 99 if args.no_offload else args.gpu_layers if args.gpu_layers is not None else item.get("gpu_layers", 99)
         command = [str(runtime_path(item["runtime"]) / "llama-server"), "--model", str(model),
                    "--alias", item["alias"], "--ctx-size", str(context),
@@ -527,12 +602,16 @@ def check_free(port: int = 8899) -> None:
 def prism_environment(runtime: str = "stock") -> dict[str, str]:
     """Use private CUDA libraries and matching KV rotation for model jobs."""
     environment = os.environ.copy()
-    libraries = ([str(runtime_path(runtime)), str(ROOT / "bonsai/runtime/bonsai2/lib")] if runtime in ("stock", "flint", "llamacpp")
-                 else [str(native_runtime_path(runtime)), str(native_runtime_path(runtime).parent / "lib")])
+    if runtime == "inkling":
+        libraries = [str(runtime_path(runtime))]
+    elif runtime in ("stock", "flint", "llamacpp"):
+        libraries = [str(runtime_path(runtime)), str(ROOT / "bonsai/runtime/bonsai2/lib")]
+    else:
+        libraries = [str(native_runtime_path(runtime)), str(native_runtime_path(runtime).parent / "lib")]
     if environment.get("LD_LIBRARY_PATH"):
         libraries.append(environment["LD_LIBRARY_PATH"])
     environment["LD_LIBRARY_PATH"] = ":".join(libraries)
-    if runtime not in ("stock", "flint", "llamacpp"):
+    if runtime not in ("stock", *GGUF_RUNTIMES):
         cuda_libraries = ROOT / "dory/.venv/lib/python3.12/site-packages/nvidia/cu13/lib"
         environment["LD_LIBRARY_PATH"] += ":" + str(cuda_libraries)
     environment.pop("LLAMA_ATTN_ROT_DISABLE", None)
@@ -629,10 +708,12 @@ def serve(args: argparse.Namespace, item: dict[str, Any]) -> int:
             command = command[3:]
         command = [str(CAPPED), "--mem", args.mem, *command]
     environment = (prism_environment(args.runtime) if item["runtime"] == "prism" else
-                   prism_environment(item["runtime"]) if item["runtime"] in ("flint", "llamacpp") else
+                   prism_environment(item["runtime"]) if item["runtime"] in GGUF_RUNTIMES else
                    prism_environment("dory-native") if item["runtime"] == "dory-native" else
                    strata.environment() if item["runtime"] in ("strata", "strata-qwen") else os.environ.copy())
-    if item["runtime"] in ("flint", "llamacpp"):
+    if item["runtime"] == "inkling":
+        environment.update(HF_HUB_OFFLINE="1", OMP_NUM_THREADS="4")
+    if item["runtime"] in GGUF_RUNTIMES:
         if args.prompt_lookup is not None:
             environment.pop("LLAMA_ARG_SPEC_TYPE", None)
         if args.moe_cache_mib is not None:
@@ -668,7 +749,7 @@ def serve(args: argparse.Namespace, item: dict[str, Any]) -> int:
         unset: list[str] = []
         if args.runtime == "bonsai-next" and args.gdn_mma:
             unset += ["-u", "GGML_CUDA_GDN_MMA_DISABLE"]
-        if item["runtime"] in ("flint", "llamacpp"):
+        if item["runtime"] in GGUF_RUNTIMES:
             if args.prompt_lookup is not None:
                 unset += ["-u", "LLAMA_ARG_SPEC_TYPE"]
             if args.moe_cache_mib is not None:
@@ -678,29 +759,61 @@ def serve(args: argparse.Namespace, item: dict[str, Any]) -> int:
         return 0
     if args.tui and not (sys.stdin.isatty() and sys.stdout.isatty()):
         raise RuntimeError("--tui requires an interactive terminal. Use --dry-run to preview the command.")
+    fetch_hint = f"localmodel fetch {args.model}"
+    if item["runtime"] == "inkling":
+        fetch_hint += f" {args.settings_profile} --quant {args.quant or 'iq1_s'} --speculative {args.speculative}"
+        if args.moe_cache_mib == "auto":
+            fetch_hint += " --moe-cache-mib auto"
     weights = item["mtp_procreations" if args.mtp_head == "procreations" else "mtp"] if args.speculative == "mtp" and item["runtime"] != "strata-qwen" else item
     if not installed(args.model, weights):
+        if item["runtime"] == "inkling":
+            raise RuntimeError(f"Model is missing. Run {fetch_hint} first.")
         suffix = f" --speculative {args.speculative}" if args.speculative != "none" else ""
         if args.mtp_head == "procreations":
             suffix += " --mtp-head procreations"
         raise RuntimeError(f"Model is missing. Run localmodel fetch {args.model}{suffix} first.")
     if args.speculative == "dflash" and not installed(args.model, item["dflash"]):
         raise RuntimeError(f"Optional weights are missing. Run localmodel fetch {args.model} --speculative {args.speculative}.")
-    if item["runtime"] in ("prism", "dory-native", "flint", "llamacpp"):
-        runtime = item["runtime"] if item["runtime"] in ("dory-native", "flint", "llamacpp") else args.runtime
-        binary = (runtime_path(runtime) if runtime in ("stock", "flint", "llamacpp") else native_runtime_path(runtime)) / "llama-server"
+    if item["runtime"] in ("prism", "dory-native", *GGUF_RUNTIMES):
+        runtime = (inkling_runtime(args) if item["runtime"] == "inkling"
+                   else args.runtime if item["runtime"] == "prism" else item["runtime"])
+        binary = (runtime_path(runtime) if runtime in ("stock", "inkling-unsloth", *GGUF_RUNTIMES) else native_runtime_path(runtime)) / "llama-server"
         if not binary.is_file():
-            hint = f"localmodel fetch {args.model}" if runtime in ("stock", "flint", "llamacpp") else f"python experiments/build-native.py {runtime} --run"
+            hint = fetch_hint if runtime in ("stock", "inkling-unsloth", *GGUF_RUNTIMES) else f"python experiments/build-native.py {runtime} --run"
             raise RuntimeError(f"Runtime is missing. Run {hint} first.")
-        if runtime not in ("stock", "flint", "llamacpp"):
+        if runtime == "inkling-unsloth":
+            environment["LD_LIBRARY_PATH"] = subprocess.check_output(
+                [sys.executable, str(INKLING_UNSLOTH_PREPARE), "--library-path"], text=True).strip()
+        elif runtime == "inkling":
+            subprocess.run(["bash", str(INKLING_PREPARE), "--verify"], check=True)
+        elif runtime not in ("stock", *GGUF_RUNTIMES):
             verify_native_build(runtime)
     STATE.mkdir(exist_ok=True)
-    with (STATE / "server.lock").open("w") as lock, (strata.model_lock(shared=True) if item["runtime"] in ("strata", "strata-qwen") else nullcontext()):
+    storage_lock = strata.model_lock(shared=True) if item["runtime"] in ("strata", "strata-qwen") else nullcontext()
+    draft_lock = nullcontext()
+    if item["runtime"] == "inkling":
+        iq2 = args.quant == "iq2_xxs"
+        storage_lock = inkling_weight_lock("inkling-iq2_xxs" if iq2 else "inkling")
+        # The IQ1 target and the DSpark drafter share one download lock.
+        if iq2 and args.speculative == "dspark":
+            draft_lock = inkling_weight_lock("inkling")
+    with (STATE / "server.lock").open("w") as lock, storage_lock, draft_lock:
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
             raise RuntimeError("Another localmodel server is running. Stop it before switching models.") from None
         check_free(args.port)
+        if item["runtime"] == "inkling":
+            if not installed(args.model, item):
+                raise RuntimeError(f"Inkling weights are missing. Run {fetch_hint}.")
+            if args.speculative == "dspark":
+                artifact = item["dspark"]
+                path = ROOT / "models" / artifact["directory"] / artifact["filename"]
+                if path.is_symlink() or not installed(args.model, artifact):
+                    raise RuntimeError(f"Inkling DSpark weights are missing or invalid. Run {fetch_hint}.")
+                with path.open("rb") as stream:
+                    if hashlib.file_digest(stream, "sha256").hexdigest() != artifact["sha256"]:
+                        raise RuntimeError(f"Inkling DSpark weights failed SHA256 verification. Run {fetch_hint}.")
         strata_config: dict[str, Any] = {}
         if item["runtime"] in ("strata", "strata-qwen"):
             if item["runtime"] == "strata":
@@ -731,33 +844,35 @@ def serve(args: argparse.Namespace, item: dict[str, Any]) -> int:
         active.write_text(json.dumps({"pid": process.pid, "controller_pid": os.getpid(), "profile": args.model,
             "command": command,
             "memory_limit": command[2] if command[:2] == [str(CAPPED), "--mem"] else None,
-            "gpu_layers": (99 if args.no_offload else args.gpu_layers if args.gpu_layers is not None else item.get("gpu_layers", 99)) if item["runtime"] == "llamacpp" else None,
+            "gpu_layers": (("auto" if args.moe_cache_mib == "auto" else 999) if item["runtime"] == "inkling" else
+                           (99 if args.no_offload else args.gpu_layers if args.gpu_layers is not None else item.get("gpu_layers", 99))
+                           if item["runtime"] == "llamacpp" else None),
             "preset": args.preset,
             "settings_profile": args.settings_profile,
-            "runtime": args.runtime if item["runtime"] == "prism" else item["runtime"],
+            "runtime": inkling_runtime(args) if item["runtime"] == "inkling" else args.runtime if item["runtime"] == "prism" else item["runtime"],
             "model": item["alias"], "port": args.port,
             "context": args.context or item["context"],
             "cpu_offload_gb": args.cpu_offload_gb,
-            "cpu_moe_layers": (0 if args.no_offload else args.cpu_moe_layers if args.cpu_moe_layers is not None else item["cpu_moe_layers"]) if "cpu_moe_layers" in item else None,
+            "cpu_moe_layers": (0 if args.no_offload else args.cpu_moe_layers if args.cpu_moe_layers is not None else item["cpu_moe_layers"]) if "cpu_moe_layers" in item and args.moe_cache_mib != "auto" else None,
             "moe_cache_mib": args.moe_cache_mib if "cpu_moe_layers" in item else None,
-            "batch_tokens": None if item["runtime"] in ("strata", "strata-qwen") else args.batch_tokens or (512 if item["runtime"] == "dory" else 2048 if item["runtime"] in ("dory-native", "flint", "llamacpp") else 256),
-            "ubatch_tokens": args.ubatch_tokens if item["runtime"] in ("prism", "dory-native", "flint", "llamacpp") else None,
+            "batch_tokens": None if item["runtime"] in ("strata", "strata-qwen") else args.batch_tokens or item.get("batch_tokens", 512 if item["runtime"] == "dory" else 2048 if item["runtime"] in ("dory-native", *GGUF_RUNTIMES) else 256),
+            "ubatch_tokens": args.ubatch_tokens if item["runtime"] in ("prism", "dory-native", *GGUF_RUNTIMES) else None,
             "rounds": args.rounds if item["runtime"] in ("dory", "dory-native") else None,
             "kv_offload_gb": args.kv_offload_gb if item["runtime"] == "dory" else None,
-            "speculative": args.speculative, "draft_tokens": args.draft_tokens,
+            "speculative": args.speculative, "draft_tokens": 0 if item["runtime"] == "inkling" and args.speculative == "none" else args.draft_tokens,
             "draft_conf": (args.draft_conf if args.draft_conf is not None else 0.8) if args.speculative == "dflash2" else None,
             "adaptive_fetch": strata_config.get("adaptive_fetch"),
             "tui": args.tui,
             "cache_reuse_fix": args.cache_reuse_fix if item["runtime"] == "strata-qwen" else None,
             "engine_log_offset": log_offset if item["runtime"] == "strata-qwen" else None,
-            "dspark_conf": (args.dspark_conf if args.dspark_conf is not None else 0.65) if args.speculative == "dspark" else None,
+            "dspark_conf": (0.0 if item["runtime"] == "inkling" else args.dspark_conf if args.dspark_conf is not None else 0.65) if args.speculative == "dspark" else None,
             "mtp_chain": environment.get("LLAMA_MTP_CHAIN") == "1" if mtp else None,
             "mtp_head": args.mtp_head if mtp else None,
             "checkpoint_every": args.checkpoint_every,
             "replay": environment.get("LLAMA_RS_REPLAY") == "1" if args.runtime == "bonsai-next" else None,
             "gdn_mma": "GGML_CUDA_GDN_MMA_DISABLE" not in environment if args.runtime == "bonsai-next" else None,
             "slot_save_path": str(args.slot_save_path.resolve()) if args.slot_save_path else None,
-            "draft_kv_cache": args.draft_kv_cache, "prompt_lookup": args.prompt_lookup,
+            "draft_kv_cache": None if item["runtime"] == "inkling" and args.speculative == "none" else args.draft_kv_cache, "prompt_lookup": args.prompt_lookup,
             "lookup_type": ("suffix" if item["runtime"] == "strata-qwen" else args.lookup_type) if args.prompt_lookup else None,
             "lookup_tokens": args.lookup_tokens if args.prompt_lookup and (item["runtime"] == "strata-qwen" or args.lookup_type == "ngram-mod") else None,
             "lookup_min_tokens": args.lookup_min_tokens if args.prompt_lookup and args.lookup_type == "ngram-mod" else None,
@@ -765,13 +880,15 @@ def serve(args: argparse.Namespace, item: dict[str, Any]) -> int:
             "mma_decode_min_kv": args.mma_decode_min_kv,
             "cache_ram_mib": args.cache_ram if args.cache_ram is not None else item.get("cache_ram", DEFAULT_CACHE_RAM_MIB if item["runtime"] in ("prism", "dory-native", "flint") else None),
             "kv_cache": args.kv_cache or item.get("kv_cache"),
+            **({"kv_device": "cpu" if getattr(args, "host_kv", False) else "cuda",
+                "fit_target_mib": args.fit_target_mib, "quant": args.quant or "iq1_s"} if item["runtime"] == "inkling" else {}),
             "kv_mean_center": str(args.kv_mean_center) if args.kv_mean_center else None,
             "reasoning_effort": (args.reasoning_effort or item.get("reasoning_effort", DEFAULT_REASONING_EFFORT)) if item["runtime"] in ("prism", "strata", "strata-qwen") or "reasoning_effort" in item else None,
             "expert_memory": strata_config.get("expert_memory"),
             "expert_ram_gb": strata_config.get("expert_ram_gb"),
             "ple_io": args.ple_io if item["runtime"] == "strata-qwen" else None,
             "expert_tail_skip": int(strata_config["env"]["STRATA_ROUTE_TAIL_SKIP"]) if item["runtime"] == "strata-qwen" else None,
-            "cpu_threads": args.cpu_threads if args.cpu_threads is not None else 12 if item["runtime"] == "strata" else None,
+            "cpu_threads": args.cpu_threads if args.cpu_threads is not None else 12 if item["runtime"] == "strata" else 4 if item["runtime"] == "inkling" else None,
             "strata_slots": strata_config.get("env", {}).get("STRATA_DS4_SLOT_KEEP") == "1" if item["runtime"] == "strata" else None,
             "strata_slot_directory": strata_config.get("env", {}).get("STRATA_DS4_SLOT_DIR"),
             "gpu_expert_cache_gb": args.gpu_expert_cache_gb,
@@ -824,7 +941,28 @@ def stop() -> None:
 
 def stats_text() -> str:
     """Show recorded measurements without starting a model."""
-    return ("2026-11-11 dense Qwen3.8-27B Dynamic 3.1 UD-Q4_K_M, llama.cpp b11946.\n"
+    return ("2026-11-21 Inkling 2 Mini IQ1_S on the 4070 SUPER, one slot, Q4 KV, no SSD offload.\n"
+            "128k-fixed (default): 120,049 uncached coding tokens at 193.8 prefill and 32.5 decode tok/s.\n"
+            "Cached follow-up: 32.2 tok/s. All 26 complete 128-token blocks reached 30 tok/s. Minimum free VRAM: 2,355 MiB.\n"
+            "128K --auto, 4,088-token retrieval (three runs): median 363.7 prefill and 27.0 decode tok/s.\n"
+            "Earlier fixed placements:\n"
+            "128K: 124,992 uncached input, 154.5 prefill and 26.1 decode tok/s, 1,207 MiB free VRAM.\n"
+            "256K: 259,994 uncached input, 89.8 prefill and 16.2 decode tok/s, 840 MiB free VRAM.\n"
+            "Both filled prompts retrieved all three values. At 128K with the same 4,088-token input,\n"
+            "the 256 MiB expert cache changed prefill/decode from 316.8/33.6 to 310.9/42.0 tok/s;\n"
+            "wall time fell from 18.99 s to 17.34 s. Both passed. The explicit 128k profile uses zero cache.\n"
+            "Earlier 128K placement: 768 MiB expert cache, input embedding and first two / last six expert banks in RAM.\n"
+            "On 124,992 uncached input: 151.0 prefill, 30.7 decode tok/s, 887 MiB free, retrieval 3/3.\n"
+            "Two-turn coding (24,625 cold input): 40.2 / 44.8 decode tok/s, 159.4 s total, 10/10 checks.\n"
+            "128k-tuned, no draft, one two-turn coding run: 120,049 uncached input at 173.4 prefill and 33.5 decode tok/s.\n"
+            "Follow-up reused 121,130 tokens, decoded at 34.1 tok/s. Total 798.6 s, 9/10 checks, 1,175 MiB free.\n"
+            "128K DSpark comparison, 124,992 cold input, same 512 MiB placement, no draft / depth 2 / no draft.\n"
+            "Cold decode was 32.7 / 16.8 / 30.2 tok/s. Cached follow-ups were 30.6–33.4 without a draft and\n"
+            "22.8–23.6 with depth 2. All nine retrieval answers passed. Background CPU load varied.\n"
+            "1M allocation, short prompt only: 4,088 uncached input and 188 output; 19.39 prefill, 9.15 decode tok/s.\n"
+            "Wall time 231.28 s, retrieval 3/3, minimum free VRAM 2,016 MiB; host KV 9,272.25 MiB, zero swap.\n"
+            "The 768 MiB expert cache hit on 6.27% of lookups. Full-window throughput and recall are unmeasured.\n\n"
+            "2026-11-11 dense Qwen3.8-27B Dynamic 3.1 UD-Q4_K_M, llama.cpp b11946.\n"
             "192K capacity, Q4 KV, auto GPU fitting, 48G cap, xhigh; same 15997-token initial OMP input.\n"
             "Standard / MTP2: decode 2.99 / 5.37 tok/s; initial prefill 383.90 / 310.31 tok/s.\n"
             "Repair plus strict resume: 340.07 / 210.04 s, with 842 / 698 generated tokens. Both pass all checks.\n"
@@ -984,8 +1122,8 @@ def stats_text() -> str:
 
 def main() -> int:
     """Parse model management and discovery commands."""
-    help_tail = (f"Start defaults to {DEFAULT_START_MODEL}. Explicit flags override preset and profile settings.\n"
-                 "Models: bonsai2-27b, bonsai2-9b, qwen3.8 (Flash-Next), qwen3.8-27b (dense), deepseek, deepseek-coder, deepseek-full, flint, groot, lfm, dory, dory-gguf.\n"
+    help_tail = (f"Start defaults to {DEFAULT_START_MODEL} (Inkling 2 Mini IQ1_S, 128K, Q4 KV, no draft). Fixed placement with a 640 MiB expert cache. Use --auto for Unsloth sizing.\n"
+                 "Models: inkling (IQ1_S or IQ2_XXS), bonsai2-27b, bonsai2-9b, qwen3.8 (Flash-Next), qwen3.8-27b (dense), deepseek, deepseek-coder, deepseek-full, flint, groot, lfm, dory, dory-gguf.\n"
                  "Use localmodel list for installed models and settings profiles; localmodel presets lists existing presets.\n"
                  "Select a settings profile with localmodel start MODEL PROFILE, for example qwen3.8 lowram.\n"
                  "Use localmodel start --help for flags and localmodel start MODEL --dry-run to preview a launch.\n"
@@ -1001,14 +1139,15 @@ def main() -> int:
     fetch_parser = commands.add_parser("fetch", aliases=["pull"], help="Fetch pinned weights and the required runtime.")
     fetch_parser.add_argument("model")
     fetch_parser.add_argument("--speculative", choices=("none", "mtp", "dflash", "dflash2", "dspark"), default="none",
-                              help="Fetch a supported optional decoder (default: plain weights; Qwen includes MTP). Qwen dflash2 also fetches its optional signed draft pack.")
+                              help="Fetch a supported optional decoder (default: plain weights; Qwen includes MTP). Inkling dspark fetches the target, Q8 drafter and Unsloth runtime. Qwen dflash2 also fetches its optional signed draft pack.")
+    fetch_parser.add_argument("--moe-cache-mib", choices=("auto",), help="Inkling: prepare the Unsloth automatic placer. The drafter is optional.")
     fetch_parser.add_argument("--mtp-head", choices=("teacher", "procreations"), default="teacher",
                               help="MTP head to fetch (default: selected preset, otherwise teacher). Requires --speculative mtp.")
     removal = commands.add_parser("remove", help="Delete selected weights and download data. Keep configuration and runtimes.",
                                   description="Remove the artifacts selected by fetch. Refuse weights that a running process uses.")
     removal.add_argument("model", help="Model name, alias, or preset. Presets select their configured decoder.")
     removal.add_argument("--speculative", choices=("none", "mtp", "dflash", "dflash2", "dspark"), default="none",
-                         help="none removes the model and optional drafts; mtp removes MTP weights (the complete profile for Qwen); dflash removes plain and draft weights; dflash2 removes only the Qwen draft pack; dspark removes only the DeepSeek draft and its pack.")
+                         help="mtp removes MTP weights (the complete profile for Qwen); dflash removes plain and draft weights; dflash2 removes the Qwen draft pack; dspark removes only the Inkling drafter or the DeepSeek draft and its pack. For Inkling, none removes only the target.")
     removal.add_argument("--mtp-head", choices=("teacher", "procreations"), default="teacher",
                          help="Select the same MTP artifact as fetch (default: selected preset, otherwise teacher).")
     removal.add_argument("--dry-run", action="store_true", help="Show the selected paths and storage use without deleting files.")
@@ -1029,8 +1168,15 @@ def main() -> int:
     start.add_argument("model", nargs="?", default=DEFAULT_START_MODEL,
                        help=f"Model or preset to start (default: {DEFAULT_START_MODEL}).")
     start.add_argument("settings_profile", nargs="?", default="default", metavar="PROFILE",
-                       help="Model settings profile (default: default). Flash-Next also supports lowram; dense Qwen supports mtp. Use localmodel list to see available profiles.")
-    start.add_argument("--context", "--ctx", type=tokens)
+                       help="Inkling defaults to 128k-fixed. Its 128k-dspark, 192k-dspark and 256k-dspark profiles select the optional drafter. Flash-Next also supports lowram; dense Qwen supports mtp. Use localmodel list to see available profiles.")
+    for selection in (fetch_parser, removal):
+        selection.add_argument("settings_profile", nargs="?", default="default", metavar="PROFILE",
+                               help="Select a named Inkling placement. See localmodel list.")
+    for selection in (fetch_parser, removal, start):
+        selection.add_argument("--quant", choices=INKLING_QUANTS,
+                               help="Inkling target weights: iq1_s (default) or iq2_xxs. Both share the DSpark drafter.")
+    start.add_argument("--context", "--ctx", "--ctxt", type=lambda value: tokens(value, maximum=1048576),
+                       help="Context length in tokens. K and M are binary units. Only Inkling supports --ctx 1m locally.")
     start.add_argument("--port", type=int, default=8899)
     start.add_argument("--tui", action="store_true",
                        help="Show Strata telemetry in this terminal. q detaches; Ctrl-C stops the server.")
@@ -1065,8 +1211,12 @@ def main() -> int:
     offload.add_argument("--cpu-offload-gb", type=float, default=0, help="Dory CPU weight offload in GiB.")
     offload.add_argument("--cpu-moe-layers", type=int,
                          help="Place routed experts in the first N layers in RAM; keep attention on the GPU. Flint: default 33, range 0-49. Groot: default 24, range 0-40.")
-    start.add_argument("--moe-cache-mib", type=int,
-                       help="Flint/Groot GPU cache for host expert weights, in MiB. Requires CPU expert layers. 0 disables; omitted inherits LLAMA_ARG_MOE_CACHE_MIB (native default: 0). --fit off does not make room automatically.")
+    cache_size = start.add_mutually_exclusive_group()
+    cache_size.add_argument("--auto", dest="moe_cache_mib", action="store_const", const="auto",
+                            help="Inkling: fit expert placement and cache size to free VRAM at startup. Keep the requested GPU KV context.")
+    cache_size.add_argument("--moe-cache-mib", type=lambda value: "auto" if value == "auto" else int(value),
+                       help="GPU cache for host experts, in MiB (0 disables). Inkling accepts auto to let Unsloth place experts for the requested context. 256k-dspark uses auto; choose a manual placement profile for a numerical budget.")
+    start.add_argument("--fit-target-mib", type=int, help="Inkling: enable the automatic placer with this free-VRAM target in MiB (default with auto: 2816).")
     start.add_argument("--kv-offload-gb", type=float, default=0,
                        help="Legacy vLLM Dory host KV cache in GiB. Attention stays on the GPU (default: 0).")
     start.add_argument("--batch-tokens", type=int)
@@ -1092,7 +1242,7 @@ def main() -> int:
     start.add_argument("--mma-decode-min-kv", type=int,
                        help="Added native Bonsai wide-GQA MMA dispatch threshold (0 disables this override). Other MMA kernels remain available. Requires --runtime bonsai-native.")
     start.add_argument("--speculative", choices=("none", "mtp", "dflash", "dflash2", "dspark"), default="none",
-                       help="Optional draft decoder (default: none; Qwen: mtp). DFlash2 is an explicit Qwen experiment. DSpark requires deepseek-full.")
+                       help="Optional draft decoder (default: none; Qwen: mtp). DFlash2 is an explicit Qwen experiment. DSpark supports Inkling and deepseek-full.")
     start.add_argument("--draft-tokens", type=int, default=2, help="Maximum neural draft tokens per step (default: 2; Qwen MTP: 4, DFlash2: 5; DeepSeek DSpark: 5). Qwen verifies N+1 tokens, including the accepted token.")
     start.add_argument("--adaptive-fetch", type=int, choices=(0, 1, 2),
                        help="Qwen experimental PCIe expert admission: 0 off, 1 supplement tier copies, 2 replace tier copies. Default: 1 with mapped experts, 0 with resident experts. Modes 1/2 require --expert-ram-gb 0; inspect native activation logs.")
@@ -1111,7 +1261,7 @@ def main() -> int:
     start.add_argument("--slot-save-path", type=Path,
                        help="Existing directory for manual Bonsai slot save/restore through the local API. Files contain prompt state; this does not enable automatic persistence.")
     start.add_argument("--draft-kv-cache", choices=("q4_0", "q8_0", "f16"), default="q8_0",
-                       help="Draft decoder KV cache type (default: q8_0).")
+                       help="Draft decoder KV cache type. Inkling DSpark uses the selected placement's draft KV. Other llama.cpp profiles default to q8_0.")
     start.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
     if args.stats:
@@ -1141,17 +1291,25 @@ def main() -> int:
         return 0
     models = catalog()
     if args.action == "list":
-        print(f"{'MODEL':<28} {'WEIGHTS':<10} {'CONTEXT':>8}  {'RUNTIME':<8}  {'PROFILES':<18}  OPTIONAL DECODERS")
+        print(f"{'MODEL':<28} {'WEIGHTS':<10} {'CONTEXT':>8}  {'RUNTIME':<8}  {'PROFILES':<18}  OPTIONAL DECODERS / QUANTS")
         for name, item in models.items():
             state = "installed" if installed(name, item) else "missing"
             optional = ", ".join(f"{variant}:{'ready' if installed(name, item[variant]) else 'missing'}"
                                  for variant in ("mtp", "mtp_procreations", "dflash") if variant in item) or "-"
             profiles = ", ".join(("default", *item.get("profiles", {})))
+            if item["runtime"] == "inkling":
+                profiles = ", ".join(p + (" (default)" if p == item["default_profile"] else "") for p in item["profiles"])
+                dspark = "ready" if installed(name, item["dspark"]) else "missing"
+                iq2 = "installed" if installed(name, item["iq2_xxs"]) else "missing"
+                optional = f"dspark:{dspark} | iq1_s:{state} (default), iq2_xxs:{iq2}"
             print(f"{name:<28} {state:<10} {item['context']:>8}  {item['runtime']:<8}  {profiles:<18}  {optional}")
         return 0
     explicit = {argument.split("=", 1)[0][2:].replace("-", "_")
                 for argument in sys.argv[2:] if argument.startswith("--")}
-    for alias, destination in (("ctx", "context"), ("loops", "rounds"), ("no_prompt_lookup", "prompt_lookup"),
+    if "auto" in explicit:
+        explicit.remove("auto")
+        explicit.add("moe_cache_mib")
+    for alias, destination in (("ctx", "context"), ("ctxt", "context"), ("loops", "rounds"), ("no_prompt_lookup", "prompt_lookup"),
                                ("no_mtp_chain", "mtp_chain"), ("no_replay", "replay"), ("no_gdn_mma", "gdn_mma")):
         if alias in explicit:
             explicit.add(destination)
@@ -1164,28 +1322,99 @@ def main() -> int:
     args.model = ALIASES.get(args.model, args.model)
     if args.model not in models:
         parser.error("Unknown model. Use localmodel list.")
+    if args.model != "inkling" and (getattr(args, "moe_cache_mib", None) == "auto" or getattr(args, "fit_target_mib", None) is not None):
+        parser.error("Automatic expert placement requires Inkling.")
+    if args.model != "inkling" and (getattr(args, "context", None) or 0) > 262144:
+        parser.error("Use 1 to 262144 tokens for this model.")
+    if getattr(args, "quant", None) is not None and args.model != "inkling":
+        parser.error("--quant requires Inkling.")
+    if args.model == "inkling" and getattr(args, "quant", None) == "iq2_xxs":
+        models["inkling"] = {**models["inkling"], **models["inkling"]["iq2_xxs"]}
+    if args.model != "inkling" and args.action in ("fetch", "pull", "remove") and args.settings_profile != "default":
+        parser.error("Named fetch and remove profiles require Inkling.")
     if getattr(args, "tui", False) and models[args.model]["runtime"] not in ("strata", "strata-qwen"):
         parser.error("--tui requires a Strata model.")
     if getattr(args, "cache_reuse_fix", False) and args.model != qwen_strata.NAME:
         parser.error("--cache-reuse-fix requires Strata Qwen.")
-    if args.action in ("start", "serve") and args.settings_profile != "default":
+    if args.model == "inkling" and args.action in ("start", "serve"):
+        item = models[args.model]
+        inkling_profiles = cast(dict[str, dict[str, Any]], item["profiles"])
+        context = args.context or item["context"]
+        if args.settings_profile == "default" and (context != item["context"] or args.speculative == "dspark"):
+            args.settings_profile = min(
+                (name for name, settings in inkling_profiles.items()
+                 if context <= settings["context"] and settings.get("speculative", "none") == args.speculative
+                 and (args.speculative != "none" or not settings.get("unsloth_runtime"))),
+                key=lambda name: (inkling_profiles[name]["context"], name),
+                default=None,
+            )
+            if args.settings_profile is None:
+                parser.error("No Inkling placement supports this context and decoder. See localmodel list.")
+        elif args.settings_profile == "default":
+            args.settings_profile = item["default_profile"]
+        elif args.settings_profile in inkling_profiles and args.context and args.context > inkling_profiles[args.settings_profile]["context"]:
+            parser.error("The requested context exceeds this Inkling placement. Omit PROFILE to select by --ctx.")
+        settings = inkling_profiles.get(args.settings_profile, {})
+        decoder = args.speculative if "speculative" in explicit else settings.get("speculative", "none")
+        if decoder not in ("none", "dspark"):
+            parser.error("Inkling supports --speculative none or dspark.")
+        if decoder != "dspark" and explicit & {"draft_tokens", "draft_kv_cache"}:
+            parser.error("Inkling draft options require --speculative dspark.")
+        if decoder == "dspark":
+            if settings.get("host_kv") or context > 262144:
+                parser.error("Inkling DSpark supports GPU KV through 256K.")
+            if not 1 <= args.draft_tokens <= 7:
+                parser.error("Inkling DSpark supports 1 to 7 draft tokens.")
+            if "draft_kv_cache" not in explicit:
+                args.draft_kv_cache = settings.get("draft_kv_cache", "f16")
+        if args.fit_target_mib is not None:
+            if args.fit_target_mib < 1 or args.moe_cache_mib not in (None, "auto"):
+                parser.error("--fit-target-mib must be positive and requires automatic expert placement.")
+            args.moe_cache_mib = "auto"
+            explicit.add("moe_cache_mib")
+        if settings.get("moe_cache_mib") == "auto" and isinstance(args.moe_cache_mib, int):
+            parser.error("This Inkling profile uses automatic expert placement. Select an explicit manual placement profile to set a numerical --moe-cache-mib.")
+        if args.no_offload and args.moe_cache_mib is None and settings.get("moe_cache_mib") != "auto":
+            args.moe_cache_mib = 0
+            explicit.add("moe_cache_mib")
+        if args.moe_cache_mib is None:
+            args.moe_cache_mib = settings.get("moe_cache_mib", 0)
+        if args.moe_cache_mib == "auto":
+            if settings.get("host_kv") or explicit & {"cpu_moe_layers", "no_offload"}:
+                parser.error("Automatic expert placement requires GPU KV and chooses the expert layers itself.")
+            if args.fit_target_mib is None:
+                args.fit_target_mib = settings.get("fit_target_mib", 2816)
+        supported = {"context", "ctx", "ctxt", "port", "mem", "dry_run", "batch_tokens", "ubatch_tokens",
+                     "cpu_moe_layers", "moe_cache_mib", "kv_cache", "no_offload", "cache_ram", "fit_target_mib", "quant",
+                     "speculative", "draft_tokens", "draft_kv_cache"}
+        if unsupported := explicit - supported:
+            parser.error("Unsupported Inkling option: " + ", ".join("--" + key.replace("_", "-") for key in sorted(unsupported)))
+    elif args.model == "inkling" and args.action in ("fetch", "pull") and args.settings_profile == "default":
+        args.settings_profile = models["inkling"]["default_profile"]
+    if getattr(args, "settings_profile", "default") != "default":
         profiles = models[args.model].get("profiles", {})
         if args.settings_profile not in profiles:
             available = ", ".join(("default", *profiles))
             parser.error(f"Unknown profile {args.settings_profile!r} for {args.model}. Available: {available}.")
-        settings = profiles[args.settings_profile]
-        for key, value in settings.items():
+        profile_settings: dict[str, Any] = dict(profiles[args.settings_profile])
+        if args.model == "inkling":
+            if args.action in ("fetch", "pull", "remove"):
+                profile_settings = {"speculative": profile_settings.get("speculative", "none"),
+                            "unsloth_runtime": bool(profile_settings.get("unsloth_runtime") or profile_settings.get("moe_cache_mib") == "auto")}
+            if "speculative" in explicit and args.speculative != profile_settings.get("speculative", "none"):
+                profile_settings.pop("draft_tokens", None)
+        for key, value in profile_settings.items():
             if key not in explicit:
                 setattr(args, key, Path(value) if key in ("kv_mean_center", "slot_save_path") else value)
-        explicit.update(settings)
+        explicit.update(profile_settings)
     if getattr(args, "speculative", "none") == "dflash2" and args.model != qwen_strata.NAME:
         parser.error("--speculative dflash2 requires Strata Qwen.")
     if getattr(args, "draft_conf", None) is not None and (args.model != qwen_strata.NAME or args.speculative != "dflash2"):
         parser.error("--draft-conf requires Qwen with --speculative dflash2.")
     if getattr(args, "adaptive_fetch", None) is not None and args.model != qwen_strata.NAME:
         parser.error("--adaptive-fetch requires Strata Qwen.")
-    if getattr(args, "speculative", "none") == "dspark" and args.model != deepseek_strata.NAME:
-        parser.error("DSpark currently requires deepseek-full. It is not enabled for DeepSeek Coder.")
+    if getattr(args, "speculative", "none") == "dspark" and args.model not in (deepseek_strata.NAME, "inkling"):
+        parser.error("DSpark requires Inkling or deepseek-full.")
     if getattr(args, "dspark_conf", None) is not None and (args.model != deepseek_strata.NAME or args.speculative != "dspark"):
         parser.error("--dspark-conf requires deepseek-full with --speculative dspark.")
     if args.model == deepseek_strata.NAME and args.action in ("start", "serve") and args.speculative == "dspark":
@@ -1217,9 +1446,10 @@ def main() -> int:
                 (args.model == deepseek_strata.NAME and args.speculative == "dspark")):
             parser.error("This profile has no pinned artifact for the selected decoder.")
         if args.action == "remove":
-            remove(args.model, args.speculative, args.dry_run, args.mtp_head)
+            remove(args.model, args.speculative, args.dry_run, args.mtp_head, quant=args.quant)
         else:
-            fetch(args.model, models[args.model], args.speculative, args.mtp_head)
+            fetch(args.model, models[args.model], args.speculative, args.mtp_head, quant=args.quant,
+                  unsloth_runtime=args.model == "inkling" and inkling_runtime(args) == "inkling-unsloth")
         return 0
     if not 0 <= args.cpu_offload_gb < float("inf"):
         parser.error("CPU offload must be finite and nonnegative.")
@@ -1229,7 +1459,7 @@ def main() -> int:
         parser.error("Use 0 to 49 CPU expert layers (Groot supports at most 40).")
     if args.gpu_layers is not None and not 0 <= args.gpu_layers <= 999:
         parser.error("Use 0 to 999 GPU layers.")
-    if args.moe_cache_mib is not None and args.moe_cache_mib < 0:
+    if isinstance(args.moe_cache_mib, int) and args.moe_cache_mib < 0:
         parser.error("The MoE cache size must be nonnegative.")
     if models[args.model]["runtime"] != "flint" and args.prompt_lookup is None:
         args.prompt_lookup = False
@@ -1238,7 +1468,7 @@ def main() -> int:
     if models[args.model]["runtime"] in ("strata", "strata-qwen") and args.ubatch_tokens is not None:
         parser.error("--ubatch-tokens is a llama.cpp control. Use --prefill-chunk for Strata.")
     if args.ubatch_tokens is None:
-        args.ubatch_tokens = 256 if models[args.model]["runtime"] == "llamacpp" else 1024 if models[args.model]["runtime"] in ("dory-native", "flint") else 64
+        args.ubatch_tokens = models[args.model].get("ubatch_tokens", 256 if models[args.model]["runtime"] == "llamacpp" else 1024 if models[args.model]["runtime"] in ("dory-native", "flint") else 64)
     if (args.batch_tokens is not None and args.batch_tokens < 1) or args.ubatch_tokens < 1:
         parser.error("Batch sizes must be positive.")
     if args.cache_ram is not None and args.cache_ram < 0:

@@ -110,9 +110,13 @@ the version pinned by upstream. For an older installation, run
 Refresh the browser after the restart. Disk activity includes all reads
 visible to the operating system or container. It is not limited to Strata.
 
+## Set up Inkling 2 Mini
+
+Run `localmodel fetch inkling` to prepare the IQ1_S weights and the verified Unsloth CUDA runtime. Run `localmodel start` for the fixed 128K configuration. Use `localmodel start --auto` to size the expert cache from available GPU memory. [Inkling controls](reference.md#inkling-2-mini)
+
 ## Set up Bonsai 2 27B
 
-This is the default local model. The selected preset is
+The 256K preset is
 `27b-256k-optimized`: official PTQ1 target weights, the trained ProCreations
 MTP head, two draft tokens, chaining, a 16K draft window, Q4 KV, 8192-token
 checkpoints, recurrent replay, and chunked prefill. Context capacity is 256K.
@@ -138,7 +142,7 @@ Fetch the target and the trained MTP head, then start:
 ```bash
 localmodel fetch 27b-256k-optimized
 localmodel start --dry-run
-localmodel start
+localmodel start 27b-256k-optimized
 ```
 
 The trained-head file preserves the target tensor bytes. The download helper

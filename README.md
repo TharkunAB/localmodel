@@ -41,7 +41,7 @@ export PATH="$HOME/.local/bin:$PATH"
 Setup links launchers into `~/.local/bin` and installs dependencies under
 `local/`. It does not fetch model weights or start services. It refuses to
 replace unrelated files or links. Put the `PATH` line in your shell config.
-Select a backend before fetching a local model: `--bonsai` builds the reviewed
+Inkling fetches its pinned CUDA runtime with the weights. For other backends, `--bonsai` builds the reviewed
 Bonsai runtime, and `--strata` installs the pinned Qwen/DeepSeek backend.
 See the [model setup steps](local/docs/harness.md#set-up-bonsai-2-27b).
 
@@ -53,9 +53,8 @@ Run search, one model, and the agent in separate terminals:
 # Terminal 1: search.
 searxng-local
 
-# Terminal 2: fetch once, then start the default Bonsai model.
-# Install its backend first: local/bin/setup-localmodel --bonsai --run
-localmodel fetch 27b-256k-optimized
+# Terminal 2: prepare Inkling 2 Mini once, then start it.
+localmodel fetch inkling
 localmodel start
 
 # Terminal 3: check services, then open the agent in your project.
@@ -70,6 +69,8 @@ at 32 GiB with no swap; model and search processes have separate limits.
 Stop the model with Ctrl-C or `localmodel stop`. Stop search with Ctrl-C.
 The [local guide](local/docs/harness.md) covers Qwen, DeepSeek, settings, and
 measured limits.
+
+Bare `localmodel start` serves Inkling 2 Mini IQ1_S at 128K with Q4 KV, a fixed 640 MiB GPU expert cache and drafting off. Run `localmodel start --auto` to let Unsloth choose expert placement from free VRAM at launch. Both commands use the same context and weights. See the [Inkling profiles](local/docs/reference.md#inkling-2-mini).
 
 ## Use a model on a rental GPU
 

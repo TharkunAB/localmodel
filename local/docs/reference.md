@@ -39,7 +39,7 @@ export PATH="$HOME/.local/bin:$PATH"
 2. Start the model in the second terminal:
 
    ```sh
-   localmodel start
+   localmodel start 27b-256k-optimized
    ```
 
    Keep this terminal open and wait for the server to finish loading. This
@@ -717,7 +717,7 @@ are linked in `~/.local/bin`. Start SearXNG and the model in separate terminals:
 
 ```bash
 searxng-local
-localmodel start
+localmodel start 27b-256k-optimized
 ```
 
 Both launchers check the configured SearXNG `/healthz` endpoint before they
@@ -936,16 +936,14 @@ Some profiles share a weight file. Removal affects each profile that uses it.
 For legacy `dory`, removal deletes its NVFP4 Hugging Face model cache.
 Run `fetch` with the same name and flags to restore the removed files.
 
-`start` defaults to `27b-256k-optimized` with MTP depth 2, chaining on, and a 16K
-draft window. The target context remains 256K. It runs in the
+`start` selects Inkling 2 Mini IQ1_S at 128K with a 640 MiB GPU expert cache and drafting off. Use `--auto` for automatic placement. Select `localmodel start 27b-256k-optimized` for Bonsai with MTP depth 2. It runs in the
 foreground. Use Ctrl-C or `localmodel stop` to stop it before
 you select another model. The stop command verifies the saved controller PID.
 It does not stop legacy servers that were started outside the manager.
 The start command refuses to replace a model that is already running.
 
 New starts listen on `127.0.0.1:8899`. Select another port with `--port PORT`.
-The defaults keep transformer layers and active KV cache on the GPU.
-`--no-offload` selects the same behavior explicitly.
+Inkling keeps its 128K KV on the GPU. Its fixed placement holds selected expert banks in RAM.
 The new Bonsai profiles disable automatic memory fitting and place all
 transformer layers on the GPU. The native loader also uses a 265 MiB
 CPU-mapped token embedding buffer.
@@ -1351,6 +1349,37 @@ and 64 microbatch tokens.
 Use `--batch-tokens`, `--ubatch-tokens`, and `--kv-cache` to test another setting.
 `--kv-mean-center FILE` selects a model-specific cache calibration file.
 
+## Inkling 2 Mini
+
+`localmodel fetch inkling` downloads the pinned IQ1_S checkpoint and verifies its SHA-256. It prepares the pinned Unsloth CUDA runtime for the default fixed placement and optional automatic sizing. Fetch an explicit manual profile to prepare its configured runtime. Each start verifies the installed runtime. The server listens on loopback at port 8899 by default and blocks outgoing connections. [Unsloth runtime preparation](../experiments/inkling-mini/prepare-dspark.py) · [Upstream loop implementation](https://github.com/ggml-org/llama.cpp/pull/32695)
+
+IQ1_S is the default quant. To compare a 2-bit target, run `localmodel fetch inkling --quant iq2_xxs`. Then select it with `localmodel start inkling --quant iq2_xxs`. The 7.90 GiB IQ2_XXS target has a separate model ID, `inkling-mini-iq2-xxs`. Both targets use the same optional draft file. `localmodel remove inkling --quant iq2_xxs --dry-run` previews removal of the 2-bit target only. [Pinned 2-bit weights](https://huggingface.co/unsloth/Inkling-2-Mini-GGUF/blob/ea0c79b2ecd73669e774c8519b79bfabfddbc027/Inkling-2-Mini-UD-IQ2_XXS.gguf)
+
+`localmodel start inkling` selects 128K. Use `localmodel start inkling 256k` for the larger measured GPU KV cache. Smaller profiles are `16k`, `32k`, `32k-q8` and `64k`. Profiles of the same quant share weights. With no profile name, `--ctxt` (also `--ctx` or `--context`) selects a placement that accommodates the requested context. For example, `localmodel start inkling --ctxt 192k` requests 196,608 tokens and `--ctxt 256k` requests 262,144 tokens. Use `--dry-run` to inspect the fitter arguments and KV settings. The runtime chooses the automatic split when the server starts.
+
+`localmodel start inkling 128k-tuned` selects the same 131,072-token window as `128k`. It keeps the input embedding and the expert banks in blocks 18, 19, 21, 22 and 23 in RAM. It uses a 768 MiB GPU cache for those experts. The repeated blocks and the Q4 KV cache stay on the GPU. This profile uses the regular Inkling runtime with drafting off.
+
+The opt-in `192k-tuned` and `256k-tuned` profiles use the pinned Unsloth CUDA runtime with drafting off. Prepare one with `localmodel fetch inkling 192k-tuned` or `localmodel fetch inkling 256k-tuned`. Both share the target GGUF and use a 640 MiB expert cache with microbatch 32. At 192K the host holds the input embedding and expert blocks 0–5, 18, 21 and 22. At 256K the host holds the embedding and expert blocks 0–5 and 18–23. Use `localmodel start inkling 192k-tuned` or `localmodel start inkling 256k-tuned` to select these placements.
+
+To try the trained Q8_0 DSpark drafter, use the following commands. Fetch verifies both GGUFs and installs Unsloth's pinned CUDA 13 server. The host needs a compatible NVIDIA driver, CUDA 13 runtime and cuBLAS. The extra download on a new installation is 384 MiB for the drafter and about 400 MiB for the server. The target GGUF is shared. Use `localmodel remove inkling --speculative dspark --dry-run` to preview removal of the drafter alone.
+
+```bash
+localmodel fetch inkling --speculative dspark
+localmodel start inkling --ctxt 128k --speculative dspark --draft-tokens 2
+```
+
+The launcher selects a DSpark placement for the requested window. At 128K it uses F16 draft KV and a 512 MiB expert cache. At 192K it uses Q8_0 draft KV and a 256 MiB expert cache. At 256K it uses Q8_0 draft KV and automatic expert placement, with a 2,816 MiB fit target. The manual 256K DSpark trial reached the VRAM guard at startup. The target KV stays Q4_0. Set `--draft-kv-cache` to override the draft KV format. The Mini checkpoint calls this drafter `mtp.safetensors`. It uses DSpark's trained prediction layers. Select `--speculative dspark` to enable them. [Drafter documentation](https://huggingface.co/unsloth/Inkling-2-Mini-GGUF/tree/ea0c79b2ecd73669e774c8519b79bfabfddbc027/dspark)
+
+Bare `localmodel start` selects `inkling 128k-fixed`. The input embedding and expert banks 0–5, 18, 21 and 22 stay in system RAM. The GPU caches 640 MiB of those experts. Use `localmodel start --auto` for Unsloth sizing. The fitter checks free VRAM once at launch. Restart with `--auto` to use VRAM another application has released. Use `localmodel start --auto --ctxt 192k` to size a larger window. The launcher fixes the requested context and asks the fitter to leave 2,816 MiB free during its estimate. Use `--fit-target-mib N` to change this estimate. Actual free VRAM can be lower. The fitter can choose a static split with no expert cache. [Unsloth fit algorithm](https://github.com/unslothai/llama.cpp/pull/251)
+
+Use `--moe-cache-mib N` to reserve N MiB of GPU memory for host expert weights. The default is 768 MiB for `128k-tuned` and `1m`, and 640 MiB for `128k-fixed`, `192k-tuned` and `256k-tuned`. DSpark uses 512 MiB at 128K, 256 MiB at 192K and automatic sizing at 256K. The basic manual GPU-KV profiles use zero. A positive budget requires CPU experts and reduces free VRAM. The GPU-KV profiles accept `--no-offload` to keep all weights on CUDA. This requires a zero expert-cache budget. The 1M placement requires host KV.
+
+The explicit `128k` profile places the experts in the first six and last two physical blocks in RAM. At 256K it places the input embedding and the experts in the first six and last six physical blocks in RAM. Both keep the recurrent core, output head and KV on CUDA. The server loads the host weights into RAM at startup and disables cgroup swap. Use `localmodel --stats` for measured cold prefill and decode speeds. `localmodel status --json` reports the active context and `omp-local` discovers it automatically.
+
+The experimental `localmodel start inkling 1m` profile reserves 1,048,576 tokens and keeps the Q4 KV cache, all expert tables, and the input embedding in host RAM. A 768 MiB GPU cache can hold frequently used experts. The no-swap process cap is 20 GiB. Use `--moe-cache-mib 0` to disable the expert cache or `--mem` to override the cap. The runtime allocated 9,272.25 MiB of host KV. A 4,088-token uncached prompt retrieved all three values in 231 seconds at 19.39 prefill and 9.15 decode tok/s. The run left at least 2,016 MiB of free VRAM and used zero swap. The 768 MiB expert cache recorded 28,073 hits and 419,634 misses (6.27% hits). A filled 1M prompt remains untested.
+
+With the same 4,088-token prompt at the 128K setting, a 256 MiB expert cache raised decode from 33.6 to 42.0 tok/s. Wall time fell from 18.99 to 17.34 seconds. Both runs retrieved all three values. Use `localmodel start inkling 128k --moe-cache-mib 256` to try this setting.
+
 ## Runtime controls
 
 The new Bonsai profiles allow a 32768 MiB host prompt cache. It stores
@@ -1402,7 +1431,7 @@ localmodel start bonsai2-9b --speculative mtp --prompt-lookup
 localmodel fetch bonsai2-9b --speculative dflash
 localmodel start bonsai2-9b --speculative dflash
 localmodel start bonsai2-4b --speculative mtp --kv-cache q8_0
-localmodel start
+localmodel start 27b-256k-optimized
 localmodel start --no-mtp-chain
 localmodel start --draft-tokens 4 --mtp-chain
 localmodel start dory --no-offload --kv-offload-gb 2

@@ -23,13 +23,18 @@ class Model(TypedDict):
     mtp: NotRequired["Model"]
     mtp_procreations: NotRequired["Model"]
     dflash: NotRequired["Model"]
+    dspark: NotRequired["Model"]
+    iq2_xxs: NotRequired["Model"]
 
 
-def model_path(root: Path, model: Model) -> Path:
-    directory = root / "models" / model["directory"]
+def model_path(root: Path, name: str, model: Model) -> Path:
+    store = root / "models"
+    if name == "inkling" or store.resolve() == root.parent / "models":
+        store = root.parent / "models"
+    directory = store / model["directory"]
     path = directory / model["filename"]
     if (
-        not directory.resolve().is_relative_to(root / "models")
+        not directory.resolve().is_relative_to(store)
         or path.parent != directory
         or path.is_symlink()
     ):
@@ -87,9 +92,10 @@ def main() -> None:
     catalog = root.parent / "config/models.json"
     if not catalog.is_file():
         catalog = root / "config/models.json"
-    models = cast(dict[str, Model], json.loads(catalog.read_text()))
+    models = {name: cast(Model, entry) for name, entry in json.loads(catalog.read_text()).items()
+              if "filename" in entry and "size" in entry}
     parser = argparse.ArgumentParser(
-        description="Manage the local Bonsai and Saluki model files.",
+        description="Manage local GGUF model files.",
         epilog=(
             "bonsai is an alias for bonsai-ptq1 (non-abliterated PTQ1_0 MTP). "
             "bonsai-ptq2 is an alias for bonsai-pq2 (non-abliterated PQ2_0)."
@@ -104,8 +110,8 @@ def main() -> None:
         subparser = commands.add_parser(command, help=help_text)
         subparser.add_argument("model", choices=[*models, "bonsai", "bonsai-ptq2"])
         subparser.add_argument(
-            "--variant", choices=("mtp", "mtp_procreations", "dflash"),
-            help="Select the optional MTP model or DFlash drafter.",
+            "--variant", choices=("mtp", "mtp_procreations", "dflash", "dspark", "iq2_xxs"),
+            help="Select an optional model artifact.",
         )
         if command == "delete":
             subparser.add_argument("--dry-run", action="store_true", help="Show paths and storage use without deleting files.")
@@ -115,7 +121,7 @@ def main() -> None:
         print(f"{'MODEL':<28} {'STATUS':<10} {'ON DISK':>10} {'MODEL SIZE':>12}")
         total = 0
         for name, model in models.items():
-            path = model_path(root, model)
+            path = model_path(root, name, model)
             size = stored_bytes(path)
             total += size
             if path.is_file() and path.stat().st_size == model["size"]:
@@ -132,7 +138,7 @@ def main() -> None:
     elif name == "bonsai-ptq2":
         name = "bonsai-pq2"
     model = models[name]
-    base_name, base_path = name, model_path(root, model)
+    base_name, base_path = name, model_path(root, name, model)
     variant = cast(str | None, getattr(arguments, "variant", None))
     if variant == "mtp_procreations" and arguments.command == "pull":
         subprocess.run([str(root.parent / "bin/localmodel"), "fetch", name,
@@ -144,10 +150,10 @@ def main() -> None:
             raise RuntimeError(f"{name} has no {variant} artifact in the model catalog.")
         model = artifact
         name = f"{name}-{variant}"
-    path = model_path(root, model)
+    path = model_path(root, base_name, model)
     state = root / "state"
     state.mkdir(parents=True, exist_ok=True)
-    lock_name = base_name if path == base_path else name
+    lock_name = base_name if path == base_path or (base_name == "inkling" and variant == "dspark") else name
     if lock_name in ("bonsai-ptq1", "bonsai2-27b-mtp"):
         lock_name = "bonsai"
     with (state / f"models-{lock_name}.lock").open("w") as lock:
@@ -158,6 +164,22 @@ def main() -> None:
 
         if arguments.command == "delete":
             refuse_in_use(path)
+            # The Inkling target and drafter share one Hugging Face download directory.
+            if base_name == "inkling":
+                downloads = path.parent / ".cache/huggingface/download"
+                if downloads.resolve() != path.parent.resolve() / ".cache/huggingface/download":
+                    raise RuntimeError(f"Unexpected cache symlink at {downloads}.")
+                targets = [path, downloads / (path.name + ".metadata"), downloads / (path.name + ".lock"),
+                           *downloads.glob(f"*.{model['sha256']}.incomplete")]
+                for target in targets:
+                    if target == path or target.is_file() or target.is_symlink():
+                        if arguments.dry_run:
+                            size = target.stat().st_size if target.is_file() and not target.is_symlink() else 0
+                            print(f"Would remove {target} ({size / 2**30:.2f} GiB).")
+                        else:
+                            target.unlink(missing_ok=True)
+                            print(f"Removed {target}.")
+                return
             size = stored_bytes(path)
             cache = path.parent / ".cache"
             if arguments.dry_run:

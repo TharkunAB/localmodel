@@ -1,4 +1,145 @@
 {
+  "inkling": {
+    "repo": "unsloth/Inkling-2-Mini-GGUF",
+    "revision": "ea0c79b2ecd73669e774c8519b79bfabfddbc027",
+    "filename": "Inkling-2-Mini-UD-IQ1_S.gguf",
+    "size": 7764291776,
+    "sha256": "c09c028b050c108624682baeb28ac6e0cdb936af021ac637c8c3609f923ea4b8",
+    "directory": "inkling-2-mini",
+    "alias": "inkling-mini-iq1-s",
+    "iq2_xxs": {
+      "directory": "inkling-2-mini",
+      "repo": "unsloth/Inkling-2-Mini-GGUF",
+      "revision": "ea0c79b2ecd73669e774c8519b79bfabfddbc027",
+      "filename": "Inkling-2-Mini-UD-IQ2_XXS.gguf",
+      "alias": "inkling-mini-iq2-xxs",
+      "size": 8486236352,
+      "sha256": "4fe958f73a667d8082f911a4347e52bc34696a7816cf3d5b9f7c8a81d5c5ceaa"
+    },
+    "dspark": {
+      "directory": "inkling-2-mini",
+      "repo": "unsloth/Inkling-2-Mini-GGUF",
+      "revision": "ea0c79b2ecd73669e774c8519b79bfabfddbc027",
+      "filename": "dspark-Inkling-2-Mini-Q8_0.gguf",
+      "size": 402278560,
+      "sha256": "2ec78510da837e8fc3be54a14757a0c5fbd2d8d9e85a0d92853fafdf674f3773"
+    },
+    "runtime": "inkling",
+    "context": 131072,
+    "default_profile": "128k-fixed",
+    "memory_mib": 12288,
+    "batch_tokens": 256,
+    "ubatch_tokens": 32,
+    "cache_ram": 0,
+    "cpu_moe_layers": 0,
+    "layers": 24,
+    "gpu_layers": 999,
+    "kv_cache": "q4_0",
+    "profiles": {
+      "16k": {
+        "context": 16384,
+        "kv_cache": "q8_0"
+      },
+      "32k": {
+        "context": 32768
+      },
+      "32k-q8": {
+        "context": 32768,
+        "kv_cache": "q8_0",
+        "cpu_moe_layers": 2
+      },
+      "64k": {
+        "context": 65536,
+        "cpu_moe_layers": 2,
+        "ubatch_tokens": 16
+      },
+      "128k-fixed": {
+        "context": 131072,
+        "unsloth_runtime": true,
+        "cpu_moe_layers": 6,
+        "load_mode": "none",
+        "moe_cache_mib": 640,
+        "tensor_placement": "^token_embd\\.weight$=CPU,^blk\\.(18|21|22)\\.ffn_.*_exps\\..*=CPU,.*=CUDA0"
+      },
+      "128k": {
+        "context": 131072,
+        "cpu_moe_layers": 6,
+        "load_mode": "none",
+        "tensor_placement": "^blk\\.(22|23)\\.ffn_.*_exps\\..*=CPU,.*=CUDA0"
+      },
+      "128k-tuned": {
+        "context": 131072,
+        "cpu_moe_layers": 0,
+        "load_mode": "none",
+        "moe_cache_mib": 768,
+        "tensor_placement": "^token_embd\\.weight$=CPU,^blk\\.(18|19|21|22|23)\\.ffn_.*_exps\\..*=CPU,.*=CUDA0"
+      },
+      "256k": {
+        "context": 262144,
+        "cpu_moe_layers": 6,
+        "load_mode": "none",
+        "tensor_placement": "^token_embd\\.weight$=CPU,^blk\\.(18|19|20|21|22|23)\\.ffn_.*_exps\\..*=CPU,.*=CUDA0"
+      },
+      "192k-tuned": {
+        "context": 196608,
+        "unsloth_runtime": true,
+        "cpu_moe_layers": 6,
+        "load_mode": "none",
+        "ubatch_tokens": 32,
+        "moe_cache_mib": 640,
+        "tensor_placement": "^token_embd\\.weight$=CPU,^blk\\.(18|21|22)\\.ffn_.*_exps\\..*=CPU,.*=CUDA0"
+      },
+      "256k-tuned": {
+        "context": 262144,
+        "unsloth_runtime": true,
+        "cpu_moe_layers": 6,
+        "load_mode": "none",
+        "ubatch_tokens": 32,
+        "moe_cache_mib": 640,
+        "tensor_placement": "^token_embd\\.weight$=CPU,^blk\\.(18|19|20|21|22|23)\\.ffn_.*_exps\\..*=CPU,.*=CUDA0"
+      },
+      "128k-dspark": {
+        "context": 131072,
+        "speculative": "dspark",
+        "draft_tokens": 2,
+        "draft_kv_cache": "f16",
+        "cpu_moe_layers": 6,
+        "load_mode": "none",
+        "moe_cache_mib": 512,
+        "tensor_placement": "^blk\\.(18|19|20|21|22|23)\\.ffn_.*_exps\\..*=CPU,.*=CUDA0"
+      },
+      "192k-dspark": {
+        "context": 196608,
+        "speculative": "dspark",
+        "draft_tokens": 2,
+        "draft_kv_cache": "q8_0",
+        "cpu_moe_layers": 6,
+        "load_mode": "none",
+        "ubatch_tokens": 16,
+        "moe_cache_mib": 256,
+        "tensor_placement": "^token_embd\\.weight$=CPU,^blk\\.(18|19|20|21|22|23)\\.ffn_.*_exps\\..*=CPU,.*=CUDA0"
+      },
+      "256k-dspark": {
+        "context": 262144,
+        "speculative": "dspark",
+        "draft_tokens": 2,
+        "draft_kv_cache": "q8_0",
+        "moe_cache_mib": "auto",
+        "fit_target_mib": 2816,
+        "ubatch_tokens": 16
+      },
+      "1m": {
+        "context": 1048576,
+        "cpu_moe_layers": 24,
+        "load_mode": "none",
+        "tensor_placement": "^token_embd\\.weight$=CPU,.*=CUDA0",
+        "host_kv": true,
+        "ubatch_tokens": 8,
+        "moe_cache_mib": 768,
+        "mem": "20G"
+      }
+    }
+  },
   "flint": {
     "repo": "unsloth/flint-GGUF",
     "revision": "20468edfc38ab43d6914cc88b08cbecb05d0fc62",
