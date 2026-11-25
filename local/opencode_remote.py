@@ -23,6 +23,28 @@ def request(base_url: str, route: str) -> Any:
         return json.load(response)
 
 
+def magnitude_model(base_url: str, models: list[object]) -> list[object]:
+    """Get the active Magnitude model and its allocated context."""
+    entries = [cast(dict[str, Any], row) for row in models if isinstance(row, dict)]
+    if not any(row.get("owned_by") == "magnitude" for row in entries):
+        return models
+    offered = {row["id"]: row for row in entries}
+    state = request(base_url, "/api/v1/instances")
+    if not isinstance(state, dict) or not isinstance(cast(dict[str, Any], state).get("instances"), list):
+        raise ValueError("Magnitude did not report its model instances.")
+    ready: list[object] = []
+    for item in cast(list[dict[str, Any]], state["instances"]):
+        lifecycle = item.get("lifecycle", {})
+        if lifecycle.get("_tag") != "Ready" or item.get("modelId") not in offered:
+            continue
+        capacity = lifecycle.get("allocation", {}).get("contextWindowTokens")
+        if type(capacity) is not int or capacity < 2:
+            raise ValueError("Magnitude reported an invalid loaded context capacity.")
+        ready.append({**offered[item["modelId"]], "context_length": capacity})
+    # A single idle catalog model can load on its next request.
+    return ready or models
+
+
 def current() -> dict[str, Any]:
     """Read the remote model ID and its available context capacity."""
     failure: Exception | None = None
@@ -44,7 +66,7 @@ def current() -> dict[str, Any]:
     entries: object = cast(dict[str, Any], data).get("data")
     if not isinstance(entries, list):
         raise ValueError("The remote /v1/models response must contain a data list.")
-    models = cast(list[object], entries)
+    models = magnitude_model(base_url, cast(list[object], entries))
     if len(models) != 1:
         raise ValueError(f"Expected one served model at port {PORT}.")
     entry = models[0]

@@ -61,7 +61,7 @@ def context_size(value: str) -> int:
         count = int(match[1]) * {"": 1, "k": 1024, "m": 1024**2}[match[2]]
         if 1024 <= count <= 1048576:
             return count
-    raise argparse.ArgumentTypeError("DeepSeek context must be between 1024 and 1M tokens.")
+    raise argparse.ArgumentTypeError("Context must be between 1024 and 1M tokens.")
 
 
 def require_container_weights(pack: Path, workspace: Path = Path("/workspace")) -> None:
@@ -72,14 +72,14 @@ def require_container_weights(pack: Path, workspace: Path = Path("/workspace")) 
                            "Use --root /opt/remote-models and a model directory outside /workspace.")
 
 
-def pro6000() -> dict[str, int | str]:
+def pro6000(profile: str = PROFILE) -> dict[str, int | str]:
     """Use the CUDA driver's visible ordinals, including container and environment masks."""
     if sys.platform != "linux" or platform.machine() != "x86_64":
-        raise RuntimeError("The pinned Basalt archive requires Linux x86_64.")
+        raise RuntimeError("The pinned runtime requires Linux x86_64.")
     try:
         cuda = ctypes.CDLL("libcuda.so.1")
     except OSError as error:
-        raise RuntimeError("The NVIDIA driver is unavailable. Use a CUDA-enabled RunPod image.") from error
+        raise RuntimeError("The NVIDIA driver is unavailable. Use a CUDA-enabled runtime.") from error
 
     def checked(symbol: str, *args: object) -> None:
         result = getattr(cuda, symbol)(*args)
@@ -90,7 +90,7 @@ def pro6000() -> dict[str, int | str]:
     count = ctypes.c_int()
     checked("cuDeviceGetCount", ctypes.byref(count))
     if count.value != 1:
-        raise RuntimeError(f"{PROFILE} requires one visible RTX PRO 6000 Blackwell 96 GB; CUDA sees {count.value}.")
+        raise RuntimeError(f"{profile} requires one visible RTX PRO 6000 Blackwell 96 GB; CUDA sees {count.value}.")
     device, major, minor = ctypes.c_int(), ctypes.c_int(), ctypes.c_int()
     checked("cuDeviceGet", ctypes.byref(device), 0)
     name = ctypes.create_string_buffer(256)
@@ -103,7 +103,7 @@ def pro6000() -> dict[str, int | str]:
     arch = major.value * 10 + minor.value
     if (not re.search(r"\bRTX PRO 6000 Blackwell\b", label, re.I) or "MIG" in label.upper() or arch != 120
             or not 90 * GIB <= total.value <= 97 * GIB):
-        raise RuntimeError(f"{PROFILE} requires one RTX PRO 6000 Blackwell 96 GB (sm_120); "
+        raise RuntimeError(f"{profile} requires one RTX PRO 6000 Blackwell 96 GB (sm_120); "
                            f"CUDA found {label}, sm_{arch}, {total.value/GIB:.1f} GiB.")
     raw = (ctypes.c_ubyte * 16)()
     checked("cuDeviceGetUuid_v2", ctypes.byref(raw), device)
@@ -132,7 +132,8 @@ def identity(path: Path, sha: str) -> list[int | str]:
     return [sha, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns, stat.st_dev, stat.st_ino]
 
 
-def fetch_hf_pack(partial: Path, download_venv: Path, size: int, sha: str) -> None:
+def fetch_hf_pack(partial: Path, download_venv: Path, size: int, sha: str,
+                  source: tuple[str, str, str] = (PACK_REPO, REVISION, PACK)) -> None:
     """Run the ordered Xet transfer in a preparation-only environment."""
     python = download_venv / "bin/python"
     if not python.is_file():
@@ -146,11 +147,12 @@ def fetch_hf_pack(partial: Path, download_venv: Path, size: int, sha: str) -> No
                HF_XET_HIGH_PERFORMANCE="1", HF_HUB_DISABLE_TELEMETRY="1", HF_HUB_DISABLE_IMPLICIT_TOKEN="1")
     print("Downloading with Hugging Face Xet and verifying SHA-256 as bytes arrive.", flush=True)
     subprocess.run([str(python), "-I", "-B", str(Path(__file__).with_name("basalt_xet.py")),
-                    PACK_REPO, REVISION, PACK, str(partial), str(size), sha], env=env, check=True)
+                    *source, str(partial), str(size), sha], env=env, check=True)
 
 
 def artifact(path: Path, url: str, size: int, sha: str, *, prepare: bool, reverify: bool,
-             hf_venv: Path | None = None) -> None:
+             hf_venv: Path | None = None, hf_source: tuple[str, str, str] = (PACK_REPO, REVISION, PACK),
+             reserve_bytes: int = 20 * GIB) -> None:
     """Resume interrupted HTTPS downloads. Publish the asset only after a full checksum."""
     partial = path.with_name(path.name + ".part")
     stamp = path.with_name(path.name + ".verified.json")
@@ -164,12 +166,12 @@ def artifact(path: Path, url: str, size: int, sha: str, *, prepare: bool, reveri
         offset = partial.stat().st_size if partial.exists() else 0
         if offset > size:
             raise RuntimeError(f"Partial download exceeds its pin: {partial}")
-        if offset < size and shutil.disk_usage(path.parent).free < size - offset + 20 * GIB:
+        if offset < size and shutil.disk_usage(path.parent).free < size - offset + reserve_bytes:
             raise RuntimeError(f"{path.parent} needs at least {(size-offset)/GIB:.1f} GiB for the remaining "
-                               "download, plus 20 GiB free after preparation.")
+                               f"download, plus {reserve_bytes/GIB:g} GiB reserved after preparation.")
         transfer_venv = hf_venv if offset == 0 else None
         if transfer_venv is not None:
-            fetch_hf_pack(partial, transfer_venv, size, sha)
+            fetch_hf_pack(partial, transfer_venv, size, sha, hf_source)
         elif offset < size:
             if offset:
                 print(f"Resuming {path.name} with curl at {offset/GIB:.2f} GiB.", flush=True)
@@ -224,7 +226,7 @@ def install_release(archive: Path, runtime: Path, *, prepare: bool) -> None:
                     target.chmod(0o755 if member.mode & 0o111 else 0o644)
             stage.rename(runtime)
         return
-    all_files = set()
+    all_files: set[Path] = set()
     for path in runtime.rglob("*"):
         if path.is_symlink() or not (path.is_dir() or path.is_file()):
             raise RuntimeError(f"Unexpected object in prepared runtime: {path}")

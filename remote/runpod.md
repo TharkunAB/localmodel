@@ -12,8 +12,7 @@ its existing flags. Neither interface requires systemd or `heavy-management`
 on the rental host. The Strata TUI and its dependency lock are shared with
 the local harness; model profiles remain specific to the host.
 
-Automatic selection serves **DeepSeek V4.1 Flash 1017** on supported Strata
-GPUs. One B300 selects **Mistral Large 4 UD-IQ1_S** with llama.cpp, DSpark,
+Automatic selection uses **Magnitude for DeepSeek V4.1 Flash 1017** on one 96 GB RTX PRO 6000 Blackwell. Other supported DeepSeek GPU configurations use Strata. One B300 selects **Mistral Large 4 UD-IQ1_S** with llama.cpp, DSpark,
 and 512K context. Other models require an explicit profile. The legacy `qwen`
 profile serves Qwen3.8-27B; the local harness uses a separate
 Qwen3.8-Flash-Next profile. `remotemodel` does not connect to a Pod over SSH.
@@ -441,6 +440,22 @@ the storage trade-off explicitly with `--allow-network-storage` on both the
 preview and launch commands. Network-backed Engram random reads can be slow.
 A successful preview checks filesystem type; it does not measure storage
 throughput or perform the later manifest-based free-disk check.
+
+## Magnitude on one RTX PRO 6000 Blackwell
+
+Use the normal SSH tunnel and Pi or OMP client. The native server listens on `127.0.0.1:8897` inside the pod. The controller selects this profile for one visible RTX PRO 6000 Blackwell 96 GB. Use `--profile deepseek-basalt-pro6000` to select the earlier Basalt profile.
+
+```bash
+bash /workspace/start-remote.sh start deepseek --dry-run
+bash /workspace/start-remote.sh fetch deepseek --profile deepseek-magnitude-pro6000
+bash /workspace/start-remote.sh start deepseek --profile deepseek-magnitude-pro6000 --no-fetch
+```
+
+The default context is 1,048,576 tokens. If the native engine cannot load that context on the pod, try `--context 512k` or `--context 128k` on the start command. Startup checks the actual CUDA device and context. The serving process and its worker run under the outbound socket guard. The OpenAI API uses the full model ID `deepseek-v4.1-flash:gguf:iq2-xxs`. For live status, use `curl -fsS http://127.0.0.1:8897/api/v1/instances | jq` on the pod. The existing `--tui` monitor supports the Basalt and Strata profiles.
+
+The Magnitude 0.3.1 Linux release uses its DeepSeek 1017 GSQ IQ2_XXS catalog variant with DSpark. The seven target files and drafter occupy 240.05 GiB together. Allow additional space for the runtime and temporary files on the container disk. The Basalt UD-IQ1_M pack has a different file format and occupies separate space. The native inference API accepts OpenAI requests at `/v1`. Pi and OMP read the resident instance’s actual context when available. Cold discovery uses the capacity that Magnitude offers for the installed weights.
+
+Magnitude reports 10 and 17 decode tok/s on 32 GB RTX 5090 systems with 64 and 128 GB of system RAM respectively. Their DeepSeek measurements use IQ2_XXS and DSpark at a 64K context setting. An RTX PRO 6000 performance result and a filled-context Pi grade are still needed. [Vendor benchmarks](https://magnitude.dev/benchmarks) · [CUDA support](https://github.com/magnitudedev/magnitude/blob/a9276e5f970f150c1294dd5541a62d76916adf68/inference/docs/compatibility.md)
 
 ## One-card DeepSeek trial
 

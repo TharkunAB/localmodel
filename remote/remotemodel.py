@@ -21,7 +21,8 @@ HERE = Path(__file__).resolve().parent
 BACKEND = HERE / "start-remote-model.sh"
 sys.path.insert(0, str(HERE))
 MODELS = {"auto": "auto", "deepseek": "deepseek-auto", "mistral": "mistral-b300"}
-PRO6000_TRIAL = {"deepseek-basalt-pro6000", "deepseek-strata-pro6000"}
+MAGNITUDE = "deepseek-magnitude-pro6000"
+PRO6000_TRIAL = {MAGNITUDE, "deepseek-basalt-pro6000", "deepseek-strata-pro6000"}
 HELP = """remotemodel COMMAND [MODEL] [options]
 
 Commands:
@@ -37,8 +38,8 @@ Options:
                                Other profiles default to /workspace/remote-models.
   --port PORT                  Loopback API port (default 8897).
   --profile PROFILE            Use an existing hardware profile for this model family.
-                               One RTX PRO 6000 Blackwell: deepseek-basalt-pro6000
-                               or deepseek-strata-pro6000 (IQ1_M, DSpark, 1M context).
+                               Single RTX PRO 6000 Blackwell selects deepseek-magnitude-pro6000.
+                               Use deepseek-basalt-pro6000 or deepseek-strata-pro6000 for comparison.
   --dry-run, --show-config     Preview the backend plan and stages without writes/downloads.
   --tui                        Show the read-only Strata or Basalt terminal monitor.
   --no-fetch                   Start only from prepared files, without preparation downloads/builds.
@@ -290,6 +291,8 @@ def main(argv: list[str] | None = None) -> int:
         print(HELP)
         return 0
     if args.backend_help:
+        if args.profile == MAGNITUDE:
+            return subprocess.call([sys.executable, "-I", "-B", str(HERE / "magnitude_backend.py"), "--help"])
         return subprocess.call(["bash", str(BACKEND), "--help"])
     if not 1024 <= args.port <= 65535:
         raise RuntimeError("The API port must be between 1024 and 65535.")
@@ -299,7 +302,7 @@ def main(argv: list[str] | None = None) -> int:
         if extra or args.profile or args.tui or args.no_fetch or args.install_deps or args.dry_run:
             raise RuntimeError(f"{action} accepts only --root and --port.")
         if action == "list":
-            print("auto       Detect DeepSeek/Strata or single-B300 Mistral.\ndeepseek   DeepSeek 1017 on Strata-supported GPUs.\n           One RTX PRO 6000 Blackwell trial: --profile deepseek-basalt-pro6000 or deepseek-strata-pro6000.\nmistral    Mistral Large 4 on one B300.")
+            print("auto       Detect single-card DeepSeek/Magnitude, DeepSeek/Strata or single-B300 Mistral.\ndeepseek   DeepSeek 1017 on Strata-supported GPUs.\n           One RTX PRO 6000 Blackwell defaults to deepseek-magnitude-pro6000; Basalt and Strata remain selectable.\nmistral    Mistral Large 4 on one B300.")
         elif action == "stop":
             stop(path)
         else:
@@ -316,11 +319,20 @@ def main(argv: list[str] | None = None) -> int:
     if args.tui and action == "start" and not args.dry_run and not sys.stdin.isatty():
         raise RuntimeError("--tui requires an interactive terminal. Run without it or use SSH with a TTY.")
     profile = str(args.profile or MODELS[model])
+    if model in ("auto", "deepseek") and profile in ("auto", "deepseek-auto"):
+        from basalt import pro6000
+        try:
+            pro6000(MAGNITUDE)
+        except RuntimeError:
+            pass  # Let the existing detector select other GPU configurations.
+        else:
+            profile = MAGNITUDE
     # Keep status/stop on the same control record for every profile on this port.
     data_root = Path("/opt/remote-models") if profile in PRO6000_TRIAL and not args.root else root
     if profile in PRO6000_TRIAL and data_root.resolve().is_relative_to(Path("/workspace").resolve()):
         raise RuntimeError("The single-card trial stores weights on the container disk. Use --root /opt/remote-models.")
-    backend = [sys.executable, "-I", "-B", str(HERE / "basalt.py")] if profile == "deepseek-basalt-pro6000" else ["bash", str(BACKEND)]
+    native_script = {MAGNITUDE: "magnitude_backend.py", "deepseek-basalt-pro6000": "basalt.py"}.get(profile)
+    backend = [sys.executable, "-I", "-B", str(HERE / native_script)] if native_script else ["bash", str(BACKEND)]
     command = [*backend, "--root", str(data_root), "--port", str(args.port), "--profile", profile, "--no-ssh", *extra]
     preview = read_plan(command)
     plan = cast(dict[str, Any], preview["plan"])
@@ -328,8 +340,8 @@ def main(argv: list[str] | None = None) -> int:
         raise RuntimeError(f"The selected profile does not serve {model}; no model was prepared or started.")
     if args.tui and plan["engine"] not in ("strata", "basalt"):
         raise RuntimeError("--tui requires a Strata or Basalt profile.")
-    if args.no_fetch and plan["engine"] not in ("strata", "basalt") and plan["profile"] != "mistral-b300":
-        raise RuntimeError("--no-fetch requires Strata, Basalt or Mistral; legacy profiles can build or download during serving.")
+    if args.no_fetch and plan["engine"] not in ("strata", "basalt", "magnitude") and plan["profile"] != "mistral-b300":
+        raise RuntimeError("--no-fetch requires Strata, Basalt, Magnitude or Mistral; legacy profiles can build or download during serving.")
     preparation = [*command, "--prepare-only", *(["--install-deps"] if args.install_deps else [])]
     if args.dry_run:
         print(json.dumps({"backend": preview, "prepare": None if args.no_fetch else preparation,
